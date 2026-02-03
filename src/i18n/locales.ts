@@ -50,6 +50,7 @@ export const resources = {
         addText: "Add Text",
         editText: "Edit Text Content:",
         enterText: "Type text here",
+        contactUs: "Contact Us"
     },
     ar: {
         appTitle: "الموقع المفتوح",
@@ -90,6 +91,7 @@ export const resources = {
         addText: "إضافة نص",
         editText: "تعديل النص:",
         enterText: "اكتب النص هنا",
+        contactUs: "اتصل بنا"
     },
     fr: {
         appTitle: "Open Signer",
@@ -130,6 +132,7 @@ export const resources = {
         addText: "Ajouter Texte",
         editText: "Modifier le texte :",
         enterText: "Tapez votre texte ici",
+        contactUs: "Contactez-nous"
     }
 } as const;
 

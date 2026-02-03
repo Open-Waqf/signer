@@ -123,11 +123,10 @@ button:active {
 }
 
 .footer-link {
-    margin-top: 24px;
-    font-size: 0.85rem;
     color: var(--text-sub);
     text-decoration: none;
     border-bottom: 1px dotted transparent;
+    cursor: pointer;
 }
 
 .footer-link:hover {

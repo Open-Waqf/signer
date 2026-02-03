@@ -5,10 +5,9 @@ import {fileService} from './lib/file-service';
 import {i18n} from './lib/i18n-service';
 import packageJson from '../package.json';
 import './components/pdf-workspace';
-
 import {Capacitor} from '@capacitor/core';
-// The error below is fixed by updating vite-env.d.ts
 import {registerSW} from 'virtual:pwa-register';
+import { AppConfig } from './config';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -191,14 +190,21 @@ export class AppRoot extends LitElement {
                         <button @click=${this.openFile}>${i18n.t('selectFile')}</button>
                         <p class="sub" style="margin: 12px 0 0 0; font-size: 0.85rem;">${i18n.t('dragDropHint')}</p>
                     </div>
+                    <div style="margin-top: 24px; display: flex; gap: 15px; font-size: 0.85rem;">
+                        <a href="#" class="footer-link" @click=${(e: Event) => {
+                            e.preventDefault();
+                            this.showPrivacy();
+                        }}>
+                            ${i18n.t('privacyTitle')}
+                        </a>
 
-                    <a href="#" class="footer-link" @click=${(e: Event) => {
-                        e.preventDefault();
-                        this.showPrivacy();
-                    }}>
-                        ${i18n.t('privacyTitle')}
-                    </a>
+                        <span style="color: #ccc;">•</span>
 
+                        <a href="mailto:${AppConfig.supportEmail}" class="footer-link">
+                            ${i18n.t('contactUs')}
+                        </a>
+                    </div>
+                    
                     <button @click=${() => {
                         const url = `${window.location.origin}/?lang=${i18n.lang}`;
                         navigator.clipboard.writeText(url);
