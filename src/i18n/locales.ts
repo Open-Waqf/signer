@@ -46,7 +46,10 @@ export const resources = {
         fileTooBigMsg: "This file is {size}MB. Editing large files may crash mobile browsers. Continue?",
         closeDoc: "Close File",
         undo: "Undo",
-        redo: "Redo"
+        redo: "Redo",
+        addText: "Add Text",
+        editText: "Edit Text Content:",
+        enterText: "Type text here",
     },
     ar: {
         appTitle: "الموقع المفتوح",
@@ -83,7 +86,10 @@ export const resources = {
         fileTooBigTitle: "ملف كبير",
         fileTooBigMsg: "حجم الملف {size} ميجابايت. قد يؤدي هذا إلى توقف المتصفح. هل تريد المتابعة؟",
         closeDoc: "إغلاق الملف",
-        undo: "تراجع", redo: "إعادة"
+        undo: "تراجع", redo: "إعادة",
+        addText: "إضافة نص",
+        editText: "تعديل النص:",
+        enterText: "اكتب النص هنا",
     },
     fr: {
         appTitle: "Open Signer",
@@ -120,7 +126,10 @@ export const resources = {
         fileTooBigTitle: "Fichier volumineux",
         fileTooBigMsg: "Ce fichier fait {size} Mo. Cela peut ralentir l'application. Continuer ?",
         closeDoc: "Fermer",
-        undo: "Annuler", redo: "Rétablir"
+        undo: "Annuler", redo: "Rétablir",
+        addText: "Ajouter Texte",
+        editText: "Modifier le texte :",
+        enterText: "Tapez votre texte ici",
     }
 } as const;
 

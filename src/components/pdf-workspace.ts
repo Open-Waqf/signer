@@ -35,17 +35,21 @@ export class PdfWorkspace extends LitElement {
             display: flex;
             flex-direction: column;
             background: #e5e7eb;
+            overflow: hidden;
         }
+
+        /* --- HEADER --- */
 
         header {
             background: #fff;
-            height: 60px;
-            padding: 0 16px;
+            height: 50px;
+            padding: 0 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #e5e7eb;
             z-index: 20;
+            flex-shrink: 0;
         }
 
         .brand {
@@ -57,10 +61,18 @@ export class PdfWorkspace extends LitElement {
         }
 
         .brand img {
-            height: 32px;
-            width: 32px;
+            height: 28px;
+            width: 28px;
             border-radius: 6px;
         }
+
+        @media (max-width: 600px) {
+            .mobile-hide {
+                display: none;
+            }
+        }
+
+        /* --- TOOLBARS --- */
 
         .toolbar {
             background: #fff;
@@ -68,22 +80,58 @@ export class PdfWorkspace extends LitElement {
             display: flex;
             gap: 8px;
             align-items: center;
-            overflow-x: auto;
             border-bottom: 1px solid #e5e7eb;
+            flex-shrink: 0;
+            height: 54px;
+
+            /* Horizontal Scroll Logic */
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+
+            /* Add padding to right so last item isn't cut off */
+            padding-right: 20px;
         }
+
+        .toolbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Secondary Toolbar (Zoom/Nav) */
+
+        .toolbar-secondary {
+            justify-content: space-between;
+            background: #f9fafb;
+            padding: 4px 12px;
+            height: 44px;
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .page-indicator {
+            font-variant-numeric: tabular-nums;
+            font-size: 0.9rem;
+            color: #555;
+            margin: 0 8px;
+            font-weight: 500;
+        }
+
+        /* --- VIEWPORT --- */
 
         .viewport {
             flex: 1;
+            display: grid;
+            place-items: start center;
             overflow: auto;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 30px;
-            position: relative;
-            touch-action: none;
+            padding: 20px;
             background-image: radial-gradient(#d1d5db 1px, transparent 1px);
             background-size: 20px 20px;
-            direction: ltr !important;
+            touch-action: pan-x pan-y;
         }
 
         .page-container {
@@ -91,6 +139,58 @@ export class PdfWorkspace extends LitElement {
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             background: white;
             border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        /* --- BUTTON STYLES --- */
+
+        button {
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            cursor: pointer;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button.primary {
+            background: #2563eb;
+            color: white;
+            border: none;
+        }
+
+        /* Mobile Specific Button Tweaks */
+        @media (max-width: 600px) {
+            .btn-label {
+                display: none;
+            }
+
+            /* Make buttons squarer and larger for touch */
+            button {
+                padding: 0;
+                width: 40px;
+                height: 36px;
+                font-size: 1.2rem;
+            }
+
+            /* Add gap to toolbar container */
+            .toolbar {
+                gap: 6px;
+            }
+
+            .toolbar-secondary {
+                justify-content: center;
+                gap: 15px;
+            }
+        }
+
+        @media (min-width: 601px) {
+            .btn-label {
+                margin-left: 6px;
+            }
         }
 
         /* --- ANNOTATIONS --- */
@@ -115,19 +215,17 @@ export class PdfWorkspace extends LitElement {
             pointer-events: none;
         }
 
-        /* The Date Text Span */
-
         .text-content {
             display: block;
             background: transparent;
             white-space: nowrap;
             font-family: 'Helvetica', sans-serif;
             color: black;
-            line-height: 1; /* Fix vertical alignment */
-            pointer-events: none; /* Let clicks pass to the container */
+            line-height: 1;
+            pointer-events: none;
         }
 
-        /* --- CONTROLS --- */
+        /* Controls */
 
         .delete-btn {
             position: absolute;
@@ -169,26 +267,23 @@ export class PdfWorkspace extends LitElement {
             display: block;
         }
 
-        /* --- STYLE POPUP (Fixed) --- */
+        /* Style Popup */
 
         .style-popup {
             position: absolute;
-            top: -45px;
+            top: -50px;
             left: 50%;
             transform: translateX(-50%);
-            background: #222; /* Darker background */
+            background: #222;
             border-radius: 6px;
             padding: 4px;
             display: flex;
-            gap: 4px;
+            gap: 6px;
             z-index: 200;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-            /* Reset inherited fonts */
             font-size: 14px;
             line-height: normal;
         }
-
-        /* Triangle Arrow */
 
         .style-popup::after {
             content: '';
@@ -204,13 +299,12 @@ export class PdfWorkspace extends LitElement {
         .style-popup button {
             background: transparent;
             border: 1px solid #444;
-            color: #fff; /* White Text */
-            font-size: 12px;
+            color: #fff;
+            font-size: 14px;
             font-weight: bold;
-            padding: 4px 8px;
-            min-width: 30px;
-            cursor: pointer;
-            border-radius: 4px;
+            padding: 0;
+            width: 32px;
+            height: 32px;
         }
 
         .style-popup button:hover {
@@ -223,39 +317,17 @@ export class PdfWorkspace extends LitElement {
             border-color: white;
         }
 
-        /* Nav & Shared Controls */
-
-        button {
-            padding: 8px 14px;
-            border-radius: 6px;
-            border: 1px solid #e5e7eb;
-            background: white;
-            cursor: pointer;
-        }
-
-        button.primary {
-            background: #2563eb;
-            color: white;
-            border: none;
-        }
-
         .lang-select {
             background: #f9fafb;
             border: 1px solid #ddd;
             padding: 6px 10px;
             border-radius: 6px;
         }
-
-        .hidden {
-            display: none;
-        }
     `;
 
     connectedCallback() {
         super.connectedCallback();
         window.addEventListener('lang-changed', () => this.requestUpdate());
-
-        // Global listeners for Drag/Resize end
         window.addEventListener('mousemove', this.handleGlobalMove);
         window.addEventListener('touchmove', this.handleGlobalMove, {passive: false});
         window.addEventListener('mouseup', this.stopInteraction);
@@ -269,58 +341,38 @@ export class PdfWorkspace extends LitElement {
     }
 
     handleKeyboard = (e: KeyboardEvent) => {
-        // Ctrl+Z or Cmd+Z
         if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
             e.preventDefault();
             this.undo();
         }
-        // Ctrl+Y or Cmd+Y or Ctrl+Shift+Z
         if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
             e.preventDefault();
             this.redo();
         }
     }
 
-    // --- HISTORY LOGIC ---
-
+    // --- HISTORY ---
     snapshot() {
-        // Save current state to history
-        // JSON parse/stringify is a simple way to deep clone the array
         const current = JSON.parse(JSON.stringify(this.annotations));
         this.history = [...this.history, current];
-        this.future = []; // Clear future when new action happens
+        this.future = [];
     }
 
     undo() {
         if (this.history.length === 0) return;
-
-        // Save current to future
-        const current = JSON.parse(JSON.stringify(this.annotations));
-        this.future = [current, ...this.future];
-
-        // Pop from history
-        const previous = this.history[this.history.length - 1];
-        this.history = this.history.slice(0, -1);
-
-        this.annotations = previous;
-        this.selectedId = null; // Deselect to avoid ghost UI
+        this.future = [JSON.parse(JSON.stringify(this.annotations)), ...this.future];
+        this.annotations = this.history.pop()!;
+        this.selectedId = null;
     }
 
     redo() {
         if (this.future.length === 0) return;
-
-        // Save current to history
-        const current = JSON.parse(JSON.stringify(this.annotations));
-        this.history = [...this.history, current];
-
-        // Pop from future
-        const next = this.future[0];
-        this.future = this.future.slice(1);
-
-        this.annotations = next;
+        this.history = [...this.history, JSON.parse(JSON.stringify(this.annotations))];
+        this.annotations = this.future.shift()!;
         this.selectedId = null;
     }
 
+    // --- PDF LOADING ---
     async loadPdf(file: Uint8Array, name: string) {
         this.pdfName = name;
         this.totalPages = await pdfEngine.load(file);
@@ -329,7 +381,7 @@ export class PdfWorkspace extends LitElement {
         this.annotations = [];
         this.selectedId = null;
         await this.updateComplete;
-        this.renderPage();
+        void this.renderPage();
     }
 
     async renderPage() {
@@ -341,21 +393,19 @@ export class PdfWorkspace extends LitElement {
         const newPage = this.currentPage + offset;
         if (newPage >= 1 && newPage <= this.totalPages) {
             this.currentPage = newPage;
-            this.selectedId = null; // Deselect on page turn
-            this.renderPage();
+            this.selectedId = null;
+            void this.renderPage();
         }
     }
 
     zoom(factor: number) {
         this.scale = Math.max(0.5, Math.min(3.0, this.scale + factor));
-        this.renderPage();
+        void this.renderPage();
     }
 
-    // --- ANNOTATION HELPERS ---
-
+    // --- ANNOTATIONS ---
     addAnnotation(type: AnnotationType, data: string, aspectRatio = 1) {
         this.snapshot();
-        // Smart Placement: Center on Screen
         const pageRect = this.container.getBoundingClientRect();
         const viewportRect = this.viewport.getBoundingClientRect();
 
@@ -370,8 +420,9 @@ export class PdfWorkspace extends LitElement {
 
         const widthPct = type === 'initials' ? 0.15 : 0.25;
 
+        // FIXED TS6385: Deprecated substr -> slice
         const newAnn: Annotation = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: Math.random().toString(36).slice(2, 11),
             type,
             page: this.currentPage - 1,
             xPct,
@@ -382,7 +433,27 @@ export class PdfWorkspace extends LitElement {
         };
 
         this.annotations = [...this.annotations, newAnn];
-        this.selectedId = newAnn.id; // Auto-select new item
+        this.selectedId = newAnn.id;
+    }
+
+    addTextAnnotation() {
+        // FIXED TS2345: Explicit cast or fallback
+        const text = (i18n.t('enterText') as string) || 'Type text';
+        this.addAnnotation('date', text, 0.5);
+    }
+
+    handleTextEdit(id: string, currentText: string | undefined) {
+        // FIXED TS2345: Explicit cast or fallback
+        const promptMsg = (i18n.t('editText') as string) || 'Edit Text:';
+        const safeCurrentText = currentText || '';
+        const newText = prompt(promptMsg, safeCurrentText);
+
+        if (newText !== null && newText.trim() !== "") {
+            this.snapshot();
+            this.annotations = this.annotations.map(a =>
+                a.id === id ? {...a, data: newText} : a
+            );
+        }
     }
 
     deleteAnnotation(id: string) {
@@ -391,42 +462,39 @@ export class PdfWorkspace extends LitElement {
         if (this.selectedId === id) this.selectedId = null;
     }
 
-    selectAnnotation(e: Event, id: string) {
-        e.stopPropagation(); // Stop click from bubbling to container
-        this.selectedId = id;
+    updateAnnotation(id: string, updates: Partial<Annotation>) {
+        this.annotations = this.annotations.map(a => a.id === id ? {...a, ...updates} : a);
     }
 
+    updateStyle(id: string, style: Partial<Annotation>) {
+        this.snapshot();
+        this.annotations = this.annotations.map(a => a.id === id ? {...a, ...style} : a);
+    }
+
+    // --- INTERACTION ---
     onContainerClick() {
-        // Clicked empty space? Deselect.
         this.selectedId = null;
     }
 
-    // --- INTERACTION LOGIC (Drag & Resize) ---
-
     startDrag(e: MouseEvent | TouchEvent, id: string) {
-        if (e.target instanceof HTMLElement && e.target.classList.contains('delete-btn')) return;
-        if (e.target instanceof HTMLElement && e.target.classList.contains('resize-handle')) return;
+        if (e.target instanceof HTMLElement && (e.target.classList.contains('delete-btn') || e.target.classList.contains('resize-handle') || e.target.closest('.style-popup'))) return;
 
         this.snapshot();
         e.preventDefault();
         e.stopPropagation();
 
-        this.selectedId = id; // Select on drag start
+        this.selectedId = id;
         this.isDragging = true;
 
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
-
         const ann = this.annotations.find(a => a.id === id);
         if (!ann) return;
 
         const rect = this.container.getBoundingClientRect();
-        const currentPxX = ann.xPct * rect.width;
-        const currentPxY = ann.yPct * rect.height;
-
         this.dragOffset = {
-            x: clientX - rect.left - currentPxX,
-            y: clientY - rect.top - currentPxY
+            x: clientX - rect.left - (ann.xPct * rect.width),
+            y: clientY - rect.top - (ann.yPct * rect.height)
         };
     }
 
@@ -439,42 +507,26 @@ export class PdfWorkspace extends LitElement {
     }
 
     handleGlobalMove = (e: MouseEvent | TouchEvent) => {
-        if (!this.selectedId) return;
-        if (!this.isDragging && !this.isResizing) return;
-
-        e.preventDefault(); // Stop scrolling
+        if (!this.selectedId || (!this.isDragging && !this.isResizing)) return;
+        e.preventDefault();
 
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
         const rect = this.container.getBoundingClientRect();
 
         if (this.isDragging) {
-            // --- DRAG LOGIC ---
             let newX = clientX - rect.left - this.dragOffset.x;
             let newY = clientY - rect.top - this.dragOffset.y;
-
-            // Clamp to page
-            const newXPct = Math.max(0, Math.min(0.95, newX / rect.width));
-            const newYPct = Math.max(0, Math.min(0.95, newY / rect.height));
-
-            this.updateAnnotation(this.selectedId, {xPct: newXPct, yPct: newYPct});
+            this.updateAnnotation(this.selectedId, {
+                xPct: Math.max(0, Math.min(0.95, newX / rect.width)),
+                yPct: Math.max(0, Math.min(0.95, newY / rect.height))
+            });
         } else if (this.isResizing) {
-            // --- RESIZE LOGIC ---
             const ann = this.annotations.find(a => a.id === this.selectedId);
             if (!ann) return;
-
-            // Calculate new width based on mouse position relative to object Left
-            const objectLeftPx = ann.xPct * rect.width;
             const mouseRelX = clientX - rect.left;
-
-            let newWidthPx = mouseRelX - objectLeftPx;
-
-            // Min width constraint (e.g. 5% of page)
-            newWidthPx = Math.max(newWidthPx, rect.width * 0.05);
-
-            const newWidthPct = newWidthPx / rect.width;
-
-            this.updateAnnotation(this.selectedId, {widthPct: newWidthPct});
+            const newWidthPx = Math.max(mouseRelX - (ann.xPct * rect.width), rect.width * 0.05);
+            this.updateAnnotation(this.selectedId, {widthPct: newWidthPx / rect.width});
         }
     };
 
@@ -483,11 +535,6 @@ export class PdfWorkspace extends LitElement {
         this.isResizing = false;
     };
 
-    updateAnnotation(id: string, updates: Partial<Annotation>) {
-        this.annotations = this.annotations.map(a => a.id === id ? {...a, ...updates} : a);
-    }
-
-    // --- MODAL HANDLERS ---
     openSignModal() {
         this._triggerModal('signature');
     }
@@ -503,8 +550,7 @@ export class PdfWorkspace extends LitElement {
             const img = new Image();
             img.src = e.detail;
             img.onload = () => {
-                const ratio = img.height / img.width;
-                this.addAnnotation(mode, e.detail, ratio);
+                this.addAnnotation(mode, e.detail, img.height / img.width);
             };
         });
         document.body.appendChild(modal);
@@ -516,51 +562,34 @@ export class PdfWorkspace extends LitElement {
         this.addAnnotation('date', dateStr, 0.3);
     }
 
-    handleLangChange(e: Event) {
-        const select = e.target as HTMLSelectElement;
-        i18n.setLanguage(select.value as any);
-    }
-
     async saveDocument() {
-        if (this.annotations.length === 0) {
-            this.dispatchEvent(new CustomEvent('toast', {detail: i18n.t('savePdf'), bubbles: true, composed: true}));
-            return;
-        }
-
         this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
         await new Promise(r => setTimeout(r, 100));
-
         try {
-            const now = new Date();
-            const dateStr = now.toISOString().slice(0, 16).replace(/[:T]/g, '-');
-            const cleanName = this.pdfName.replace('.pdf', '');
-            const filename = `${cleanName}_signed_${dateStr}.pdf`;
-
+            const dateStr = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+            const filename = `${this.pdfName.replace('.pdf', '')}_signed_${dateStr}.pdf`;
             const finalBytes = await pdfEngine.saveProfessional(this.annotations);
             await fileService.savePdf(filename, finalBytes);
-
-            this.dispatchEvent(new CustomEvent('toast', {detail: i18n.t('savedMsg'), bubbles: true, composed: true}));
+            // FIXED TS2345
+            this.dispatchEvent(new CustomEvent('toast', {
+                detail: (i18n.t('savedMsg') as string) || 'Saved',
+                bubbles: true,
+                composed: true
+            }));
         } catch (e) {
             console.error(e);
-            this.dispatchEvent(new CustomEvent('toast', {detail: 'Error Saving PDF', bubbles: true, composed: true}));
+            this.dispatchEvent(new CustomEvent('toast', {detail: 'Error Saving', bubbles: true, composed: true}));
         } finally {
             this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
         }
     }
 
-    // Helper to dispatch exit event
     requestExit() {
-        this.dispatchEvent(new CustomEvent('exit-workspace', {
-            bubbles: true,
-            composed: true
-        }));
+        this.dispatchEvent(new CustomEvent('exit-workspace', {bubbles: true, composed: true}));
     }
 
-    updateStyle(id: string, style: Partial<Annotation>) {
-        this.snapshot(); // Add to Undo History
-        this.annotations = this.annotations.map(a =>
-            a.id === id ? {...a, ...style} : a
-        );
+    handleLangChange(e: Event) {
+        i18n.setLanguage((e.target as HTMLSelectElement).value as any);
     }
 
     render() {
@@ -568,10 +597,10 @@ export class PdfWorkspace extends LitElement {
             <header>
                 <div class="brand">
                     <button @click=${this.requestExit}
-                            style="margin-right:10px; padding: 4px 8px; border:none; background:transparent; font-size: 1.2rem; cursor: pointer;">
+                            style="margin-right:10px; padding:0; width:40px; border:none; background:transparent; font-size: 1.5rem;">
                         ←
                     </button>
-                    <img src="/icons/icon-192.webp" alt="Logo" onerror="this.style.display='none'"/>
+                    <img src="/icons/icon-192.webp" alt="Open Waqf Signer Logo" onerror="this.style.display='none'"/>
                     <span class="mobile-hide">${i18n.t('appTitle')}</span>
                 </div>
                 <select class="lang-select" @change=${this.handleLangChange}>
@@ -582,26 +611,43 @@ export class PdfWorkspace extends LitElement {
             </header>
 
             <div class="toolbar">
-                <button class="primary" @click=${this.openSignModal}>${i18n.t('addSig')}</button>
-                <button @click=${this.openInitialsModal}>${i18n.t('addInitials')}</button>
-                <button @click=${this.addDateStamp}>${i18n.t('addDate')}</button>
-                <div style="width: 1px; height: 20px; background: #ddd; margin: 0 4px;"></div>
+                <button class="primary" @click=${this.openSignModal} title="${i18n.t('addSig')}">
+                    ✒️<span class="btn-label">${i18n.t('addSig')}</span>
+                </button>
+                <button @click=${this.openInitialsModal} title="${i18n.t('addInitials')}">
+                    Aa<span class="btn-label">${i18n.t('addInitials')}</span>
+                </button>
+                <button @click=${this.addTextAnnotation} title="${i18n.t('addText')}">
+                    T<span class="btn-label">${i18n.t('addText')}</span>
+                </button>
+                <button @click=${this.addDateStamp} title="${i18n.t('addDate')}">
+                    📅<span class="btn-label">${i18n.t('addDate')}</span>
+                </button>
+
+                <div style="width: 1px; height: 20px; background: #ddd; margin: 0 4px; flex-shrink: 0;"></div>
+
                 <button @click=${this.undo} ?disabled=${this.history.length === 0} title="${i18n.t('undo')}">↩</button>
                 <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}">↪</button>
+
                 <div style="flex:1"></div>
-                <button class="primary" @click=${this.saveDocument}>${i18n.t('savePdf')}</button>
+
+                <button class="primary" @click=${this.saveDocument} title="${i18n.t('savePdf')}">
+                    💾<span class="btn-label">${i18n.t('savePdf')}</span>
+                </button>
             </div>
 
-            <div class="toolbar" style="justify-content:center;">
-                <button @click=${() => this.zoom(-0.2)}> -</button>
-                <span style="margin: 0 15px;">Page ${this.currentPage} / ${this.totalPages}</span>
-                <button @click=${() => this.zoom(0.2)}> +</button>
-                <div style="width:10px"></div>
-                <button @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>${i18n.t('prev')}
-                </button>
-                <button @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>
-                    ${i18n.t('next')}
-                </button>
+            <div class="toolbar toolbar-secondary">
+                <div class="tool-group">
+                    <button @click=${() => this.zoom(-0.2)}>－</button>
+                    <button @click=${() => this.zoom(0.2)}>＋</button>
+                </div>
+
+                <div class="tool-group">
+                    <button @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>‹</button>
+                    <span class="page-indicator">${this.currentPage} / ${this.totalPages}</span>
+                    <button @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>›
+                    </button>
+                </div>
             </div>
 
             <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
@@ -612,23 +658,11 @@ export class PdfWorkspace extends LitElement {
                             .filter(ann => ann.page === (this.currentPage - 1))
                             .map(ann => {
                                 const isSelected = this.selectedId === ann.id;
-
-                                // 1. CONTAINER STYLE (Position Only)
-                                const boxStyle = `
-                                    left: ${ann.xPct * 100}%; 
-                                    top: ${ann.yPct * 100}%;
-                                    width: ${ann.widthPct ? ann.widthPct * 100 + '%' : 'auto'};
-                                `;
-
-                                // 2. TEXT STYLE (Font Appearance Only)
-                                const textStyle = `
-                                    font-size: ${ann.fontSize || 12}px; 
-                                    font-weight: ${ann.fontWeight || 'normal'};
-                                `;
+                                const boxStyle = `left: ${ann.xPct * 100}%; top: ${ann.yPct * 100}%; width: ${ann.widthPct ? ann.widthPct * 100 + '%' : 'auto'};`;
+                                const textStyle = `font-size: ${ann.fontSize || 12}px; font-weight: ${ann.fontWeight || 'normal'};`;
 
                                 return html`
-                                    <div class="draggable ${isSelected ? 'selected' : ''}"
-                                         style="${boxStyle}"
+                                    <div class="draggable ${isSelected ? 'selected' : ''}" style="${boxStyle}"
                                          @mousedown=${(e: any) => this.startDrag(e, ann.id)}
                                          @touchstart=${(e: any) => this.startDrag(e, ann.id)}>
 
@@ -648,27 +682,27 @@ export class PdfWorkspace extends LitElement {
                                             <div class="style-popup"
                                                  @mousedown=${(e: Event) => e.stopPropagation()}
                                                  @touchstart=${(e: Event) => e.stopPropagation()}>
-
+                                                <button @click=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.handleTextEdit(ann.id, ann.data);
+                                                }}>✎
+                                                </button>
+                                                <div style="width:1px; background:#444; margin:0 2px;"></div>
                                                 <button class="${ann.fontWeight === 'bold' ? 'active' : ''}"
                                                         @click=${(e: Event) => {
-                                                            e.stopPropagation(); // Stop drag start
+                                                            e.stopPropagation();
                                                             this.updateStyle(ann.id, {fontWeight: ann.fontWeight === 'bold' ? 'normal' : 'bold'});
-                                                        }}>
-                                                    B
+                                                        }}>B
                                                 </button>
-
                                                 <button @click=${(e: Event) => {
                                                     e.stopPropagation();
                                                     this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
-                                                }}>
-                                                    A-
+                                                }}>A-
                                                 </button>
-
                                                 <button @click=${(e: Event) => {
                                                     e.stopPropagation();
                                                     this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
-                                                }}>
-                                                    A+
+                                                }}>A+
                                                 </button>
                                             </div>
                                         ` : ''}
@@ -676,11 +710,16 @@ export class PdfWorkspace extends LitElement {
                                         ${ann.type !== 'date' ? html`
                                             <div class="resize-handle"
                                                  @mousedown=${(e: any) => this.startResize(e, ann.id)}
-                                                 @touchstart=${(e: any) => this.startResize(e, ann.id)}>
-                                            </div>
-                                            <img src="${ann.data}"/>
+                                                 @touchstart=${(e: any) => this.startResize(e, ann.id)}></div>
+                                            <img src="${ann.data}" alt="User annotation"/>
                                         ` : html`
-                                            <span class="text-content" style="${textStyle}">${ann.data}</span>
+                                            <span class="text-content" style="${textStyle}"
+                                                  @dblclick=${(e: Event) => {
+                                                      e.stopPropagation();
+                                                      this.handleTextEdit(ann.id, ann.data);
+                                                  }}>
+                                                ${ann.data}
+                                            </span>
                                         `}
                                     </div>
                                 `;
