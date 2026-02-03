@@ -65,35 +65,26 @@ export class PdfEngine {
             // PDF Coordinates: Y starts at bottom.
             // We flip Y: (height - (yPct * height)) - objectHeight
 
-            if (ann.type === 'date' && ann.data) {
-                // --- BURN DATE STAMP ---
-                const stampText = `Visually Signed: ${ann.data}`; // FIX: Wording
-                const hashId = `ID: ${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+            if (ann.type === 'date' && ann.data) {// --- BURN DATE STAMP ---
 
-                const fontSize = 10;
-                const textW = font.widthOfTextAtSize(stampText, fontSize);
-                const boxW = textW + 20;
-                const boxH = 35;
+                // 1. Get User Styles (or defaults)
+                const textSize = ann.fontSize || 12;
+                const textFont = ann.fontWeight === 'bold' ? fontBold : font;
 
-                // Use the percentage width if provided, otherwise default
+                // 2. Measure Text
+                const textH = textSize; // Approx height
+
+                // 3. Calculate Position
                 const finalX = width * ann.xPct;
-                const finalY = height - (height * ann.yPct) - boxH;
+                const finalY = height - (height * ann.yPct) - textH;
 
-                page.drawRectangle({
-                    x: finalX, y: finalY, width: boxW, height: boxH,
-                    color: rgb(0.95, 0.95, 0.95),
-                    borderColor: rgb(0.5, 0.5, 0.5),
-                    borderWidth: 1,
-                });
-
-                page.drawText(stampText, {
-                    x: finalX + 10, y: finalY + 20,
-                    size: fontSize, font: fontBold, color: rgb(0, 0, 0),
-                });
-
-                page.drawText(hashId, {
-                    x: finalX + 10, y: finalY + 8,
-                    size: 8, font: font, color: rgb(0.4, 0.4, 0.4),
+                // 4. Draw Text
+                page.drawText(ann.data, {
+                    x: finalX,
+                    y: finalY,
+                    size: textSize,
+                    font: textFont,
+                    color: rgb(0, 0, 0),
                 });
 
             } else if ((ann.type === 'signature' || ann.type === 'initials') && ann.data) {

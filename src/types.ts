@@ -9,4 +9,6 @@ export interface Annotation {
     widthPct: number;      // Width relative to page width
     data?: string;         // Base64 image or Text string
     aspectRatio?: number;  // height/width ratio (for images)
+    fontSize?: number; // e.g. 12, 18, 24
+    fontWeight?: 'normal' | 'bold';
 }
