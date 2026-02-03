@@ -10,12 +10,15 @@ export default defineConfig({
     plugins: [
         VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+            includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
             manifest: {
                 name: 'Open Waqf Signer',
                 short_name: 'Signer',
-                description: 'Offline PDF Signer & Editor',
+                description: 'Secure, Offline, Free PDF Signer.',
                 theme_color: '#ffffff',
+                background_color: '#ffffff',
+                display: 'standalone',
+                orientation: 'portrait',
                 icons: [
                     {
                         src: 'icons/icon-192.webp',
@@ -31,7 +34,4 @@ export default defineConfig({
             }
         })
     ],
-    server: {
-        port: 3000,
-    }
 });

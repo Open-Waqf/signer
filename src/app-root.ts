@@ -156,11 +156,26 @@ export class AppRoot extends LitElement {
                 <div class="dialog-content">
                     <h2>${i18n.t('privacyTitle')}</h2>
                     <p>${i18n.t('privacyContent')}</p>
+
+                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;"/>
+
+                    <button @click=${this.clearAppCache}
+                            style="background: #fee2e2; color: #b91c1c; border: none; width: 100%; margin-bottom: 10px;">
+                        ${i18n.t('forgetData')}
+                    </button>
                 </div>
                 <div class="dialog-footer">
                     <button @click=${this.closePrivacy}>${i18n.t('close')}</button>
                 </div>
             </dialog>
+            
         `;
+    }
+
+    clearAppCache() {
+        if (confirm(i18n.t('confirmClear'))) {
+            localStorage.clear();
+            window.location.reload();
+        }
     }
 }

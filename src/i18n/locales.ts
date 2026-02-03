@@ -32,6 +32,8 @@ export const resources = {
         loadingDoc: "Loading Document...",
         errorLoading: "Error loading PDF. Is it valid?",
         exitConfirm: "Exit editing? Unsaved changes will be lost.",
+        forgetData: "🗑️ Forget My Data",
+        confirmClear: "Delete saved signature, initials, and language preference?",
     },
     ar: {
         appTitle: "الموقع المفتوح",
@@ -55,6 +57,8 @@ export const resources = {
         loadingDoc: "جاري تحميل المستند...",
         errorLoading: "خطأ في تحميل الملف. هل هو صالح؟",
         exitConfirm: "هل تريد الخروج؟ ستفقد التغييرات غير المحفوظة.",
+        forgetData: "🗑️ مسح بياناتي",
+        confirmClear: "هل تريد حذف التوقيع والأحرف المحفوظة وإعدادات اللغة؟",
     },
     fr: {
         appTitle: "Open Signer",
@@ -78,6 +82,8 @@ export const resources = {
         loadingDoc: "Chargement du document...",
         errorLoading: "Erreur de chargement. Est-ce valide ?",
         exitConfirm: "Quitter ? Les modifications seront perdues.",
+        forgetData: "🗑️ Oublier mes données",
+        confirmClear: "Supprimer la signature, les initiales et les préférences ?",
     }
 } as const;
 

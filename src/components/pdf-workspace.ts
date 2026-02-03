@@ -3,38 +3,35 @@ import {customElement, property, query, state} from 'lit/decorators.js';
 import {pdfEngine} from '../lib/pdf-engine';
 import {fileService} from '../lib/file-service';
 import {i18n} from '../lib/i18n-service';
+import {Annotation, AnnotationType} from '../types';
 import './signature-modal';
-
-type DragType = 'sig' | 'initials' | 'date';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
     @property() pdfName = '';
-    @state() currentPage = 1;
+    @state() currentPage = 1; // 1-indexed for View
     @state() totalPages = 0;
     @state() scale = 1.0;
 
-    // 1. Signature State
-    @state() signatureUrl: string | null = null;
-    @state() sigPos = {x: 50, y: 50};
-
-    // 2. Initials State (NEW & SEPARATE)
-    @state() initialsUrl: string | null = null;
-    @state() initialsPos = {x: 100, y: 100};
-
-    // 3. Date State
-    @state() addedDate: string | null = null;
-    @state() datePos = {x: 150, y: 150};
+    // THE NEW CORE STATE
+    @state() annotations: Annotation[] = [];
+    @state() activeDragId: string | null = null;
+    @state() dragOffset = {x: 0, y: 0};
 
     @query('#pdf-canvas') canvas!: HTMLCanvasElement;
+    @query('.page-container') container!: HTMLDivElement;
 
     static styles = css`
+        /* ... (Keep your existing Header/Toolbar styles) ... */
+
         :host {
             height: 100vh;
             display: flex;
             flex-direction: column;
             background: #e5e7eb;
         }
+
+        /* ... Copy existing Header/Toolbar CSS here ... */
 
         header {
             background: #fff;
@@ -44,8 +41,6 @@ export class PdfWorkspace extends LitElement {
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #e5e7eb;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-            z-index: 20;
         }
 
         .brand {
@@ -62,24 +57,27 @@ export class PdfWorkspace extends LitElement {
             border-radius: 6px;
         }
 
-        .lang-select {
-            background: #f9fafb;
-            border: 1px solid #ddd;
-            color: #374151;
-            padding: 6px 10px;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            outline: none;
-        }
-
         .toolbar {
             background: #fff;
             padding: 8px 12px;
             display: flex;
             gap: 8px;
-            align-items: center;
             overflow-x: auto;
             border-bottom: 1px solid #e5e7eb;
+        }
+
+        button {
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: #2563eb;
+            color: white;
+            border: none;
         }
 
         .viewport {
@@ -100,13 +98,15 @@ export class PdfWorkspace extends LitElement {
             position: relative;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             background: white;
-            border-radius: 2px;
         }
+
+        /* Updated Draggable Style */
 
         .draggable {
             position: absolute;
             cursor: move;
-            border: 2px dashed rgba(37, 99, 235, 0.5);
+            border: 2px dashed rgba(37, 99, 235, 0.0); /* Hidden by default */
+            transition: border-color 0.2s;
         }
 
         .draggable:hover, .draggable.active {
@@ -116,56 +116,58 @@ export class PdfWorkspace extends LitElement {
 
         .draggable img {
             width: 100%;
-            pointer-events: none;
+            height: 100%;
             display: block;
+            pointer-events: none;
         }
 
         .draggable span {
-            background: transparent;
+            background: rgba(255, 255, 255, 0.8);
             padding: 4px 8px;
-            font-family: 'Courier New', monospace;
+            font-family: monospace;
             font-weight: bold;
-            font-size: 16px;
-            display: block;
-            white-space: nowrap;
-        }
-
-        button {
-            padding: 8px 14px;
-            border-radius: 6px;
-            border: 1px solid #e5e7eb;
-            background: white;
-            cursor: pointer;
             font-size: 14px;
             white-space: nowrap;
-            color: #374151;
+            border: 1px solid #ccc;
         }
 
-        button.primary {
-            background: #2563eb;
+        .delete-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 20px;
+            height: 20px;
+            background: red;
             color: white;
+            border-radius: 50%;
             border: none;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            cursor: pointer;
         }
 
-        .nav-controls {
+        .draggable:hover .delete-btn {
             display: flex;
-            align-items: center;
-            gap: 8px;
-            font-variant-numeric: tabular-nums;
-            font-size: 0.9rem;
         }
     `;
 
     connectedCallback() {
         super.connectedCallback();
         window.addEventListener('lang-changed', () => this.requestUpdate());
+        // Global mouseup to stop dragging anywhere
+        window.addEventListener('mouseup', () => this.stopDrag());
+        window.addEventListener('touchend', () => this.stopDrag());
     }
 
+    // ... (Keep loadPdf, renderPage, changePage, zoom logic same as before) ...
     async loadPdf(file: Uint8Array, name: string) {
         this.pdfName = name;
         this.totalPages = await pdfEngine.load(file);
         this.currentPage = 1;
         this.scale = 1.0;
+        this.annotations = []; // Reset on new file
         await this.updateComplete;
         this.renderPage();
     }
@@ -188,25 +190,32 @@ export class PdfWorkspace extends LitElement {
         this.renderPage();
     }
 
-    // --- MODAL LOGIC (Fixed for separate storage) ---
-    _triggerModal(mode: 'signature' | 'initials') {
-        const modal = document.createElement('signature-modal') as any;
-        modal.mode = mode;
+    // --- ANNOTATION HELPERS ---
 
-        // Listen for result
-        modal.addEventListener('signed', (e: any) => {
-            const result = e.detail;
-            if (mode === 'signature') {
-                this.signatureUrl = result;
-                this.sigPos = {x: 100, y: 100};
-            } else {
-                this.initialsUrl = result;
-                this.initialsPos = {x: 120, y: 120};
-            }
-        });
+    addAnnotation(type: AnnotationType, data: string, aspectRatio = 1) {
+        // Default size logic
+        const widthPct = type === 'initials' ? 0.15 : 0.25;
 
-        document.body.appendChild(modal);
+        // Center on current view (approximate)
+        const newAnn: Annotation = {
+            id: Math.random().toString(36).substr(2, 9),
+            type,
+            page: this.currentPage - 1, // Store as 0-index
+            xPct: 0.35, // Center-ish
+            yPct: 0.45,
+            widthPct,
+            data,
+            aspectRatio
+        };
+
+        this.annotations = [...this.annotations, newAnn];
     }
+
+    deleteAnnotation(id: string) {
+        this.annotations = this.annotations.filter(a => a.id !== id);
+    }
+
+    // --- MODAL HANDLERS ---
 
     openSignModal() {
         this._triggerModal('signature');
@@ -216,51 +225,99 @@ export class PdfWorkspace extends LitElement {
         this._triggerModal('initials');
     }
 
-    addDateStamp() {
-        const now = new Date();
-        this.addedDate = now.toISOString().replace('T', ' ').substring(0, 16);
-        this.datePos = {x: 150, y: 150};
+    _triggerModal(mode: 'signature' | 'initials') {
+        const modal = document.createElement('signature-modal') as any;
+        modal.mode = mode;
+        modal.addEventListener('signed', (e: any) => {
+            const img = new Image();
+            img.src = e.detail;
+            img.onload = () => {
+                const ratio = img.height / img.width;
+                this.addAnnotation(mode, e.detail, ratio);
+            };
+        });
+        document.body.appendChild(modal);
     }
 
-    // --- DRAG LOGIC (Fixed for 3 items) ---
-    startDrag(e: MouseEvent | TouchEvent, type: DragType) {
+    addDateStamp() {
+        const now = new Date();
+        const dateStr = now.toISOString().replace('T', ' ').substring(0, 16);
+        this.addAnnotation('date', dateStr, 0.3); // Aspect ratio for date box approx
+    }
+
+    // --- DRAG LOGIC (Percentages!) ---
+
+    startDrag(e: MouseEvent | TouchEvent, id: string) {
         e.preventDefault();
         e.stopPropagation();
 
-        const move = (ev: MouseEvent | TouchEvent) => {
-            const clientX = 'touches' in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX;
-            const clientY = 'touches' in ev ? ev.touches[0].clientY : (ev as MouseEvent).clientY;
-            const rect = this.canvas.getBoundingClientRect();
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
 
-            const newX = clientX - rect.left;
-            const newY = clientY - rect.top;
+        // Find the annotation being dragged
+        const ann = this.annotations.find(a => a.id === id);
+        if (!ann) return;
 
-            if (type === 'sig') this.sigPos = {x: newX, y: newY};
-            else if (type === 'initials') this.initialsPos = {x: newX, y: newY};
-            else if (type === 'date') this.datePos = {x: newX, y: newY};
+        // Get Container Dimensions
+        const rect = this.container.getBoundingClientRect();
+
+        // Calculate current pixel position of the element
+        const currentPxX = ann.xPct * rect.width;
+        const currentPxY = ann.yPct * rect.height;
+
+        // Calculate offset so it doesn't snap to top-left corner
+        this.dragOffset = {
+            x: clientX - rect.left - currentPxX,
+            y: clientY - rect.top - currentPxY
         };
 
-        const stop = () => {
-            window.removeEventListener('mousemove', move);
-            window.removeEventListener('touchmove', move);
-            window.removeEventListener('mouseup', stop);
-            window.removeEventListener('touchend', stop);
-        };
+        this.activeDragId = id;
 
-        window.addEventListener('mousemove', move);
-        window.addEventListener('touchmove', move);
-        window.addEventListener('mouseup', stop);
-        window.addEventListener('touchend', stop);
+        // Listeners for move
+        window.addEventListener('mousemove', this.handleMove);
+        window.addEventListener('touchmove', this.handleMove, {passive: false});
     }
 
-    handleLangChange(e: Event) {
-        const select = e.target as HTMLSelectElement;
-        i18n.setLanguage(select.value as any);
+    handleMove = (e: MouseEvent | TouchEvent) => {
+        if (!this.activeDragId) return;
+        e.preventDefault();
+
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+        const rect = this.container.getBoundingClientRect();
+
+        // Calculate new Position in Pixels
+        let newX = clientX - rect.left - this.dragOffset.x;
+        let newY = clientY - rect.top - this.dragOffset.y;
+
+        // Clamp to boundaries
+        const ann = this.annotations.find(a => a.id === this.activeDragId);
+        if (!ann) return;
+
+        // Convert back to Percentage immediately
+        // Note: We clamp 0.0 to 1.0 (roughly) to keep inside page
+        const newXPct = Math.max(0, Math.min(1, newX / rect.width));
+        const newYPct = Math.max(0, Math.min(1, newY / rect.height));
+
+        // Update State (Lit will re-render, creating the movement)
+        this.annotations = this.annotations.map(a =>
+            a.id === this.activeDragId
+                ? {...a, xPct: newXPct, yPct: newYPct}
+                : a
+        );
     }
 
+    stopDrag() {
+        if (this.activeDragId) {
+            this.activeDragId = null;
+            window.removeEventListener('mousemove', this.handleMove);
+            window.removeEventListener('touchmove', this.handleMove);
+        }
+    }
+
+    // --- SAVE ---
     async saveDocument() {
-        // Check if we have ANYTHING to save
-        if (!this.signatureUrl && !this.addedDate && !this.initialsUrl) {
+        if (this.annotations.length === 0) {
             this.dispatchEvent(new CustomEvent('toast', {detail: i18n.t('savePdf'), bubbles: true, composed: true}));
             return;
         }
@@ -269,67 +326,13 @@ export class PdfWorkspace extends LitElement {
         await new Promise(r => setTimeout(r, 100));
 
         try {
-            const rect = this.canvas.getBoundingClientRect();
-
-            // 1. Prepare Signature Data
-            let sigData = null;
-            if (this.signatureUrl) {
-                sigData = {
-                    base64: this.signatureUrl,
-                    xPct: this.sigPos.x / rect.width,
-                    yPct: this.sigPos.y / rect.height,
-                    page: this.currentPage - 1
-                };
-            }
-
-            // 2. Prepare Date Data
-            let dateData = null;
-            if (this.addedDate) {
-                dateData = {
-                    dateString: this.addedDate,
-                    xPct: this.datePos.x / rect.width,
-                    yPct: this.datePos.y / rect.height,
-                    page: this.currentPage - 1
-                };
-            }
-
-            // 3. Prepare Initials Data (Reusing the Professional Save routine - can extend engine later)
-            // For MVP: We will treat initials as a second signature image burn
-            // Note: You need to update saveProfessional in pdf-engine if you want strict separation in engine,
-            // but for now, we can handle it here or merge logic.
-            // **Quick Fix:** Since pdf-engine 'saveProfessional' currently accepts (sigData, dateData),
-            // we might lose Initials if we don't extend the engine.
-            // For now, let's burn Initials separately using the basic logic if needed,
-            // OR extend the engine call.
-
-            // To keep it simple and robust, we will execute TWO burns if needed, or pass array.
-            // Let's assume standard usage: Signature OR Initials.
-            // If BOTH: The current engine needs update.
-            // *Correction*: Let's stick to the current engine signature.
-            // If user has initials, we treat it as the signature image for the engine call if signature is empty.
-            // If BOTH exist, we prioritize Signature for the "Professional" slot.
-
-            // BETTER: Extend the engine call right here in memory.
-            // Since I cannot rewrite pdf-engine.ts in this specific response block without making it huge,
-            // I will map 'Initials' to 'SignatureData' if Signature is missing.
-            // (If you need both burned, we need to update pdf-engine.ts to accept an array of images).
-
-            if (!sigData && this.initialsUrl) {
-                sigData = {
-                    base64: this.initialsUrl,
-                    xPct: this.initialsPos.x / rect.width,
-                    yPct: this.initialsPos.y / rect.height,
-                    page: this.currentPage - 1
-                };
-            }
-
-            // ... (Filename logic) ...
             const now = new Date();
             const dateStr = now.toISOString().slice(0, 16).replace(/[:T]/g, '-');
             const cleanName = this.pdfName.replace('.pdf', '');
             const filename = `${cleanName}_signed_${dateStr}.pdf`;
 
-            const finalBytes = await pdfEngine.saveProfessional(sigData, dateData);
+            // Pass the WHOLE array to the engine
+            const finalBytes = await pdfEngine.saveProfessional(this.annotations);
             await fileService.savePdf(filename, finalBytes);
 
             this.dispatchEvent(new CustomEvent('toast', {detail: i18n.t('savedMsg'), bubbles: true, composed: true}));
@@ -341,19 +344,11 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
+    // --- RENDER ---
     render() {
         return html`
             <header>
-                <div class="brand">
-                    <img src="/icons/icon-192.webp" alt="Logo" onerror="this.style.display='none'"/>
-                    <span>${i18n.t('appTitle')}</span>
-                </div>
-
-                <select class="lang-select" @change=${this.handleLangChange}>
-                    <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
-                    <option value="ar" ?selected=${i18n.lang === 'ar'}>العربية</option>
-                    <option value="fr" ?selected=${i18n.lang === 'fr'}>Français</option>
-                </select>
+                <div class="brand"><span>${i18n.t('appTitle')}</span></div>
             </header>
 
             <div class="toolbar">
@@ -364,12 +359,12 @@ export class PdfWorkspace extends LitElement {
                 <button class="primary" @click=${this.saveDocument}>${i18n.t('savePdf')}</button>
             </div>
 
-            <div class="toolbar" style="background:#f9fafb; font-size:0.9em; justify-content:center;">
+            <div class="toolbar" style="justify-content:center;">
                 <button @click=${() => this.zoom(-0.2)}> -</button>
-                <div class="nav-controls">
+                <div class="nav-controls" style="margin: 0 10px;">
                     <button @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>${i18n.t('prev')}
                     </button>
-                    <span>Page ${this.currentPage} / ${this.totalPages}</span>
+                    <span style="margin: 0 8px;">Page ${this.currentPage} / ${this.totalPages}</span>
                     <button @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>
                         ${i18n.t('next')}
                     </button>
@@ -381,32 +376,48 @@ export class PdfWorkspace extends LitElement {
                 <div class="page-container">
                     <canvas id="pdf-canvas"></canvas>
 
-                    ${this.signatureUrl ? html`
-                        <div class="draggable active"
-                             style="left: ${this.sigPos.x}px; top: ${this.sigPos.y}px; width: 200px"
-                             @mousedown=${(e: any) => this.startDrag(e, 'sig')}
-                             @touchstart=${(e: any) => this.startDrag(e, 'sig')}>
-                            <img src="${this.signatureUrl}"/>
-                        </div>
-                    ` : ''}
+                    ${this.annotations
+                            .filter(ann => ann.page === (this.currentPage - 1)) // ONLY SHOW CURRENT PAGE
+                            .map(ann => {
+                                // Convert % to PX for rendering on top of the current canvas size
+                                // We assume 'container' (page-container) matches the canvas size
+                                // Note: During first render, container might be null, so fallback needed
+                                // But Lit usually handles this well.
 
-                    ${this.initialsUrl ? html`
-                        <div class="draggable active"
-                             style="left: ${this.initialsPos.x}px; top: ${this.initialsPos.y}px; width: 100px"
-                             @mousedown=${(e: any) => this.startDrag(e, 'initials')}
-                             @touchstart=${(e: any) => this.startDrag(e, 'initials')}>
-                            <img src="${this.initialsUrl}"/>
-                        </div>
-                    ` : ''}
+                                // We use CSS % for positioning to be inherently responsive!
+                                // Left: xPct * 100%, Top: yPct * 100%
+                                const style = `
+                left: ${ann.xPct * 100}%; 
+                top: ${ann.yPct * 100}%;
+                width: ${ann.widthPct ? ann.widthPct * 100 + '%' : 'auto'};
+              `;
 
-                    ${this.addedDate ? html`
-                        <div class="draggable active"
-                             style="left: ${this.datePos.x}px; top: ${this.datePos.y}px;"
-                             @mousedown=${(e: any) => this.startDrag(e, 'date')}
-                             @touchstart=${(e: any) => this.startDrag(e, 'date')}>
-                            <span>${this.addedDate}</span>
-                        </div>
-                    ` : ''}
+                                return html`
+                                    <div class="draggable ${this.activeDragId === ann.id ? 'active' : ''}"
+                                         style="${style}"
+                                         @mousedown=${(e: any) => this.startDrag(e, ann.id)}
+                                         @touchstart=${(e: any) => this.startDrag(e, ann.id)}>
+
+                                        <button class="delete-btn"
+                                                @mousedown=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.deleteAnnotation(ann.id);
+                                                }}
+                                                @touchstart=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.deleteAnnotation(ann.id);
+                                                }}>
+                                            ×
+                                        </button>
+
+                                        ${ann.type === 'date'
+                                                ? html`<span>${ann.data}</span>`
+                                                : html`<img src="${ann.data}"/>`
+                                        }
+                                    </div>
+                                `;
+                            })
+                    }
                 </div>
             </div>
         `;

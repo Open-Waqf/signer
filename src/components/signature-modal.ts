@@ -74,13 +74,18 @@ export class SignatureModal extends LitElement {
         }
     `;
 
+    private _resizeHandler: (() => void) | null = null;
+
     async firstUpdated() {
         // FIX: Wait for 1 frame so the DOM is fully painted and has width
         await new Promise(requestAnimationFrame);
 
         this.ctx = this.canvas.getContext('2d');
-        this.resizeCanvas();
-        window.addEventListener('resize', () => this.resizeCanvas());
+
+        // Save the bound function so we can remove it later
+        this._resizeHandler = () => this.resizeCanvas();
+        window.addEventListener('resize', this._resizeHandler);
+
         this.setupEvents();
 
         // Load Saved Data
@@ -90,6 +95,13 @@ export class SignatureModal extends LitElement {
             const img = new Image();
             img.onload = () => this.ctx?.drawImage(img, 0, 0);
             img.src = saved;
+        }
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if (this._resizeHandler) {
+            window.removeEventListener('resize', this._resizeHandler);
         }
     }
 
