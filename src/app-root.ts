@@ -38,6 +38,7 @@ export class AppRoot extends LitElement {
             if (this.mode === 'workspace') {
                 if (confirm(i18n.t('exitConfirm'))) {
                     this.mode = 'home';
+                    window.location.reload();
                 }
                 return;
             }
@@ -70,6 +71,20 @@ export class AppRoot extends LitElement {
     }
 
     async handleFile(data: Uint8Array, name: string) {
+        // --- 🛡️ PERFORMANCE GUARDRAIL ---
+        const sizeInMB = data.byteLength / (1024 * 1024);
+
+        // Stricter limit for Mobile (assuming Capacitor is Native)
+        const isMobile = Capacitor.isNativePlatform() || window.innerWidth < 768;
+        const limit = isMobile ? 25 : 50;
+
+        if (sizeInMB > limit) {
+            const msg = i18n.t('fileTooBigMsg').replace('{size}', sizeInMB.toFixed(1));
+            if (!confirm(msg)) {
+                return; // User cancelled
+            }
+        }
+
         this.isLoading = true;
         this.requestUpdate();
         await new Promise(r => setTimeout(r, 50));
@@ -78,6 +93,8 @@ export class AppRoot extends LitElement {
             this.mode = 'workspace';
             await this.updateComplete;
             if (this.workspace) {
+                // Pass a COPY of the data to keep the original clean?
+                // No, for memory reasons, we pass the reference.
                 await this.workspace.loadPdf(data, name);
             }
         } catch (e) {
@@ -130,6 +147,13 @@ export class AppRoot extends LitElement {
         if (confirm(i18n.t('confirmClear'))) {
             localStorage.clear();
             window.location.reload();
+        }
+    }
+
+    handleExitWorkspace() {
+        if (confirm(i18n.t('exitConfirm'))) {
+            this.mode = 'home';
+            window.location.reload(); // Hard reset (Safest for memory)
         }
     }
 
@@ -193,6 +217,7 @@ export class AppRoot extends LitElement {
                         this.isLoading = e.detail;
                         this.requestUpdate();
                     }}
+                    @exit-workspace=${this.handleExitWorkspace}
             ></pdf-workspace>
 
             <dialog>

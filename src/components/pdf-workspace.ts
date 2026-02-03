@@ -26,90 +26,190 @@ export class PdfWorkspace extends LitElement {
     @query('.viewport') viewport!: HTMLDivElement;
 
     static styles = css`
-    :host { height: 100vh; display: flex; flex-direction: column; background: #e5e7eb; }
-    
-    header {
-      background: #fff; height: 60px; padding: 0 16px; 
-      display: flex; justify-content: space-between; align-items: center; 
-      border-bottom: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.05); z-index: 20;
-    }
-    .brand { font-weight: 600; color: #1f2937; display: flex; align-items: center; gap: 12px; }
-    .brand img { height: 32px; width: 32px; border-radius: 6px; }
+        :host {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: #e5e7eb;
+        }
 
-    .lang-select {
-      background: #f9fafb; border: 1px solid #ddd; color: #374151;
-      padding: 6px 10px; border-radius: 6px; font-size: 0.9rem; outline: none;
-    }
-    
-    .toolbar {
-      background: #fff; padding: 8px 12px; display: flex; gap: 8px; 
-      align-items: center; overflow-x: auto; border-bottom: 1px solid #e5e7eb;
-    }
-    
-    .viewport {
-      flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start;
-      padding: 30px; position: relative; touch-action: none;
-      background-image: radial-gradient(#d1d5db 1px, transparent 1px);
-      background-size: 20px 20px;
-      direction: ltr !important; 
-    }
-    
-    .page-container { 
-      position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
-      background: white; border-radius: 2px;
-    }
-    
-    /* --- ANNOTATIONS --- */
-    .draggable { 
-      position: absolute; cursor: grab; 
-      border: 1px dashed transparent; /* Hidden by default */
-      transition: border-color 0.1s;
-      user-select: none;
-    }
-    
-    /* Selected State: Blue Border + Handles */
-    .draggable.selected { 
-      border: 1px solid #2563eb; 
-      background: rgba(37, 99, 235, 0.05); 
-      z-index: 100;
-      cursor: grabbing;
-    }
+        header {
+            background: #fff;
+            height: 60px;
+            padding: 0 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            z-index: 20;
+        }
 
-    .draggable img { width: 100%; height: 100%; display: block; pointer-events: none; }
-    .draggable span { 
-      background: rgba(255,255,255,0.9); padding: 4px 8px; 
-      font-family: monospace; font-weight: bold; font-size: 14px; 
-      white-space: nowrap; border: 1px solid #ccc; display: block;
-    }
+        .brand {
+            font-weight: 600;
+            color: #1f2937;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
 
-    /* Resize Handle (Bottom Right) */
-    .resize-handle {
-      position: absolute; bottom: -6px; right: -6px;
-      width: 12px; height: 12px;
-      background: #2563eb; border: 2px solid white; border-radius: 50%;
-      cursor: nwse-resize; display: none;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    .draggable.selected .resize-handle { display: block; }
+        .brand img {
+            height: 32px;
+            width: 32px;
+            border-radius: 6px;
+        }
 
-    /* Delete Button (Top Right) */
-    .delete-btn {
-      position: absolute; top: -12px; right: -12px; width: 24px; height: 24px;
-      background: white; color: #ef4444; border: 1px solid #e5e7eb; border-radius: 50%;
-      display: none; justify-content: center; align-items: center; 
-      font-size: 16px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .delete-btn:hover { background: #fee2e2; }
-    .draggable.selected .delete-btn { display: flex; }
+        .lang-select {
+            background: #f9fafb;
+            border: 1px solid #ddd;
+            color: #374151;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            outline: none;
+        }
 
-    button {
-      padding: 8px 14px; border-radius: 6px; border: 1px solid #e5e7eb; 
-      background: white; cursor: pointer; font-size: 14px; white-space: nowrap; color: #374151;
-    }
-    button.primary { background: #2563eb; color: white; border: none; }
-    
-    .nav-controls { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; font-size: 0.9rem;}
-  `;
+        .toolbar {
+            background: #fff;
+            padding: 8px 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            overflow-x: auto;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .viewport {
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 30px;
+            position: relative;
+            touch-action: none;
+            background-image: radial-gradient(#d1d5db 1px, transparent 1px);
+            background-size: 20px 20px;
+            direction: ltr !important;
+        }
+
+        .page-container {
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            background: white;
+            border-radius: 2px;
+        }
+
+        /* --- ANNOTATIONS --- */
+
+        .draggable {
+            position: absolute;
+            cursor: grab;
+            border: 1px dashed transparent; /* Hidden by default */
+            transition: border-color 0.1s;
+            user-select: none;
+        }
+
+        /* Selected State: Blue Border + Handles */
+
+        .draggable.selected {
+            border: 1px solid #2563eb;
+            background: rgba(37, 99, 235, 0.05);
+            z-index: 100;
+            cursor: grabbing;
+        }
+
+        .draggable img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            pointer-events: none;
+        }
+
+        .draggable span {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 4px 8px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 14px;
+            white-space: nowrap;
+            border: 1px solid #ccc;
+            display: block;
+        }
+
+        /* Resize Handle (Bottom Right) */
+
+        .resize-handle {
+            position: absolute;
+            bottom: -6px;
+            right: -6px;
+            width: 12px;
+            height: 12px;
+            background: #2563eb;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: nwse-resize;
+            display: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .draggable.selected .resize-handle {
+            display: block;
+        }
+
+        /* Delete Button (Top Right) */
+
+        .delete-btn {
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            color: #ef4444;
+            border: 1px solid #e5e7eb;
+            border-radius: 50%;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .delete-btn:hover {
+            background: #fee2e2;
+        }
+
+        .draggable.selected .delete-btn {
+            display: flex;
+        }
+
+        button {
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            white-space: nowrap;
+            color: #374151;
+        }
+
+        button.primary {
+            background: #2563eb;
+            color: white;
+            border: none;
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-variant-numeric: tabular-nums;
+            font-size: 0.9rem;
+        }
+    `;
 
     connectedCallback() {
         super.connectedCallback();
@@ -346,88 +446,102 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
+    // Helper to dispatch exit event
+    requestExit() {
+        this.dispatchEvent(new CustomEvent('exit-workspace', {
+            bubbles: true,
+            composed: true
+        }));
+    }
+
     render() {
         return html`
-      <header>
-        <div class="brand">
-          <img src="/icons/icon-192.webp" alt="Logo" onerror="this.style.display='none'" />
-          <span>${i18n.t('appTitle')}</span>
-        </div>
-        
-        <select class="lang-select" @change=${this.handleLangChange}>
-             <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
-             <option value="ar" ?selected=${i18n.lang === 'ar'}>العربية</option>
-             <option value="fr" ?selected=${i18n.lang === 'fr'}>Français</option>
-        </select>
-      </header>
-      
-      <div class="toolbar">
-        <button class="primary" @click=${this.openSignModal}>${i18n.t('addSig')}</button>
-        <button @click=${this.openInitialsModal}>${i18n.t('addInitials')}</button>
-        <button @click=${this.addDateStamp}>${i18n.t('addDate')}</button>
-        <div style="flex:1"></div>
-        <button class="primary" @click=${this.saveDocument}>${i18n.t('savePdf')}</button>
-      </div>
+            <header>
+                <div class="brand">
+                    <button @click=${this.requestExit}
+                            style="margin-right:10px; padding: 4px 8px; border:none; background:transparent; font-size: 1.2rem; cursor: pointer;">
+                        ←
+                    </button>
+                    <img src="/icons/icon-192.webp" alt="Logo" onerror="this.style.display='none'"/>
+                    <span class="mobile-hide">${i18n.t('appTitle')}</span>
+                </div>
+                <select class="lang-select" @change=${this.handleLangChange}>
+                    <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
+                    <option value="ar" ?selected=${i18n.lang === 'ar'}>العربية</option>
+                    <option value="fr" ?selected=${i18n.lang === 'fr'}>Français</option>
+                </select>
+            </header>
 
-      <div class="toolbar" style="justify-content:center;">
-        <button @click=${() => this.zoom(-0.2)}> - </button>
-         <div class="nav-controls" style="margin: 0 10px;">
-           <button @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>${i18n.t('prev')}</button>
-           <span style="margin: 0 8px;">Page ${this.currentPage} / ${this.totalPages}</span>
-           <button @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>${i18n.t('next')}</button>
-        </div>
-        <button @click=${() => this.zoom(0.2)}> + </button>
-      </div>
+            <div class="toolbar">
+                <button class="primary" @click=${this.openSignModal}>${i18n.t('addSig')}</button>
+                <button @click=${this.openInitialsModal}>${i18n.t('addInitials')}</button>
+                <button @click=${this.addDateStamp}>${i18n.t('addDate')}</button>
+                <div style="flex:1"></div>
+                <button class="primary" @click=${this.saveDocument}>${i18n.t('savePdf')}</button>
+            </div>
 
-      <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
-        <div class="page-container">
-          <canvas id="pdf-canvas"></canvas>
-          
-          ${this.annotations
-            .filter(ann => ann.page === (this.currentPage - 1))
-            .map(ann => {
-                const isSelected = this.selectedId === ann.id;
+            <div class="toolbar" style="justify-content:center;">
+                <button @click=${() => this.zoom(-0.2)}> -</button>
+                <div class="nav-controls" style="margin: 0 10px;">
+                    <button @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>${i18n.t('prev')}
+                    </button>
+                    <span style="margin: 0 8px;">Page ${this.currentPage} / ${this.totalPages}</span>
+                    <button @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>
+                        ${i18n.t('next')}
+                    </button>
+                </div>
+                <button @click=${() => this.zoom(0.2)}> +</button>
+            </div>
 
-                // CSS Math for rendering
-                const style = `
+            <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
+                <div class="page-container">
+                    <canvas id="pdf-canvas"></canvas>
+
+                    ${this.annotations
+                            .filter(ann => ann.page === (this.currentPage - 1))
+                            .map(ann => {
+                                const isSelected = this.selectedId === ann.id;
+
+                                // CSS Math for rendering
+                                const style = `
                 left: ${ann.xPct * 100}%; 
                 top: ${ann.yPct * 100}%;
                 width: ${ann.widthPct ? ann.widthPct * 100 + '%' : 'auto'};
               `;
 
-                return html`
-                <div class="draggable ${isSelected ? 'selected' : ''}" 
-                     style="${style}"
-                     @mousedown=${(e: any) => this.startDrag(e, ann.id)}
-                     @touchstart=${(e: any) => this.startDrag(e, ann.id)}>
-                  
-                  <button class="delete-btn" 
-                          @mousedown=${(e: Event) => {
-                    e.stopPropagation();
-                    this.deleteAnnotation(ann.id);
-                }}
-                          @touchstart=${(e: Event) => {
-                    e.stopPropagation();
-                    this.deleteAnnotation(ann.id);
-                }}>
-                    ×
-                  </button>
+                                return html`
+                                    <div class="draggable ${isSelected ? 'selected' : ''}"
+                                         style="${style}"
+                                         @mousedown=${(e: any) => this.startDrag(e, ann.id)}
+                                         @touchstart=${(e: any) => this.startDrag(e, ann.id)}>
 
-                  <div class="resize-handle"
-                       @mousedown=${(e: any) => this.startResize(e, ann.id)}
-                       @touchstart=${(e: any) => this.startResize(e, ann.id)}>
-                  </div>
+                                        <button class="delete-btn"
+                                                @mousedown=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.deleteAnnotation(ann.id);
+                                                }}
+                                                @touchstart=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.deleteAnnotation(ann.id);
+                                                }}>
+                                            ×
+                                        </button>
 
-                  ${ann.type === 'date'
-                    ? html`<span>${ann.data}</span>`
-                    : html`<img src="${ann.data}" />`
-                }
+                                        <div class="resize-handle"
+                                             @mousedown=${(e: any) => this.startResize(e, ann.id)}
+                                             @touchstart=${(e: any) => this.startResize(e, ann.id)}>
+                                        </div>
+
+                                        ${ann.type === 'date'
+                                                ? html`<span>${ann.data}</span>`
+                                                : html`<img src="${ann.data}"/>`
+                                        }
+                                    </div>
+                                `;
+                            })
+                    }
                 </div>
-              `;
-            })
-        }
-        </div>
-      </div>
-    `;
+            </div>
+        `;
     }
 }

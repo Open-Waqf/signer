@@ -41,7 +41,10 @@ export const resources = {
         shareText: "Here is your signed PDF.",
         shareDialog: "Save or Send PDF",
         shareError: "Could not open Share menu. Please try again.",
-        tagline: "Secure. Offline. Free."
+        tagline: "Secure. Offline. Free.",
+        fileTooBigTitle: "Large File Detected",
+        fileTooBigMsg: "This file is {size}MB. Editing large files may crash mobile browsers. Continue?",
+        closeDoc: "Close File",
     },
     ar: {
         appTitle: "الموقع المفتوح",
@@ -74,7 +77,10 @@ export const resources = {
         shareText: "إليك ملف PDF الموقع.",
         shareDialog: "حفظ أو إرسال PDF",
         shareError: "تعذر فتح قائمة المشاركة. حاول مرة أخرى.",
-        tagline: "آمن. بدون اتصال. مجاني."
+        tagline: "آمن. بدون اتصال. مجاني.",
+        fileTooBigTitle: "ملف كبير",
+        fileTooBigMsg: "حجم الملف {size} ميجابايت. قد يؤدي هذا إلى توقف المتصفح. هل تريد المتابعة؟",
+        closeDoc: "إغلاق الملف",
     },
     fr: {
         appTitle: "Open Signer",
@@ -107,7 +113,10 @@ export const resources = {
         shareText: "Voici votre PDF signé.",
         shareDialog: "Enregistrer ou envoyer le PDF",
         shareError: "Impossible d'ouvrir le menu de partage. Réessayez.",
-        tagline: "Sécurisé. Hors ligne. Gratuit."
+        tagline: "Sécurisé. Hors ligne. Gratuit.",
+        fileTooBigTitle: "Fichier volumineux",
+        fileTooBigMsg: "Ce fichier fait {size} Mo. Cela peut ralentir l'application. Continuer ?",
+        closeDoc: "Fermer",
     }
 } as const;
 
