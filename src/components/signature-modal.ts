@@ -91,6 +91,14 @@ export class SignatureModal extends LitElement {
             this.draw(e.touches[0]);
         });
         this.canvas.addEventListener('touchend', () => this.stop());
+        const saved = localStorage.getItem('my-signature');
+        if (saved) {
+            const img = new Image();
+            img.onload = () => {
+                this.ctx?.drawImage(img, 0, 0);
+            };
+            img.src = saved;
+        }
     }
 
     resizeCanvas() {
@@ -123,12 +131,16 @@ export class SignatureModal extends LitElement {
 
     clear() {
         this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        localStorage.removeItem('my-signature'); // clear storage too
     }
 
     save() {
         const dataUrl = this.canvas.toDataURL('image/png');
+
+        localStorage.setItem('my-signature', dataUrl);
+
         this.dispatchEvent(new CustomEvent('signed', {detail: dataUrl}));
-        this.remove(); // Close modal
+        this.remove();
     }
 
     close() {

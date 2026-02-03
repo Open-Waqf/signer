@@ -98,6 +98,13 @@ export class AppRoot extends LitElement {
                  }}
                  @drop=${this.handleDrop}>
 
+                <div style="position: absolute; top: 20px; right: 20px;">
+                    <button @click=${() => i18n.cycleNext()}
+                            style="background: transparent; color: var(--text-sub); border: 1px solid var(--border); padding: 6px 12px; box-shadow:none;">
+                        🌐 ${i18n.getCurrentLabel()}
+                    </button>
+                </div>
+
                 <div class="drop-card">
                     <img src="/icons/icon-192.webp" alt="Open Waqf" onerror="this.style.display='none'"/>
 

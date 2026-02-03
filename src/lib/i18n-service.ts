@@ -47,6 +47,27 @@ class I18nService {
         document.documentElement.dir = dir;
         document.documentElement.lang = this.currentLang;
     }
+
+    cycleNext() {
+        const langs: LanguageCode[] = ['en', 'ar', 'fr'];
+        const index = langs.indexOf(this.currentLang);
+        const nextIndex = (index + 1) % langs.length;
+        this.setLanguage(langs[nextIndex]);
+    }
+
+    getCurrentLabel() {
+        switch (this.currentLang) {
+            case 'en':
+                return 'English';
+            case 'ar':
+                return 'عربي';
+            case 'fr':
+                return 'Français';
+            default:
+                return 'English';
+        }
+    }
+
 }
 
 export const i18n = new I18nService();

@@ -285,7 +285,12 @@ export class PdfWorkspace extends LitElement {
             // Call the new Engine Method
             const finalBytes = await pdfEngine.saveProfessional(sigData, dateData);
 
-            await fileService.savePdf(`signed-${this.pdfName}`, finalBytes);
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 16).replace(/[:T]/g, '-');
+            const cleanName = this.pdfName.replace('.pdf', '');
+            const filename = `${cleanName}_signed_${dateStr}.pdf`;
+
+            await fileService.savePdf(filename, finalBytes);
             alert(i18n.t('savedMsg'));
         } catch (e) {
             console.error(e);
@@ -302,8 +307,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     toggleLang() {
-        const next = i18n.lang === 'en' ? 'ar' : 'en';
-        i18n.setLanguage(next);
+        i18n.cycleNext();
     }
 
     render() {
@@ -316,7 +320,7 @@ export class PdfWorkspace extends LitElement {
 
                 <div style="display:flex; align-items:center">
                     <button class="lang-btn" @click=${this.toggleLang}>
-                        ${i18n.lang === 'en' ? 'عربي' : 'English'}
+                        ${i18n.getCurrentLabel()}
                     </button>
                 </div>
             </header>
