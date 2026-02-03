@@ -1,54 +1,80 @@
 import {html, LitElement} from 'lit';
 import {customElement, query, state} from 'lit/decorators.js';
+import {App} from '@capacitor/app'; // For Native Back Button
 import {fileService} from './lib/file-service';
 import {i18n} from './lib/i18n-service';
+import packageJson from '../package.json'; // Displays Version v1.0.0
 import './components/pdf-workspace';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
     @state() mode: 'home' | 'workspace' = 'home';
-    @state() isLoading = false; // New Loading State
+    @state() isLoading = false;
+    @state() toastMsg: string | null = null; // Toast State
 
     @query('pdf-workspace') workspace: any;
     @query('dialog') privacyDialog!: HTMLDialogElement;
 
+    // Disable Shadow DOM so global styles apply easily
     createRenderRoot() {
         return this;
     }
 
     connectedCallback() {
         super.connectedCallback();
-        // Listen for language changes and re-render
+
+        // 1. Listen for Language Changes
         window.addEventListener('lang-changed', () => this.requestUpdate());
+
+        // 2. Handle Native Android Back Button
+        App.addListener('backButton', () => {
+            // Priority 1: Close Privacy Modal if open
+            if (this.privacyDialog && this.privacyDialog.open) {
+                this.closePrivacy();
+                return;
+            }
+
+            // Priority 2: If inside Workspace, ask to exit
+            if (this.mode === 'workspace') {
+                if (confirm(i18n.t('exitConfirm'))) {
+                    this.mode = 'home';
+                }
+                return;
+            }
+
+            // Priority 3: Exit App
+            App.exitApp();
+        });
     }
 
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        window.removeEventListener('lang-changed', () => this.requestUpdate());
+    // --- TOAST SYSTEM ---
+    showToast(msg: string) {
+        this.toastMsg = msg;
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+            this.toastMsg = null;
+        }, 3000);
     }
 
+    // --- FILE HANDLING ---
     async handleFile(data: Uint8Array, name: string) {
-        // 1. Show Loader immediately
         this.isLoading = true;
-        this.requestUpdate(); // Force UI update
+        this.requestUpdate();
 
-        // 2. Small delay to let the UI render the spinner before blocking CPU
+        // Small delay to let UI render the spinner
         await new Promise(r => setTimeout(r, 50));
 
         try {
             this.mode = 'workspace';
-            // Wait for the workspace component to exist in DOM
             await this.updateComplete;
-
             if (this.workspace) {
                 await this.workspace.loadPdf(data, name);
             }
         } catch (e) {
             console.error(e);
-            alert('Error loading PDF');
+            this.showToast(i18n.t('errorLoading'));
             this.mode = 'home';
         } finally {
-            // 3. Hide Loader
             this.isLoading = false;
         }
     }
@@ -58,7 +84,7 @@ export class AppRoot extends LitElement {
             const data = await fileService.openPdf();
             await this.handleFile(data, 'document.pdf');
         } catch (e) {
-            // Cancelled
+            // User cancelled selection
         }
     }
 
@@ -74,6 +100,7 @@ export class AppRoot extends LitElement {
         }
     }
 
+    // --- PRIVACY MODAL ---
     showPrivacy() {
         this.privacyDialog.showModal();
     }
@@ -82,38 +109,37 @@ export class AppRoot extends LitElement {
         this.privacyDialog.close();
     }
 
+    // --- RENDER ---
     render() {
         return html`
             ${this.isLoading ? html`
                 <div class="loader-overlay">
                     <div class="spinner"></div>
-                    <div>Loading Document...</div>
+                    <div>${i18n.t('loadingDoc')}</div>
                 </div>
             ` : ''}
 
+            <div class="toast ${this.toastMsg ? 'show' : ''}">${this.toastMsg}</div>
+
             <div class="drop-zone ${this.mode === 'workspace' ? 'hidden' : ''}"
-                 @dragover=${(e: DragEvent) => {
-                     e.preventDefault();
-                     // Optional: Add visual feedback class here if desired
-                 }}
+                 @dragover=${(e: DragEvent) => e.preventDefault()}
                  @drop=${this.handleDrop}>
 
                 <div style="position: absolute; top: 20px; right: 20px;">
-                    <button @click=${() => i18n.cycleNext()}
-                            style="background: transparent; color: var(--text-sub); border: 1px solid var(--border); padding: 6px 12px; box-shadow:none;">
+                    <button @click=${() => i18n.cycleNext()} class="lang-switcher">
                         🌐 ${i18n.getCurrentLabel()}
                     </button>
                 </div>
 
                 <div class="drop-card">
-                    <img src="/icons/icon-192.webp" alt="Open Waqf" onerror="this.style.display='none'"/>
+                    <img src="/icons/icon-192.webp" alt="Logo" onerror="this.style.display='none'"/>
 
                     <h1>${i18n.t('appTitle')}</h1>
-                    <p class="sub">Secure. Offline. Free.</p>
+                    <p class="sub">v${packageJson.version} • Secure. Offline. Free.</p>
 
                     <div class="drop-area-visual">
-                        <button @click=${this.openFile}>Select PDF File</button>
-                        <p class="sub" style="margin: 12px 0 0 0; font-size: 0.85rem;">or drag and drop here</p>
+                        <button @click=${this.openFile}>${i18n.t('selectFile')}</button>
+                        <p class="sub" style="margin: 12px 0 0 0; font-size: 0.85rem;">${i18n.t('dragDropHint')}</p>
                     </div>
 
                     <a href="#" class="footer-link" @click=${(e: Event) => {
@@ -125,7 +151,9 @@ export class AppRoot extends LitElement {
                 </div>
             </div>
 
-            <pdf-workspace class="${this.mode === 'home' ? 'hidden' : ''}"></pdf-workspace>
+            <pdf-workspace class="${this.mode === 'home' ? 'hidden' : ''}"
+                           @toast=${(e: CustomEvent) => this.showToast(e.detail)}>
+            </pdf-workspace>
 
             <dialog>
                 <div class="dialog-content">

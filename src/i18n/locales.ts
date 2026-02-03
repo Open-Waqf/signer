@@ -26,7 +26,12 @@ export const resources = {
         close: "Close",
         dragHint: "Drag to move",
         // Config Overrides (Example)
-        direction: "ltr"
+        direction: "ltr",
+        selectFile: "Select PDF File",
+        dragDropHint: "or drag and drop here",
+        loadingDoc: "Loading Document...",
+        errorLoading: "Error loading PDF. Is it valid?",
+        exitConfirm: "Exit editing? Unsaved changes will be lost.",
     },
     ar: {
         appTitle: "الموقع المفتوح",
@@ -44,7 +49,12 @@ export const resources = {
         privacyContent: "مستنداتك لا تغادر هذا الجهاز أبداً. لا تتبع. لا خوادم.",
         close: "إغلاق",
         dragHint: "اسحب للتحريك",
-        direction: "rtl"
+        direction: "rtl",
+        selectFile: "اختر ملف PDF",
+        dragDropHint: "أو اسحب الملف هنا",
+        loadingDoc: "جاري تحميل المستند...",
+        errorLoading: "خطأ في تحميل الملف. هل هو صالح؟",
+        exitConfirm: "هل تريد الخروج؟ ستفقد التغييرات غير المحفوظة.",
     },
     fr: {
         appTitle: "Open Signer",
@@ -62,7 +72,12 @@ export const resources = {
         privacyContent: "Vos documents ne quittent jamais cet appareil.",
         close: "Fermer",
         dragHint: "Glisser pour déplacer",
-        direction: "ltr"
+        direction: "ltr",
+        selectFile: "Sélectionner un fichier PDF",
+        dragDropHint: "ou glissez le fichier ici",
+        loadingDoc: "Chargement du document...",
+        errorLoading: "Erreur de chargement. Est-ce valide ?",
+        exitConfirm: "Quitter ? Les modifications seront perdues.",
     }
 } as const;
 

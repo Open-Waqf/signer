@@ -199,3 +199,46 @@ dialog::backdrop {
         transform: rotate(360deg);
     }
 }
+
+/* Add Safe Area for Android 15 Edge-to-Edge / iPhone Notch */
+body {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Toast Notification Styles */
+.toast {
+    visibility: hidden;
+    min-width: 250px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 8px;
+    padding: 16px;
+    position: fixed;
+    z-index: 10000;
+    left: 50%;
+    bottom: 30px;
+    transform: translateX(-50%);
+    font-size: 16px;
+    opacity: 0;
+    transition: opacity 0.3s, bottom 0.3s;
+}
+
+.toast.show {
+    visibility: visible;
+    opacity: 1;
+    bottom: 50px; /* Slight animation up */
+}
+
+/* Language Switcher Styling fix */
+.lang-switcher {
+    background: transparent !important;
+    color: var(--text-sub) !important;
+    border: 1px solid var(--border) !important;
+    padding: 6px 12px !important;
+    box-shadow: none !important;
+}
+
+.lang-switcher:hover {
+    background: rgba(0, 0, 0, 0.05) !important;
+}

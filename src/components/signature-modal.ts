@@ -1,13 +1,19 @@
 import {css, html, LitElement} from 'lit';
-import {customElement, query} from 'lit/decorators.js';
+import {customElement, property, query} from 'lit/decorators.js';
 
 @customElement('signature-modal')
 export class SignatureModal extends LitElement {
     @query('canvas') canvas!: HTMLCanvasElement;
+
+    // NEW: specific mode to separate storage keys
+    @property() mode: 'signature' | 'initials' = 'signature';
+
     private isDrawing = false;
     private ctx: CanvasRenderingContext2D | null = null;
 
     static styles = css`
+        /* ... (Keep existing styles) ... */
+
         :host {
             position: fixed;
             top: 0;
@@ -34,7 +40,7 @@ export class SignatureModal extends LitElement {
         canvas {
             border: 2px dashed #ccc;
             border-radius: 8px;
-            touch-action: none; /* Critical for mobile drawing */
+            touch-action: none;
             background: #fafafa;
             width: 100%;
             height: 250px;
@@ -76,12 +82,34 @@ export class SignatureModal extends LitElement {
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
 
-        // Mouse Events
+        this.setupEvents();
+
+        // FIXED: Load from separate, prefixed keys
+        const storageKey = `signer_${this.mode}`;
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+            const img = new Image();
+            img.onload = () => this.ctx?.drawImage(img, 0, 0);
+            img.src = saved;
+        }
+    }
+
+    // ... (Keep resizeCanvas, setupEvents, draw logic same as before) ...
+    resizeCanvas() {
+        const rect = this.canvas.getBoundingClientRect();
+        this.canvas.width = rect.width;
+        this.canvas.height = rect.height;
+        this.ctx!.lineWidth = 3;
+        this.ctx!.lineCap = 'round';
+        this.ctx!.strokeStyle = '#000';
+    }
+
+    setupEvents() {
+        // Mouse
         this.canvas.addEventListener('mousedown', (e) => this.start(e));
         this.canvas.addEventListener('mousemove', (e) => this.draw(e));
         this.canvas.addEventListener('mouseup', () => this.stop());
-
-        // Touch Events
+        // Touch
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.start(e.touches[0]);
@@ -91,24 +119,6 @@ export class SignatureModal extends LitElement {
             this.draw(e.touches[0]);
         });
         this.canvas.addEventListener('touchend', () => this.stop());
-        const saved = localStorage.getItem('my-signature');
-        if (saved) {
-            const img = new Image();
-            img.onload = () => {
-                this.ctx?.drawImage(img, 0, 0);
-            };
-            img.src = saved;
-        }
-    }
-
-    resizeCanvas() {
-        // Make canvas resolution match display size for crisp lines
-        const rect = this.canvas.getBoundingClientRect();
-        this.canvas.width = rect.width;
-        this.canvas.height = rect.height;
-        this.ctx!.lineWidth = 3;
-        this.ctx!.lineCap = 'round';
-        this.ctx!.strokeStyle = '#000';
     }
 
     start(e: { clientX: number, clientY: number }) {
@@ -131,13 +141,27 @@ export class SignatureModal extends LitElement {
 
     clear() {
         this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        localStorage.removeItem('my-signature'); // clear storage too
+        // FIXED: Remove specific key
+        localStorage.removeItem(`signer_${this.mode}`);
     }
 
     save() {
-        const dataUrl = this.canvas.toDataURL('image/png');
+        // ... (Keep existing resize/optimization logic) ...
+        const MAX_WIDTH = 500;
+        let finalCanvas = this.canvas;
+        if (this.canvas.width > MAX_WIDTH) {
+            const scale = MAX_WIDTH / this.canvas.width;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = MAX_WIDTH;
+            tempCanvas.height = this.canvas.height * scale;
+            const tCtx = tempCanvas.getContext('2d');
+            tCtx?.drawImage(this.canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+            finalCanvas = tempCanvas;
+        }
+        const dataUrl = finalCanvas.toDataURL('image/png', 0.8);
 
-        localStorage.setItem('my-signature', dataUrl);
+        // FIXED: Save with prefix
+        localStorage.setItem(`signer_${this.mode}`, dataUrl);
 
         this.dispatchEvent(new CustomEvent('signed', {detail: dataUrl}));
         this.remove();
@@ -150,7 +174,7 @@ export class SignatureModal extends LitElement {
     render() {
         return html`
             <div class="card">
-                <h3>Draw Signature</h3>
+                <h3>${this.mode === 'initials' ? 'Draw Initials' : 'Draw Signature'}</h3>
                 <canvas></canvas>
                 <div class="actions">
                     <button class="btn-close" @click=${this.close}>Cancel</button>

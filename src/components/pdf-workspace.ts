@@ -99,6 +99,7 @@ export class PdfWorkspace extends LitElement {
             touch-action: none;
             background-image: radial-gradient(#d1d5db 1px, transparent 1px);
             background-size: 20px 20px; /* Dot pattern background */
+            direction: ltr !important;
         }
 
         .page-container {
@@ -291,10 +292,18 @@ export class PdfWorkspace extends LitElement {
             const filename = `${cleanName}_signed_${dateStr}.pdf`;
 
             await fileService.savePdf(filename, finalBytes);
-            alert(i18n.t('savedMsg'));
+            this.dispatchEvent(new CustomEvent('toast', {
+                detail: i18n.t('savedMsg'),
+                bubbles: true,
+                composed: true
+            }));
         } catch (e) {
             console.error(e);
-            alert('Error saving PDF. Please try again.');
+            this.dispatchEvent(new CustomEvent('toast', {
+                detail: 'Error Saving PDF',
+                bubbles: true,
+                composed: true
+            }));
         }
     }
 
