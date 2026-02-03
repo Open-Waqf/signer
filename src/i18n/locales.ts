@@ -55,9 +55,11 @@ export const resources = {
         privacyBadge: "No Uploads. Processing happens 100% on-device.",
         addAuditPage: "Attach Audit Trail Page",
         auditTrail: "Audit Trail",
+        sharePdf: "Share PDF",
+        noChanges: "No changes to save/share.",
     },
     ar: {
-        appTitle: "الموقع المفتوح",
+        appTitle: "الموقّع المفتوح",
         appDesc: "وقّع مستندات PDF بأمان وبدون اتصال. أداة مجانية ومفتوحة المصدر.",
         privacy: "الخصوصية",
         zoomIn: "تكبير",
@@ -101,7 +103,8 @@ export const resources = {
         performanceHint: "أفضل للملفات أقل من 25 ميجابايت. الملفات الكبيرة قد توقف المتصفح.",
         privacyBadge: "لا رفع للملفات. المعالجة تتم 100% على الجهاز.",
         addAuditPage: "إرفاق صفحة سجل التدقيق",
-        auditTrail: "سجل التدقيق"
+        auditTrail: "سجل التدقيق",
+        sharePdf: "مشاركة PDF",
     },
     fr: {
         appTitle: "Open Signer",
@@ -148,7 +151,8 @@ export const resources = {
         performanceHint: "Recommandé pour les fichiers de moins de 25 Mo.",
         privacyBadge: "Aucun envoi. Traitement 100% sur l'appareil.",
         addAuditPage: "Joindre une page d'audit",
-        auditTrail: "Journal d'audit"
+        auditTrail: "Journal d'audit",
+        sharePdf: "Partager PDF",
     }
 } as const;
 
