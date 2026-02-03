@@ -8,7 +8,7 @@ export class SignatureModal extends LitElement {
 
     private isDrawing = false;
     private ctx: CanvasRenderingContext2D | null = null;
-    // Track listener to remove it later
+    private points: { x: number, y: number }[] = []; // Store points for smoothing
     private _resizeHandler: (() => void) | null = null;
 
     static styles = css`
@@ -23,7 +23,6 @@ export class SignatureModal extends LitElement {
             justify-content: center;
             align-items: center;
             z-index: 1000;
-            /* Fix: Force LTR so coordinates don't flip in Arabic */
             direction: ltr;
         }
 
@@ -45,11 +44,7 @@ export class SignatureModal extends LitElement {
             width: 100%;
             height: 250px;
             display: block;
-        }
-
-        h3 {
-            margin-top: 0;
-            color: #333;
+            cursor: crosshair;
         }
 
         .actions {
@@ -84,60 +79,54 @@ export class SignatureModal extends LitElement {
     `;
 
     async firstUpdated() {
-        // Wait for layout to settle
         await new Promise(requestAnimationFrame);
 
         this.ctx = this.canvas.getContext('2d');
         this.resizeCanvas();
 
-        // Bind resize handler safely
         this._resizeHandler = () => this.resizeCanvas();
         window.addEventListener('resize', this._resizeHandler!);
 
         this.setupEvents();
-
-        // Load saved data
-        const storageKey = `signer_${this.mode}`;
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-            const img = new Image();
-            img.onload = () => this.ctx?.drawImage(img, 0, 0);
-            img.src = saved;
-        }
+        this.loadSaved();
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        if (this._resizeHandler) {
-            window.removeEventListener('resize', this._resizeHandler);
+        if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
+    }
+
+    loadSaved() {
+        const storageKey = `signer_${this.mode}`;
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+            const img = new Image();
+            img.onload = () => this.ctx?.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+            img.src = saved;
         }
     }
 
     resizeCanvas() {
         const rect = this.canvas.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
-            // Set Bitmap size to match CSS size
             this.canvas.width = rect.width;
             this.canvas.height = rect.height;
 
-            // Re-apply context styles after resize clears them
+            // Reset Context Styles
             if (this.ctx) {
-                this.ctx.lineWidth = 3;
+                this.ctx.lineJoin = 'round';
                 this.ctx.lineCap = 'round';
-                this.ctx.strokeStyle = '#000';
+                this.ctx.lineWidth = 2;
+                this.ctx.fillStyle = '#000'; // For dots
+                this.ctx.strokeStyle = '#000'; // For lines
             }
         }
     }
 
-    // --- ROBUST COORDINATE CALCULATION ---
     getMousePos(e: { clientX: number, clientY: number }) {
         const rect = this.canvas.getBoundingClientRect();
-
-        // Calculate scaling factors (Bitmap Resolution / CSS Size)
-        // This fixes the offset if browser is zoomed or on high-DPI screens
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
-
         return {
             x: (e.clientX - rect.left) * scaleX,
             y: (e.clientY - rect.top) * scaleY
@@ -145,11 +134,7 @@ export class SignatureModal extends LitElement {
     }
 
     setupEvents() {
-        // Mouse
-        this.canvas.addEventListener('mousedown', (e) => this.start(e));
-        this.canvas.addEventListener('mousemove', (e) => this.draw(e));
-        this.canvas.addEventListener('mouseup', () => this.stop());
-        // Touch (Passive: false prevents scrolling while drawing)
+        // Touch (Passive false is critical for drawing)
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.start(e.touches[0]);
@@ -159,24 +144,52 @@ export class SignatureModal extends LitElement {
             this.draw(e.touches[0]);
         }, {passive: false});
         this.canvas.addEventListener('touchend', () => this.stop());
+
+        // Mouse
+        this.canvas.addEventListener('mousedown', (e) => this.start(e));
+        this.canvas.addEventListener('mousemove', (e) => this.draw(e));
+        this.canvas.addEventListener('mouseup', () => this.stop());
     }
 
     start(e: { clientX: number, clientY: number }) {
         this.isDrawing = true;
-        const pos = this.getMousePos(e); // Use helper
+        this.points = []; // Reset points
+        const pos = this.getMousePos(e);
+        this.points.push(pos);
+
+        // Draw a single dot in case it's just a tap
         this.ctx?.beginPath();
-        this.ctx?.moveTo(pos.x, pos.y);
+        this.ctx?.arc(pos.x, pos.y, 1, 0, Math.PI * 2);
+        this.ctx?.fill();
     }
 
     draw(e: { clientX: number, clientY: number }) {
-        if (!this.isDrawing) return;
-        const pos = this.getMousePos(e); // Use helper
-        this.ctx?.lineTo(pos.x, pos.y);
-        this.ctx?.stroke();
+        if (!this.isDrawing || !this.ctx) return;
+
+        const pos = this.getMousePos(e);
+        this.points.push(pos);
+
+        // SMOOTHING ALGORITHM: Quadratic Curve
+        // We draw from the previous mid-point to the current mid-point
+        if (this.points.length > 2) {
+            const lastTwo = this.points.slice(-3);
+            const p1 = lastTwo[0];
+            const p2 = lastTwo[1];
+            const p3 = lastTwo[2];
+
+            const mid1 = {x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2};
+            const mid2 = {x: (p2.x + p3.x) / 2, y: (p2.y + p3.y) / 2};
+
+            this.ctx.beginPath();
+            this.ctx.moveTo(mid1.x, mid1.y);
+            this.ctx.quadraticCurveTo(p2.x, p2.y, mid2.x, mid2.y);
+            this.ctx.stroke();
+        }
     }
 
     stop() {
         this.isDrawing = false;
+        this.points = []; // Clear for next stroke
     }
 
     clear() {
@@ -185,7 +198,8 @@ export class SignatureModal extends LitElement {
     }
 
     save() {
-        // Optimization: Downscale huge images to prevent memory crash
+        // 1. Crop empty space (Optional but nice)
+        // 2. Downscale for memory safety
         const MAX_WIDTH = 500;
         let finalCanvas = this.canvas;
 
@@ -213,6 +227,7 @@ export class SignatureModal extends LitElement {
     }
 
     render() {
+        // Note: Text here should ideally be i18n too, but keeping it simple for this snippet
         return html`
             <div class="card">
                 <h3>${this.mode === 'initials' ? 'Draw Initials' : 'Draw Signature'}</h3>
