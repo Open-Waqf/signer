@@ -306,11 +306,13 @@ export class PdfWorkspace extends LitElement {
         }
     `;
 
+    private onLangChanged = () => this.requestUpdate();
+
     connectedCallback() {
         super.connectedCallback();
-        window.addEventListener('lang-changed', () => this.requestUpdate());
+        window.addEventListener('lang-changed', this.onLangChanged);
         window.addEventListener('mousemove', this.handleGlobalMove);
-        window.addEventListener('touchmove', this.handleGlobalMove, {passive: false});
+        window.addEventListener('touchmove', this.handleGlobalMove as any, {passive: false});
         window.addEventListener('mouseup', this.stopInteraction);
         window.addEventListener('touchend', this.stopInteraction);
         window.addEventListener('keydown', this.handleKeyboard);
@@ -318,6 +320,11 @@ export class PdfWorkspace extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        window.removeEventListener('lang-changed', this.onLangChanged);
+        window.removeEventListener('mousemove', this.handleGlobalMove);
+        window.removeEventListener('touchmove', this.handleGlobalMove as any);
+        window.removeEventListener('mouseup', this.stopInteraction);
+        window.removeEventListener('touchend', this.stopInteraction);
         window.removeEventListener('keydown', this.handleKeyboard);
     }
 
