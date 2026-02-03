@@ -4,16 +4,12 @@ import {customElement, property, query} from 'lit/decorators.js';
 @customElement('signature-modal')
 export class SignatureModal extends LitElement {
     @query('canvas') canvas!: HTMLCanvasElement;
-
-    // NEW: specific mode to separate storage keys
     @property() mode: 'signature' | 'initials' = 'signature';
 
     private isDrawing = false;
     private ctx: CanvasRenderingContext2D | null = null;
 
     static styles = css`
-        /* ... (Keep existing styles) ... */
-
         :host {
             position: fixed;
             top: 0;
@@ -44,6 +40,7 @@ export class SignatureModal extends LitElement {
             background: #fafafa;
             width: 100%;
             height: 250px;
+            display: block; /* Fixes layout inline issues */
         }
 
         .actions {
@@ -77,14 +74,16 @@ export class SignatureModal extends LitElement {
         }
     `;
 
-    firstUpdated() {
+    async firstUpdated() {
+        // FIX: Wait for 1 frame so the DOM is fully painted and has width
+        await new Promise(requestAnimationFrame);
+
         this.ctx = this.canvas.getContext('2d');
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
-
         this.setupEvents();
 
-        // FIXED: Load from separate, prefixed keys
+        // Load Saved Data
         const storageKey = `signer_${this.mode}`;
         const saved = localStorage.getItem(storageKey);
         if (saved) {
@@ -94,14 +93,16 @@ export class SignatureModal extends LitElement {
         }
     }
 
-    // ... (Keep resizeCanvas, setupEvents, draw logic same as before) ...
     resizeCanvas() {
         const rect = this.canvas.getBoundingClientRect();
-        this.canvas.width = rect.width;
-        this.canvas.height = rect.height;
-        this.ctx!.lineWidth = 3;
-        this.ctx!.lineCap = 'round';
-        this.ctx!.strokeStyle = '#000';
+        // Safety check: ensure we don't set 0 width
+        if (rect.width > 0 && rect.height > 0) {
+            this.canvas.width = rect.width;
+            this.canvas.height = rect.height;
+            this.ctx!.lineWidth = 3;
+            this.ctx!.lineCap = 'round';
+            this.ctx!.strokeStyle = '#000';
+        }
     }
 
     setupEvents() {
@@ -109,15 +110,15 @@ export class SignatureModal extends LitElement {
         this.canvas.addEventListener('mousedown', (e) => this.start(e));
         this.canvas.addEventListener('mousemove', (e) => this.draw(e));
         this.canvas.addEventListener('mouseup', () => this.stop());
-        // Touch
+        // Touch - Use passive: false to prevent scrolling while drawing
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.start(e.touches[0]);
-        });
+        }, {passive: false});
         this.canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
             this.draw(e.touches[0]);
-        });
+        }, {passive: false});
         this.canvas.addEventListener('touchend', () => this.stop());
     }
 
@@ -141,26 +142,27 @@ export class SignatureModal extends LitElement {
 
     clear() {
         this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        // FIXED: Remove specific key
         localStorage.removeItem(`signer_${this.mode}`);
     }
 
     save() {
-        // ... (Keep existing resize/optimization logic) ...
+        // Resize for memory safety
         const MAX_WIDTH = 500;
         let finalCanvas = this.canvas;
+
         if (this.canvas.width > MAX_WIDTH) {
             const scale = MAX_WIDTH / this.canvas.width;
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = MAX_WIDTH;
             tempCanvas.height = this.canvas.height * scale;
             const tCtx = tempCanvas.getContext('2d');
-            tCtx?.drawImage(this.canvas, 0, 0, tempCanvas.width, tempCanvas.height);
-            finalCanvas = tempCanvas;
+            if (tCtx) {
+                tCtx.drawImage(this.canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+                finalCanvas = tempCanvas;
+            }
         }
-        const dataUrl = finalCanvas.toDataURL('image/png', 0.8);
 
-        // FIXED: Save with prefix
+        const dataUrl = finalCanvas.toDataURL('image/png');
         localStorage.setItem(`signer_${this.mode}`, dataUrl);
 
         this.dispatchEvent(new CustomEvent('signed', {detail: dataUrl}));

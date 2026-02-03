@@ -1,67 +1,53 @@
 import {html, LitElement} from 'lit';
 import {customElement, query, state} from 'lit/decorators.js';
-import {App} from '@capacitor/app'; // For Native Back Button
+import {App} from '@capacitor/app';
 import {fileService} from './lib/file-service';
 import {i18n} from './lib/i18n-service';
-import packageJson from '../package.json'; // Displays Version v1.0.0
+import packageJson from '../package.json';
 import './components/pdf-workspace';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
     @state() mode: 'home' | 'workspace' = 'home';
     @state() isLoading = false;
-    @state() toastMsg: string | null = null; // Toast State
+    @state() toastMsg: string | null = null;
 
     @query('pdf-workspace') workspace: any;
     @query('dialog') privacyDialog!: HTMLDialogElement;
 
-    // Disable Shadow DOM so global styles apply easily
     createRenderRoot() {
         return this;
     }
 
     connectedCallback() {
         super.connectedCallback();
-
-        // 1. Listen for Language Changes
         window.addEventListener('lang-changed', () => this.requestUpdate());
 
-        // 2. Handle Native Android Back Button
         App.addListener('backButton', () => {
-            // Priority 1: Close Privacy Modal if open
             if (this.privacyDialog && this.privacyDialog.open) {
                 this.closePrivacy();
                 return;
             }
-
-            // Priority 2: If inside Workspace, ask to exit
             if (this.mode === 'workspace') {
                 if (confirm(i18n.t('exitConfirm'))) {
                     this.mode = 'home';
                 }
                 return;
             }
-
-            // Priority 3: Exit App
             App.exitApp();
         });
     }
 
-    // --- TOAST SYSTEM ---
     showToast(msg: string) {
         this.toastMsg = msg;
-        // Auto-hide after 3 seconds
         setTimeout(() => {
             this.toastMsg = null;
         }, 3000);
     }
 
-    // --- FILE HANDLING ---
     async handleFile(data: Uint8Array, name: string) {
         this.isLoading = true;
         this.requestUpdate();
-
-        // Small delay to let UI render the spinner
         await new Promise(r => setTimeout(r, 50));
 
         try {
@@ -84,7 +70,7 @@ export class AppRoot extends LitElement {
             const data = await fileService.openPdf();
             await this.handleFile(data, 'document.pdf');
         } catch (e) {
-            // User cancelled selection
+            // Cancelled
         }
     }
 
@@ -100,7 +86,11 @@ export class AppRoot extends LitElement {
         }
     }
 
-    // --- PRIVACY MODAL ---
+    handleLangChange(e: Event) {
+        const select = e.target as HTMLSelectElement;
+        i18n.setLanguage(select.value as any);
+    }
+
     showPrivacy() {
         this.privacyDialog.showModal();
     }
@@ -109,7 +99,6 @@ export class AppRoot extends LitElement {
         this.privacyDialog.close();
     }
 
-    // --- RENDER ---
     render() {
         return html`
             ${this.isLoading ? html`
@@ -126,9 +115,12 @@ export class AppRoot extends LitElement {
                  @drop=${this.handleDrop}>
 
                 <div style="position: absolute; top: 20px; right: 20px;">
-                    <button @click=${() => i18n.cycleNext()} class="lang-switcher">
-                        🌐 ${i18n.getCurrentLabel()}
-                    </button>
+                    <select @change=${this.handleLangChange}
+                            style="padding: 6px; border-radius: 6px; border: 1px solid #ddd;">
+                        <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
+                        <option value="ar" ?selected=${i18n.lang === 'ar'}>العربية</option>
+                        <option value="fr" ?selected=${i18n.lang === 'fr'}>Français</option>
+                    </select>
                 </div>
 
                 <div class="drop-card">
@@ -151,9 +143,14 @@ export class AppRoot extends LitElement {
                 </div>
             </div>
 
-            <pdf-workspace class="${this.mode === 'home' ? 'hidden' : ''}"
-                           @toast=${(e: CustomEvent) => this.showToast(e.detail)}>
-            </pdf-workspace>
+            <pdf-workspace
+                    class="${this.mode === 'home' ? 'hidden' : ''}"
+                    @toast=${(e: CustomEvent) => this.showToast(e.detail)}
+                    @set-loading=${(e: CustomEvent) => {
+                        this.isLoading = e.detail;
+                        this.requestUpdate();
+                    }}
+            ></pdf-workspace>
 
             <dialog>
                 <div class="dialog-content">
