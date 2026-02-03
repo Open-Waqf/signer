@@ -1,6 +1,6 @@
 // src/i18n/locales.ts
 
-// 1. Global Configuration (Not language dependent, but overridable)
+// 1. Global Configuration
 export const config = {
     defaultLang: 'en',
     dateFormat: 'YYYY-MM-DD',
@@ -26,7 +26,6 @@ export const resources = {
         privacyContent: "Your documents never leave this device. No tracking. No servers.",
         close: "Close",
         dragHint: "Drag to move",
-        // Config Overrides (Example)
         direction: "ltr",
         selectFile: "Select PDF File",
         dragDropHint: "or drag and drop here",
@@ -41,16 +40,21 @@ export const resources = {
         shareText: "Here is your signed PDF.",
         shareDialog: "Save or Send PDF",
         shareError: "Could not open Share menu. Please try again.",
-        tagline: "Secure. Offline. Free.",
+        tagline: "Visual PDF Signer. Secure. Offline. Free.",
         fileTooBigTitle: "Large File Detected",
         fileTooBigMsg: "This file is {size}MB. Editing large files may crash mobile browsers. Continue?",
         closeDoc: "Close File",
-        undo: "Undo",
-        redo: "Redo",
+        undo: "Undo", redo: "Redo",
         addText: "Add Text",
         editText: "Edit Text Content:",
         enterText: "Type text here",
-        contactUs: "Contact Us"
+        contactUs: "Contact Us",
+        disclaimerTitle: "Important Note",
+        pkiDisclaimer: "This tool applies a visual signature only. It does not generate a cryptographic PKI digital certificate.",
+        performanceHint: "Best for files under 25MB. Large files may crash mobile browsers.",
+        privacyBadge: "No Uploads. Processing happens 100% on-device.",
+        addAuditPage: "Attach Audit Trail Page",
+        auditTrail: "Audit Trail",
     },
     ar: {
         appTitle: "الموقع المفتوح",
@@ -91,7 +95,13 @@ export const resources = {
         addText: "إضافة نص",
         editText: "تعديل النص:",
         enterText: "اكتب النص هنا",
-        contactUs: "اتصل بنا"
+        contactUs: "اتصل بنا",
+        disclaimerTitle: "ملاحظة مهمة",
+        pkiDisclaimer: "تطبق هذه الأداة توقيعاً مرئياً فقط. لا تنشئ شهادة رقمية مشفرة (PKI).",
+        performanceHint: "أفضل للملفات أقل من 25 ميجابايت. الملفات الكبيرة قد توقف المتصفح.",
+        privacyBadge: "لا رفع للملفات. المعالجة تتم 100% على الجهاز.",
+        addAuditPage: "إرفاق صفحة سجل التدقيق",
+        auditTrail: "سجل التدقيق"
     },
     fr: {
         appTitle: "Open Signer",
@@ -132,7 +142,13 @@ export const resources = {
         addText: "Ajouter Texte",
         editText: "Modifier le texte :",
         enterText: "Tapez votre texte ici",
-        contactUs: "Contactez-nous"
+        contactUs: "Contactez-nous",
+        disclaimerTitle: "Note Importante",
+        pkiDisclaimer: "Cet outil applique une signature visuelle uniquement. Il ne génère pas de certificat numérique PKI.",
+        performanceHint: "Recommandé pour les fichiers de moins de 25 Mo.",
+        privacyBadge: "Aucun envoi. Traitement 100% sur l'appareil.",
+        addAuditPage: "Joindre une page d'audit",
+        auditTrail: "Journal d'audit"
     }
 } as const;
 

@@ -123,6 +123,29 @@ The GitHub Action does **not** build the APK to the store automatically. To rele
 3. Open **Android Studio** -> **Build** -> **Generate Signed Bundle / APK**.
 4. Copy the resulting APK to `public/app/signer.apk` manually if distributing via the website.
 
+## ⚠️ Important Disclaimers
+
+### Visual vs. Digital Signatures
+
+Open Waqf Signer applies a **visual electronic signature** (drawing an image on a PDF page).
+
+* ✅ **Good for:** Contracts, internal approvals, invoices, waivers, and general business use where visual consent is
+  sufficient.
+* ❌ **Not for:** Scenarios requiring legally mandated **PKI / Digital Certificates** (e.g., eIDAS Qualified Electronic
+  Signatures) that require a cryptographic USB token or Smart Card.
+
+### Privacy & Security
+
+* **No Uploads:** Your documents **never** leave your device. All processing is done in the browser's memory.
+* **Audit Trail:** The app generates a local "Event Log" page attached to the end of your PDF to track when signatures
+  were applied.
+
+### Performance Limits
+
+* **Recommended:** Files under **25MB**.
+* **Large Files:** Since everything runs in your RAM (memory), opening files larger than 50MB-100MB on mobile devices
+  may cause the browser tab to crash. This is a security feature of the browser sandbox.
+
 ---
 
 *Built with ❤️ for the Ummah and Humanity.*

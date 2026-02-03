@@ -15,6 +15,9 @@ export class PdfWorkspace extends LitElement {
 
     @state() annotations: Annotation[] = [];
 
+    // NEW: Audit Trail Toggle State
+    @state() includeAudit = false;
+
     // Interaction State
     @state() selectedId: string | null = null;
     @state() isDragging = false;
@@ -37,8 +40,6 @@ export class PdfWorkspace extends LitElement {
             background: #e5e7eb;
             overflow: hidden;
         }
-
-        /* --- HEADER --- */
 
         header {
             background: #fff;
@@ -72,7 +73,7 @@ export class PdfWorkspace extends LitElement {
             }
         }
 
-        /* --- TOOLBARS --- */
+        /* TOOLBAR */
 
         .toolbar {
             background: #fff;
@@ -83,22 +84,16 @@ export class PdfWorkspace extends LitElement {
             border-bottom: 1px solid #e5e7eb;
             flex-shrink: 0;
             height: 54px;
-
-            /* Horizontal Scroll Logic */
             overflow-x: auto;
             white-space: nowrap;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
-
-            /* Add padding to right so last item isn't cut off */
             padding-right: 20px;
         }
 
         .toolbar::-webkit-scrollbar {
             display: none;
         }
-
-        /* Secondary Toolbar (Zoom/Nav) */
 
         .toolbar-secondary {
             justify-content: space-between;
@@ -121,8 +116,6 @@ export class PdfWorkspace extends LitElement {
             font-weight: 500;
         }
 
-        /* --- VIEWPORT --- */
-
         .viewport {
             flex: 1;
             display: grid;
@@ -142,8 +135,6 @@ export class PdfWorkspace extends LitElement {
             flex-shrink: 0;
         }
 
-        /* --- BUTTON STYLES --- */
-
         button {
             padding: 8px 14px;
             border-radius: 6px;
@@ -162,13 +153,11 @@ export class PdfWorkspace extends LitElement {
             border: none;
         }
 
-        /* Mobile Specific Button Tweaks */
         @media (max-width: 600px) {
             .btn-label {
                 display: none;
             }
 
-            /* Make buttons squarer and larger for touch */
             button {
                 padding: 0;
                 width: 40px;
@@ -176,7 +165,6 @@ export class PdfWorkspace extends LitElement {
                 font-size: 1.2rem;
             }
 
-            /* Add gap to toolbar container */
             .toolbar {
                 gap: 6px;
             }
@@ -186,14 +174,11 @@ export class PdfWorkspace extends LitElement {
                 gap: 15px;
             }
         }
-
         @media (min-width: 601px) {
             .btn-label {
                 margin-left: 6px;
             }
         }
-
-        /* --- ANNOTATIONS --- */
 
         .draggable {
             position: absolute;
@@ -219,13 +204,11 @@ export class PdfWorkspace extends LitElement {
             display: block;
             background: transparent;
             white-space: nowrap;
-            font-family: 'Helvetica', sans-serif;
+            font-family: 'WaqfCustom', sans-serif;
             color: black;
             line-height: 1;
             pointer-events: none;
         }
-
-        /* Controls */
 
         .delete-btn {
             position: absolute;
@@ -266,8 +249,6 @@ export class PdfWorkspace extends LitElement {
         .draggable.selected .resize-handle {
             display: block;
         }
-
-        /* Style Popup */
 
         .style-popup {
             position: absolute;
@@ -420,7 +401,6 @@ export class PdfWorkspace extends LitElement {
 
         const widthPct = type === 'initials' ? 0.15 : 0.25;
 
-        // FIXED TS6385: Deprecated substr -> slice
         const newAnn: Annotation = {
             id: Math.random().toString(36).slice(2, 11),
             type,
@@ -437,13 +417,11 @@ export class PdfWorkspace extends LitElement {
     }
 
     addTextAnnotation() {
-        // FIXED TS2345: Explicit cast or fallback
         const text = (i18n.t('enterText') as string) || 'Type text';
         this.addAnnotation('date', text, 0.5);
     }
 
     handleTextEdit(id: string, currentText: string | undefined) {
-        // FIXED TS2345: Explicit cast or fallback
         const promptMsg = (i18n.t('editText') as string) || 'Edit Text:';
         const safeCurrentText = currentText || '';
         const newText = prompt(promptMsg, safeCurrentText);
@@ -567,10 +545,17 @@ export class PdfWorkspace extends LitElement {
         await new Promise(r => setTimeout(r, 100));
         try {
             const dateStr = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-            const filename = `${this.pdfName.replace('.pdf', '')}_signed_${dateStr}.pdf`;
-            const finalBytes = await pdfEngine.saveProfessional(this.annotations);
+            const cleanName = this.pdfName.replace('.pdf', '');
+            const filename = `${cleanName}_signed_${dateStr}.pdf`;
+
+            // Updated Call: passing pdfName and includeAudit
+            const finalBytes = await pdfEngine.saveProfessional(
+                this.annotations,
+                this.pdfName,
+                this.includeAudit
+            );
+
             await fileService.savePdf(filename, finalBytes);
-            // FIXED TS2345
             this.dispatchEvent(new CustomEvent('toast', {
                 detail: (i18n.t('savedMsg') as string) || 'Saved',
                 bubbles: true,
@@ -592,6 +577,11 @@ export class PdfWorkspace extends LitElement {
         i18n.setLanguage((e.target as HTMLSelectElement).value as any);
     }
 
+    handleImageError(e: Event) {
+        const img = e.target as HTMLImageElement;
+        img.style.display = 'none';
+    }
+
     render() {
         return html`
             <header>
@@ -600,7 +590,7 @@ export class PdfWorkspace extends LitElement {
                             style="margin-right:10px; padding:0; width:40px; border:none; background:transparent; font-size: 1.5rem;">
                         ←
                     </button>
-                    <img src="/icons/icon-192.webp" alt="Open Waqf Signer Logo" onerror="this.style.display='none'"/>
+                    <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}" @error=${this.handleImageError}/>
                     <span class="mobile-hide">${i18n.t('appTitle')}</span>
                 </div>
                 <select class="lang-select" @change=${this.handleLangChange}>
@@ -630,6 +620,15 @@ export class PdfWorkspace extends LitElement {
                 <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}">↪</button>
 
                 <div style="flex:1"></div>
+
+                <label style="display:flex; align-items:center; gap:6px; margin-right:10px; font-size:0.8rem; cursor:pointer;"
+                       title="${i18n.t('addAuditPage')}">
+                    <input type="checkbox"
+                           ?checked=${this.includeAudit}
+                           @change=${(e: Event) => this.includeAudit = (e.target as HTMLInputElement).checked}>
+                    <span class="btn-label">${i18n.t('auditTrail')}</span>
+                    <span class="mobile-hide" style="font-size:1rem;">📋</span>
+                </label>
 
                 <button class="primary" @click=${this.saveDocument} title="${i18n.t('savePdf')}">
                     💾<span class="btn-label">${i18n.t('savePdf')}</span>

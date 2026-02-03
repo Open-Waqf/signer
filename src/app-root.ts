@@ -7,7 +7,7 @@ import packageJson from '../package.json';
 import './components/pdf-workspace';
 import {Capacitor} from '@capacitor/core';
 import {registerSW} from 'virtual:pwa-register';
-import { AppConfig } from './config';
+import {AppConfig} from './config';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -156,6 +156,11 @@ export class AppRoot extends LitElement {
         }
     }
 
+    handleImageError(e: Event) {
+        const img = e.target as HTMLImageElement;
+        img.style.display = 'none';
+    }
+
     render() {
         return html`
             ${this.isLoading ? html`
@@ -181,7 +186,7 @@ export class AppRoot extends LitElement {
                 </div>
 
                 <div class="drop-card">
-                    <img src="/icons/icon-192.webp" alt="Logo" onerror="this.style.display='none'"/>
+                    <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}" @error=${this.handleImageError}/>
 
                     <h1>${i18n.t('appTitle')}</h1>
                     <p class="sub">v${packageJson.version} • ${i18n.t('tagline')}</p>
@@ -189,6 +194,12 @@ export class AppRoot extends LitElement {
                     <div class="drop-area-visual">
                         <button @click=${this.openFile}>${i18n.t('selectFile')}</button>
                         <p class="sub" style="margin: 12px 0 0 0; font-size: 0.85rem;">${i18n.t('dragDropHint')}</p>
+                        <p style="font-size: 0.75rem; color: #f59e0b; margin-top: 8px;">
+                            ⚠️ ${i18n.t('performanceHint')}
+                        </p>
+                    </div>
+                    <div style="margin-top: 16px; font-size: 0.8rem; color: #10b981; font-weight: 500; background: #ecfdf5; padding: 6px 12px; border-radius: 20px;">
+                        🛡️ ${i18n.t('privacyBadge')}
                     </div>
                     <div style="margin-top: 24px; display: flex; gap: 15px; font-size: 0.85rem;">
                         <a href="#" class="footer-link" @click=${(e: Event) => {
@@ -204,7 +215,7 @@ export class AppRoot extends LitElement {
                             ${i18n.t('contactUs')}
                         </a>
                     </div>
-                    
+
                     <button @click=${() => {
                         const url = `${window.location.origin}/?lang=${i18n.lang}`;
                         navigator.clipboard.writeText(url);

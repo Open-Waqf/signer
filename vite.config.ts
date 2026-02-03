@@ -12,6 +12,12 @@ export default defineConfig({
             injectRegister: null,
             registerType: 'autoUpdate',
             includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+            workbox: {
+                cleanupOutdatedCaches: true,
+                skipWaiting: true,
+                clientsClaim: true,
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,bcmap,pfb,ttf}']
+            },
             manifest: {
                 name: 'Open Waqf Signer',
                 short_name: 'Signer',
