@@ -21,6 +21,10 @@ export class PdfWorkspace extends LitElement {
     @state() isResizing = false;
     @state() dragOffset = {x: 0, y: 0};
 
+    // --- HISTORY STATE ---
+    @state() history: Annotation[][] = [];
+    @state() future: Annotation[][] = [];
+
     @query('#pdf-canvas') canvas!: HTMLCanvasElement;
     @query('.page-container') container!: HTMLDivElement;
     @query('.viewport') viewport!: HTMLDivElement;
@@ -220,9 +224,67 @@ export class PdfWorkspace extends LitElement {
         window.addEventListener('touchmove', this.handleGlobalMove, {passive: false});
         window.addEventListener('mouseup', this.stopInteraction);
         window.addEventListener('touchend', this.stopInteraction);
+        window.addEventListener('keydown', this.handleKeyboard);
     }
 
-    // ... (Keep loadPdf, renderPage, changePage, zoom logic same as before) ...
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        window.removeEventListener('keydown', this.handleKeyboard);
+    }
+
+    handleKeyboard = (e: KeyboardEvent) => {
+        // Ctrl+Z or Cmd+Z
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            this.undo();
+        }
+        // Ctrl+Y or Cmd+Y or Ctrl+Shift+Z
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+            e.preventDefault();
+            this.redo();
+        }
+    }
+
+    // --- HISTORY LOGIC ---
+
+    snapshot() {
+        // Save current state to history
+        // JSON parse/stringify is a simple way to deep clone the array
+        const current = JSON.parse(JSON.stringify(this.annotations));
+        this.history = [...this.history, current];
+        this.future = []; // Clear future when new action happens
+    }
+
+    undo() {
+        if (this.history.length === 0) return;
+
+        // Save current to future
+        const current = JSON.parse(JSON.stringify(this.annotations));
+        this.future = [current, ...this.future];
+
+        // Pop from history
+        const previous = this.history[this.history.length - 1];
+        this.history = this.history.slice(0, -1);
+
+        this.annotations = previous;
+        this.selectedId = null; // Deselect to avoid ghost UI
+    }
+
+    redo() {
+        if (this.future.length === 0) return;
+
+        // Save current to history
+        const current = JSON.parse(JSON.stringify(this.annotations));
+        this.history = [...this.history, current];
+
+        // Pop from future
+        const next = this.future[0];
+        this.future = this.future.slice(1);
+
+        this.annotations = next;
+        this.selectedId = null;
+    }
+
     async loadPdf(file: Uint8Array, name: string) {
         this.pdfName = name;
         this.totalPages = await pdfEngine.load(file);
@@ -256,6 +318,7 @@ export class PdfWorkspace extends LitElement {
     // --- ANNOTATION HELPERS ---
 
     addAnnotation(type: AnnotationType, data: string, aspectRatio = 1) {
+        this.snapshot();
         // Smart Placement: Center on Screen
         const pageRect = this.container.getBoundingClientRect();
         const viewportRect = this.viewport.getBoundingClientRect();
@@ -287,6 +350,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     deleteAnnotation(id: string) {
+        this.snapshot();
         this.annotations = this.annotations.filter(a => a.id !== id);
         if (this.selectedId === id) this.selectedId = null;
     }
@@ -307,6 +371,7 @@ export class PdfWorkspace extends LitElement {
         if (e.target instanceof HTMLElement && e.target.classList.contains('delete-btn')) return;
         if (e.target instanceof HTMLElement && e.target.classList.contains('resize-handle')) return;
 
+        this.snapshot();
         e.preventDefault();
         e.stopPropagation();
 
@@ -330,6 +395,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     startResize(e: MouseEvent | TouchEvent, id: string) {
+        this.snapshot();
         e.preventDefault();
         e.stopPropagation();
         this.isResizing = true;
@@ -476,6 +542,13 @@ export class PdfWorkspace extends LitElement {
                 <button class="primary" @click=${this.openSignModal}>${i18n.t('addSig')}</button>
                 <button @click=${this.openInitialsModal}>${i18n.t('addInitials')}</button>
                 <button @click=${this.addDateStamp}>${i18n.t('addDate')}</button>
+                <div style="width: 1px; height: 20px; background: #ddd; margin: 0 4px;"></div>
+                <button @click=${this.undo} ?disabled=${this.history.length === 0} title="${i18n.t('undo')}">
+                    ↩
+                </button>
+                <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}">
+                    ↪
+                </button>
                 <div style="flex:1"></div>
                 <button class="primary" @click=${this.saveDocument}>${i18n.t('savePdf')}</button>
             </div>
