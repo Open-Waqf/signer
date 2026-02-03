@@ -6,6 +6,10 @@ import {i18n} from './lib/i18n-service';
 import packageJson from '../package.json';
 import './components/pdf-workspace';
 
+import {Capacitor} from '@capacitor/core';
+// The error below is fixed by updating vite-env.d.ts
+import {registerSW} from 'virtual:pwa-register';
+
 @customElement('app-root')
 export class AppRoot extends LitElement {
     @state() mode: 'home' | 'workspace' = 'home';
@@ -23,6 +27,9 @@ export class AppRoot extends LitElement {
         super.connectedCallback();
         window.addEventListener('lang-changed', () => this.requestUpdate());
 
+        // Setup Manual PWA Registration here (cleaner than outside class)
+        this.setupPWA();
+
         App.addListener('backButton', () => {
             if (this.privacyDialog && this.privacyDialog.open) {
                 this.closePrivacy();
@@ -36,6 +43,23 @@ export class AppRoot extends LitElement {
             }
             App.exitApp();
         });
+    }
+
+    // New Method to handle PWA logic cleanly
+    setupPWA() {
+        if (!Capacitor.isNativePlatform()) {
+            const updateSW = registerSW({
+                onNeedRefresh() {
+                    // "New version available! Reload to update?"
+                    if (confirm("New version available! Reload?")) {
+                        updateSW(true);
+                    }
+                },
+                onOfflineReady() {
+                    console.log("App is ready for offline usage.");
+                },
+            });
+        }
     }
 
     showToast(msg: string) {
@@ -69,8 +93,7 @@ export class AppRoot extends LitElement {
         try {
             const data = await fileService.openPdf();
             await this.handleFile(data, 'document.pdf');
-        } catch (e) {
-            // Cancelled
+        } catch (e) { /* Cancelled */
         }
     }
 
@@ -97,6 +120,13 @@ export class AppRoot extends LitElement {
 
     closePrivacy() {
         this.privacyDialog.close();
+    }
+
+    clearAppCache() {
+        if (confirm(i18n.t('confirmClear'))) {
+            localStorage.clear();
+            window.location.reload();
+        }
     }
 
     render() {
@@ -144,7 +174,7 @@ export class AppRoot extends LitElement {
                     <button @click=${() => {
                         const url = `${window.location.origin}/?lang=${i18n.lang}`;
                         navigator.clipboard.writeText(url);
-                        this.showToast(i18n.t('linkCopied')); // <--- Translated
+                        this.showToast(i18n.t('linkCopied'));
                     }}
                             style="margin-top:10px; background:#fff; color:#333; border:1px solid #ddd; padding: 12px 30px; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600;">
                         ${i18n.t('shareApp')}
@@ -177,14 +207,6 @@ export class AppRoot extends LitElement {
                     <button @click=${this.closePrivacy}>${i18n.t('close')}</button>
                 </div>
             </dialog>
-
         `;
-    }
-
-    clearAppCache() {
-        if (confirm(i18n.t('confirmClear'))) {
-            localStorage.clear();
-            window.location.reload();
-        }
     }
 }
