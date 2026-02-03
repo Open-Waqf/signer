@@ -1,31 +1,29 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import {PDFDocument} from 'pdf-lib';
-
-// FIX: Vite worker import for PDF.js
+import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export class PdfEngine {
-    private pdfDoc: any = null; // The PDF.js document (for viewing)
-    private pdfBytes: Uint8Array | null = null; // The raw bytes (for saving)
+    private pdfDoc: any = null; // View (PDF.js)
+    private pdfBytes: Uint8Array | null = null; // Save (Raw Data)
 
     async load(data: Uint8Array) {
-        this.pdfBytes = data;
-        // Load for viewing
-        const loadingTask = pdfjsLib.getDocument({data: this.pdfBytes});
+        // 1. CLONE THE DATA (Fixes the "No Header" crash)
+        // We create a deep copy so PDF.js can't "steal" (transfer) the buffer
+        this.pdfBytes = new Uint8Array(data.buffer.slice(0));
+
+        // 2. Load the View (using a copy or the original, doesn't matter now)
+        const loadingTask = pdfjsLib.getDocument({data: new Uint8Array(data)});
         this.pdfDoc = await loadingTask.promise;
         return this.pdfDoc.numPages;
     }
 
-    // Render a specific page to an HTML Canvas
     async renderPage(pageNumber: number, canvas: HTMLCanvasElement, scale = 1.5) {
         if (!this.pdfDoc) throw new Error('No PDF loaded');
-
         const page = await this.pdfDoc.getPage(pageNumber);
         const viewport = page.getViewport({scale});
 
-        // Set canvas dimensions to match the PDF page
         canvas.height = viewport.height;
         canvas.width = viewport.width;
 
@@ -35,50 +33,89 @@ export class PdfEngine {
         };
 
         await page.render(renderContext).promise;
-        return {width: viewport.width, height: viewport.height, originalWidth: viewport.width / scale};
     }
 
-    // The Magic: Take the signature image and burn it into the PDF
-    async saveWithSignature(
-        signaturePngBase64: string,
-        pageIndex: number,
-        xPercent: number, // 0.0 to 1.0 (relative to canvas width)
-        yPercent: number, // 0.0 to 1.0 (relative to canvas height)
+    /**
+     * Professional Saving Routine
+     * Adds Signature + Metadata + "Verified" Stamp
+     */
+    async saveProfessional(
+        signatureData: { base64: string, xPct: number, yPct: number, page: number } | null,
+        dateData: { dateString: string, xPct: number, yPct: number, page: number } | null
     ): Promise<Uint8Array> {
-        if (!this.pdfBytes) throw new Error('No PDF loaded');
 
-        // 1. Load the document into pdf-lib (The editor)
+        if (!this.pdfBytes) throw new Error('No PDF bytes available');
+
+        // Load the document
         const pdfDoc = await PDFDocument.load(this.pdfBytes);
+
+        // 1. Set Metadata (Professional Touch)
+        pdfDoc.setTitle('Signed Document');
+        pdfDoc.setAuthor('Open Waqf Signer');
+        pdfDoc.setProducer('Open Waqf (Privacy First)');
+        pdfDoc.setModificationDate(new Date());
+
         const pages = pdfDoc.getPages();
-        const page = pages[pageIndex];
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-        // 2. Embed the signature image
-        const pngImage = await pdfDoc.embedPng(signaturePngBase64);
+        // 2. Burn Signature (Image)
+        if (signatureData) {
+            const page = pages[signatureData.page];
+            const {width, height} = page.getSize();
 
-        // 3. Calculate coordinates
-        // PDF coordinates start at Bottom-Left. Browser is Top-Left.
-        const {width, height} = page.getSize();
+            const pngImage = await pdfDoc.embedPng(signatureData.base64);
+            const pngDims = pngImage.scale(0.5);
 
-        // Scale the signature image
-        const imgDims = pngImage.scale(0.5); // Default scale
-        // You might want to pass exact width/height from the UI later,
-        // but for MVP, we scale it based on the document size roughly.
-        const finalWidth = width * 0.3; // Signature is 30% of page width
-        const finalHeight = (imgDims.height / imgDims.width) * finalWidth;
+            // Calculate realistic size (max 25% of page width)
+            const finalW = width * 0.25;
+            const finalH = (pngDims.height / pngDims.width) * finalW;
 
-        const x = width * xPercent;
-        // Flip Y axis: (Page Height - Visual Y) - Image Height
-        const y = height - (height * yPercent) - finalHeight;
+            page.drawImage(pngImage, {
+                x: width * signatureData.xPct,
+                y: height - (height * signatureData.yPct) - finalH, // Flip Y
+                width: finalW,
+                height: finalH,
+            });
+        }
 
-        // 4. Draw it
-        page.drawImage(pngImage, {
-            x: x,
-            y: y,
-            width: finalWidth,
-            height: finalHeight,
-        });
+        // 3. Burn Professional "Stamp" (Text)
+        if (dateData) {
+            const page = pages[dateData.page];
+            const {width, height} = page.getSize();
 
-        // 5. Save
+            const stampText = `Digitally Signed: ${dateData.dateString}`;
+            const hashId = `ID: ${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+
+            const fontSize = 10;
+            const textW = font.widthOfTextAtSize(stampText, fontSize);
+            const boxW = textW + 20;
+            const boxH = 35;
+
+            const x = width * dateData.xPct;
+            const y = height - (height * dateData.yPct) - boxH;
+
+            // Draw "Badge" Background
+            page.drawRectangle({
+                x: x, y: y, width: boxW, height: boxH,
+                color: rgb(0.95, 0.95, 0.95), // Light Gray
+                borderColor: rgb(0.5, 0.5, 0.5),
+                borderWidth: 1,
+            });
+
+            // Draw "Verified" Text
+            page.drawText(stampText, {
+                x: x + 10, y: y + 20,
+                size: fontSize, font: fontBold, color: rgb(0, 0, 0),
+            });
+
+            // Draw ID Text
+            page.drawText(hashId, {
+                x: x + 10, y: y + 8,
+                size: 8, font: font, color: rgb(0.4, 0.4, 0.4),
+            });
+        }
+
         return await pdfDoc.save();
     }
 }
