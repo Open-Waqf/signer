@@ -1,0 +1,7 @@
+Contact: mailto:security@open-waqf.org
+Preferred-Languages: en, ar, fr
+Policy: https://sign.open-waqf.org/privacy
+Canonical: https://sign.open-waqf.org/.well-known/security.txt
+
+# This application runs 100% offline (Client-Side Only).
+# No user documents are ever transmitted to a server.

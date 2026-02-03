@@ -1,3 +1,0 @@
-Contact: mailto:security@open-waqf.org
-Preferred-Languages: en, ar, fr
-Policy: This application runs 100% offline. No user data is ever sent to our servers.

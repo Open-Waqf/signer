@@ -91,9 +91,13 @@ export class AppRoot extends LitElement {
 
     async openFile() {
         try {
-            const data = await fileService.openPdf();
-            await this.handleFile(data, 'document.pdf');
-        } catch (e) { /* Cancelled */
+            // 1. Get BOTH data and name
+            const {data, name} = await fileService.openPdf();
+
+            // 2. Pass the REAL name to handleFile
+            await this.handleFile(data, name);
+        } catch (e) {
+            // User cancelled
         }
     }
 
@@ -157,7 +161,7 @@ export class AppRoot extends LitElement {
                     <img src="/icons/icon-192.webp" alt="Logo" onerror="this.style.display='none'"/>
 
                     <h1>${i18n.t('appTitle')}</h1>
-                    <p class="sub">v${packageJson.version} • Secure. Offline. Free.</p>
+                    <p class="sub">v${packageJson.version} • ${i18n.t('tagline')}</p>
 
                     <div class="drop-area-visual">
                         <button @click=${this.openFile}>${i18n.t('selectFile')}</button>

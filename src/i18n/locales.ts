@@ -37,6 +37,11 @@ export const resources = {
         confirmClear: "Delete saved signature, initials, and language preference?",
         shareApp: "🔗 Share App",
         linkCopied: "Link copied! Share it anywhere.",
+        shareTitle: "Signed Document",
+        shareText: "Here is your signed PDF.",
+        shareDialog: "Save or Send PDF",
+        shareError: "Could not open Share menu. Please try again.",
+        tagline: "Secure. Offline. Free."
     },
     ar: {
         appTitle: "الموقع المفتوح",
@@ -65,6 +70,11 @@ export const resources = {
         confirmClear: "هل تريد حذف التوقيع والأحرف المحفوظة وإعدادات اللغة؟",
         shareApp: "🔗 شارك التطبيق",
         linkCopied: "تم نسخ الرابط! شاركه في أي مكان.",
+        shareTitle: "مستند موقع",
+        shareText: "إليك ملف PDF الموقع.",
+        shareDialog: "حفظ أو إرسال PDF",
+        shareError: "تعذر فتح قائمة المشاركة. حاول مرة أخرى.",
+        tagline: "آمن. بدون اتصال. مجاني."
     },
     fr: {
         appTitle: "Open Signer",
@@ -93,6 +103,11 @@ export const resources = {
         confirmClear: "Supprimer la signature, les initiales et les préférences ?",
         shareApp: "🔗 Partager l'app",
         linkCopied: "Lien copié ! Partagez-le partout.",
+        shareTitle: "Document signé",
+        shareText: "Voici votre PDF signé.",
+        shareDialog: "Enregistrer ou envoyer le PDF",
+        shareError: "Impossible d'ouvrir le menu de partage. Réessayez.",
+        tagline: "Sécurisé. Hors ligne. Gratuit."
     }
 } as const;
 
