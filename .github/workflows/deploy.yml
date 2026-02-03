@@ -1,0 +1,44 @@
+name: Deploy Open Waqf Signer
+
+on:
+  push:
+    branches: [ "develop" ]
+  workflow_dispatch:
+
+# Permissions needed to deploy to Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source (Readable)
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build (The Clean Up)
+        # compiles TS -> JS and puts it in /dist
+        run: npm run build
+
+      - name: Copy CNAME (If you have one)
+        # Vite wipes 'dist', so we recreate CNAME if needed
+        run: echo "sign.open-waqf.org" > dist/CNAME
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "./dist" # We only deploy the clean folder
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
