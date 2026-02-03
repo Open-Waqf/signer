@@ -2,46 +2,41 @@ name: Deploy Open Waqf Signer
 
 on:
   push:
-    branches: [ "develop" ]
-  workflow_dispatch:
+    branches:
+      - develop
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-
-      - name: Configure Git Identity (Generic)
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
 
       - name: Install Dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build (Clean Up)
+        # This runs Vite, creating the optimized 'dist' folder
         run: npm run build
 
       - name: Copy CNAME
+        # We need to manually put the CNAME into dist before pushing
         run: echo "sign.open-waqf.org" > dist/CNAME
 
-      - name: Upload Artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to Deploy Branch
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          path: "./dist"
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          folder: dist
+          branch: deploy
+          clean: true
+          git-config-name: "Open Waqf Bot"
+          git-config-email: "bot@open-waqf.org"
+          commit-message: "deploy: update signer (automated)"
