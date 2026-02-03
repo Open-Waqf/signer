@@ -48,15 +48,16 @@ export class AppRoot extends LitElement {
     // New Method to handle PWA logic cleanly
     setupPWA() {
         if (!Capacitor.isNativePlatform()) {
+            // We capture the return function to trigger the update later
             const updateSW = registerSW({
                 onNeedRefresh() {
-                    // "New version available! Reload to update?"
-                    if (confirm("New version available! Reload?")) {
-                        updateSW(true);
+                    // Logic: The browser has found a new version but is waiting
+                    if (confirm("New version available! Reload to apply updates?")) {
+                        updateSW(true); // This tells the SW to 'skipWaiting'
                     }
                 },
                 onOfflineReady() {
-                    console.log("App is ready for offline usage.");
+                    console.log("App ready for offline use.");
                 },
             });
         }
