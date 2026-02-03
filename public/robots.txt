@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://sign.open-waqf.org/sitemap.xml

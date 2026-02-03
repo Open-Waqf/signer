@@ -11,6 +11,7 @@ export const config = {
 export const resources = {
     en: {
         appTitle: "Open Signer",
+        appDesc: "Sign PDFs offline securely. Free, private, open source tool for signatures and dates.",
         privacy: "Privacy",
         zoomIn: "Zoom In",
         zoomOut: "Zoom Out",
@@ -34,9 +35,12 @@ export const resources = {
         exitConfirm: "Exit editing? Unsaved changes will be lost.",
         forgetData: "🗑️ Forget My Data",
         confirmClear: "Delete saved signature, initials, and language preference?",
+        shareApp: "🔗 Share App",
+        linkCopied: "Link copied! Share it anywhere.",
     },
     ar: {
         appTitle: "الموقع المفتوح",
+        appDesc: "وقّع مستندات PDF بأمان وبدون اتصال. أداة مجانية ومفتوحة المصدر.",
         privacy: "الخصوصية",
         zoomIn: "تكبير",
         zoomOut: "تصغير",
@@ -59,9 +63,12 @@ export const resources = {
         exitConfirm: "هل تريد الخروج؟ ستفقد التغييرات غير المحفوظة.",
         forgetData: "🗑️ مسح بياناتي",
         confirmClear: "هل تريد حذف التوقيع والأحرف المحفوظة وإعدادات اللغة؟",
+        shareApp: "🔗 شارك التطبيق",
+        linkCopied: "تم نسخ الرابط! شاركه في أي مكان.",
     },
     fr: {
         appTitle: "Open Signer",
+        appDesc: "Signez vos PDF hors ligne en toute sécurité. Outil gratuit et privé.",
         privacy: "Confidentialité",
         zoomIn: "Zoom Avant",
         zoomOut: "Zoom Arrière",
@@ -84,6 +91,8 @@ export const resources = {
         exitConfirm: "Quitter ? Les modifications seront perdues.",
         forgetData: "🗑️ Oublier mes données",
         confirmClear: "Supprimer la signature, les initiales et les préférences ?",
+        shareApp: "🔗 Partager l'app",
+        linkCopied: "Lien copié ! Partagez-le partout.",
     }
 } as const;
 

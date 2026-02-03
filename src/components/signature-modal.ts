@@ -8,6 +8,8 @@ export class SignatureModal extends LitElement {
 
     private isDrawing = false;
     private ctx: CanvasRenderingContext2D | null = null;
+    // Track listener to remove it later
+    private _resizeHandler: (() => void) | null = null;
 
     static styles = css`
         :host {
@@ -21,6 +23,8 @@ export class SignatureModal extends LitElement {
             justify-content: center;
             align-items: center;
             z-index: 1000;
+            /* Fix: Force LTR so coordinates don't flip in Arabic */
+            direction: ltr;
         }
 
         .card {
@@ -40,7 +44,12 @@ export class SignatureModal extends LitElement {
             background: #fafafa;
             width: 100%;
             height: 250px;
-            display: block; /* Fixes layout inline issues */
+            display: block;
+        }
+
+        h3 {
+            margin-top: 0;
+            color: #333;
         }
 
         .actions {
@@ -74,21 +83,20 @@ export class SignatureModal extends LitElement {
         }
     `;
 
-    private _resizeHandler: (() => void) | null = null;
-
     async firstUpdated() {
-        // FIX: Wait for 1 frame so the DOM is fully painted and has width
+        // Wait for layout to settle
         await new Promise(requestAnimationFrame);
 
         this.ctx = this.canvas.getContext('2d');
+        this.resizeCanvas();
 
-        // Save the bound function so we can remove it later
+        // Bind resize handler safely
         this._resizeHandler = () => this.resizeCanvas();
-        window.addEventListener('resize', this._resizeHandler);
+        window.addEventListener('resize', this._resizeHandler!);
 
         this.setupEvents();
 
-        // Load Saved Data
+        // Load saved data
         const storageKey = `signer_${this.mode}`;
         const saved = localStorage.getItem(storageKey);
         if (saved) {
@@ -107,14 +115,33 @@ export class SignatureModal extends LitElement {
 
     resizeCanvas() {
         const rect = this.canvas.getBoundingClientRect();
-        // Safety check: ensure we don't set 0 width
         if (rect.width > 0 && rect.height > 0) {
+            // Set Bitmap size to match CSS size
             this.canvas.width = rect.width;
             this.canvas.height = rect.height;
-            this.ctx!.lineWidth = 3;
-            this.ctx!.lineCap = 'round';
-            this.ctx!.strokeStyle = '#000';
+
+            // Re-apply context styles after resize clears them
+            if (this.ctx) {
+                this.ctx.lineWidth = 3;
+                this.ctx.lineCap = 'round';
+                this.ctx.strokeStyle = '#000';
+            }
         }
+    }
+
+    // --- ROBUST COORDINATE CALCULATION ---
+    getMousePos(e: { clientX: number, clientY: number }) {
+        const rect = this.canvas.getBoundingClientRect();
+
+        // Calculate scaling factors (Bitmap Resolution / CSS Size)
+        // This fixes the offset if browser is zoomed or on high-DPI screens
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
     }
 
     setupEvents() {
@@ -122,7 +149,7 @@ export class SignatureModal extends LitElement {
         this.canvas.addEventListener('mousedown', (e) => this.start(e));
         this.canvas.addEventListener('mousemove', (e) => this.draw(e));
         this.canvas.addEventListener('mouseup', () => this.stop());
-        // Touch - Use passive: false to prevent scrolling while drawing
+        // Touch (Passive: false prevents scrolling while drawing)
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.start(e.touches[0]);
@@ -136,15 +163,15 @@ export class SignatureModal extends LitElement {
 
     start(e: { clientX: number, clientY: number }) {
         this.isDrawing = true;
-        const rect = this.canvas.getBoundingClientRect();
+        const pos = this.getMousePos(e); // Use helper
         this.ctx?.beginPath();
-        this.ctx?.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+        this.ctx?.moveTo(pos.x, pos.y);
     }
 
     draw(e: { clientX: number, clientY: number }) {
         if (!this.isDrawing) return;
-        const rect = this.canvas.getBoundingClientRect();
-        this.ctx?.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        const pos = this.getMousePos(e); // Use helper
+        this.ctx?.lineTo(pos.x, pos.y);
         this.ctx?.stroke();
     }
 
@@ -158,7 +185,7 @@ export class SignatureModal extends LitElement {
     }
 
     save() {
-        // Resize for memory safety
+        // Optimization: Downscale huge images to prevent memory crash
         const MAX_WIDTH = 500;
         let finalCanvas = this.canvas;
 

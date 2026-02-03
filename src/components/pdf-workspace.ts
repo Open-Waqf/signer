@@ -192,17 +192,42 @@ export class PdfWorkspace extends LitElement {
 
     // --- ANNOTATION HELPERS ---
 
+    @query('.viewport') viewport!: HTMLDivElement; // Add this query at the top
+
     addAnnotation(type: AnnotationType, data: string, aspectRatio = 1) {
+        // 1. Get the Page's bounding box (The total drawing area)
+        const pageRect = this.container.getBoundingClientRect();
+
+        // 2. Get the Viewport's bounding box (The scrollable window)
+        const viewportRect = this.viewport.getBoundingClientRect();
+
+        // 3. Calculate the center point of the USER'S SCREEN
+        const screenCenterX = viewportRect.left + (viewportRect.width / 2);
+        const screenCenterY = viewportRect.top + (viewportRect.height / 2);
+
+        // 4. Map screen coordinates to Page coordinates
+        // (We subtract the page's offset to find the relative position)
+        let relativeX = screenCenterX - pageRect.left;
+        let relativeY = screenCenterY - pageRect.top;
+
+        // 5. Convert to Percentage (0.0 to 1.0)
+        let xPct = relativeX / pageRect.width;
+        let yPct = relativeY / pageRect.height;
+
+        // 6. Clamp values (ensure it doesn't spawn off-page if you are looking at the gray background)
+        // We stick it to the edge if the user is scrolled way off
+        xPct = Math.max(0.1, Math.min(0.9, xPct));
+        yPct = Math.max(0.1, Math.min(0.9, yPct));
+
         // Default size logic
         const widthPct = type === 'initials' ? 0.15 : 0.25;
 
-        // Center on current view (approximate)
         const newAnn: Annotation = {
             id: Math.random().toString(36).substr(2, 9),
             type,
-            page: this.currentPage - 1, // Store as 0-index
-            xPct: 0.35, // Center-ish
-            yPct: 0.45,
+            page: this.currentPage - 1,
+            xPct,  // <--- Uses calculated visible center
+            yPct,  // <--- Uses calculated visible center
             widthPct,
             data,
             aspectRatio

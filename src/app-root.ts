@@ -140,6 +140,15 @@ export class AppRoot extends LitElement {
                     }}>
                         ${i18n.t('privacyTitle')}
                     </a>
+
+                    <button @click=${() => {
+                        const url = `${window.location.origin}/?lang=${i18n.lang}`;
+                        navigator.clipboard.writeText(url);
+                        this.showToast(i18n.t('linkCopied')); // <--- Translated
+                    }}
+                            style="margin-top:10px; background:#fff; color:#333; border:1px solid #ddd; padding: 12px 30px; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600;">
+                        ${i18n.t('shareApp')}
+                    </button>
                 </div>
             </div>
 
@@ -168,7 +177,7 @@ export class AppRoot extends LitElement {
                     <button @click=${this.closePrivacy}>${i18n.t('close')}</button>
                 </div>
             </dialog>
-            
+
         `;
     }
 
