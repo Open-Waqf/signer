@@ -14,13 +14,11 @@ export class PdfWorkspace extends LitElement {
     @state() totalPages = 0;
     @state() scale = 1.0;
 
-    // ✨ NEW STATE for the Post-Save Modal
+    // Proof Modal State
     @state() showProofModal = false;
     @state() lastSavedId: string | null = null;
 
     @state() annotations: Annotation[] = [];
-
-    // Audit Trail Toggle
     @state() includeAudit = false;
 
     // Interaction State
@@ -38,10 +36,7 @@ export class PdfWorkspace extends LitElement {
     private lastSavedBytes: Uint8Array | null = null;
     @state() outputFilename = '';
 
-    // Dirty flag
     @state() isDirty = false;
-
-    // Drag/resize internals (non-reactive)
     private interactionSnapshotTaken = false;
     private interactionChanged = false;
 
@@ -53,16 +48,22 @@ export class PdfWorkspace extends LitElement {
         return this.annotations.length > 0 || this.includeAudit;
     }
 
-    // 1. ✨ NEW TOOL: Identity
+    // 1. ✨ UPDATED IDENTITY TOOL: Auto-Save & Pre-Fill
     addIdentity() {
-        const email = prompt(i18n.t('identityPrompt') || 'Enter your email:');
+        // Load saved email
+        const savedEmail = localStorage.getItem('user_email') || '';
+
+        const email = prompt(i18n.t('identityPrompt') || 'Enter your email:', savedEmail);
+
         if (email) {
+            // Save for next time
+            localStorage.setItem('user_email', email);
+
             const text = `${i18n.t('signedBy') || 'Signed by'}: ${email}`;
             this.addAnnotation('identity', text, 0);
         }
     }
 
-    // 2. ✨ SEND PROOF ACTION
     sendProofEmail() {
         if (!this.lastSavedId) return;
 
@@ -410,7 +411,6 @@ export class PdfWorkspace extends LitElement {
         }
     };
 
-    // --- HISTORY ---
     snapshot() {
         const current = JSON.parse(JSON.stringify(this.annotations));
         this.history = [...this.history, current];
@@ -433,16 +433,13 @@ export class PdfWorkspace extends LitElement {
         this.isDirty = true;
     }
 
-    // --- PDF LOADING ---
     async loadPdf(file: Uint8Array, name: string) {
         this.pdfName = name;
         this.totalPages = await pdfEngine.load(file);
         this.currentPage = 1;
         this.scale = 1.0;
-
         this.annotations = [];
         this.selectedId = null;
-
         this.includeAudit = false;
         this.isDirty = false;
         this.lastSaved = null;
@@ -450,7 +447,6 @@ export class PdfWorkspace extends LitElement {
         this.history = [];
         this.future = [];
 
-        // Initialize output name ONCE. Clean the input name (remove .pdf, remove old _signed_ dates)
         const cleanName = name.replace(/_signed_\d{4}-\d{2}-\d{2}.*$/, '').replace(/\.pdf$/i, '');
         this.outputFilename = `${cleanName}_signed_${new Date().toISOString().slice(0, 10)}`;
 
@@ -477,22 +473,16 @@ export class PdfWorkspace extends LitElement {
         void this.renderPage();
     }
 
-    // --- ANNOTATIONS ---
     addAnnotation(type: AnnotationType, data: string, aspectRatio = 1) {
         this.snapshot();
-
         const pageRect = this.container.getBoundingClientRect();
         const viewportRect = this.viewport.getBoundingClientRect();
-
         const screenCenterX = viewportRect.left + viewportRect.width / 2;
         const screenCenterY = viewportRect.top + viewportRect.height / 2;
-
         const relativeX = screenCenterX - pageRect.left;
         const relativeY = screenCenterY - pageRect.top;
-
         const xPct = Math.max(0.1, Math.min(0.8, relativeX / pageRect.width));
         const yPct = Math.max(0.1, Math.min(0.8, relativeY / pageRect.height));
-
         const widthPct = type === 'initials' ? 0.15 : 0.25;
 
         const newAnn: Annotation = {
@@ -545,36 +535,22 @@ export class PdfWorkspace extends LitElement {
         this.isDirty = true;
     }
 
-    // --- INTERACTION ---
     onContainerClick() {
         this.selectedId = null;
     }
 
     startDrag(e: MouseEvent | TouchEvent, id: string) {
-        if (
-            e.target instanceof HTMLElement &&
-            (e.target.classList.contains('delete-btn') ||
-                e.target.classList.contains('resize-handle') ||
-                e.target.closest('.style-popup'))
-        )
-            return;
-
+        if (e.target instanceof HTMLElement && (e.target.classList.contains('delete-btn') || e.target.classList.contains('resize-handle') || e.target.closest('.style-popup'))) return;
         e.preventDefault();
         e.stopPropagation();
-
         this.selectedId = id;
         this.isDragging = true;
-
-        // Reset interaction flags
         this.interactionSnapshotTaken = false;
         this.interactionChanged = false;
-
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
-
         const ann = this.annotations.find((a) => a.id === id);
         if (!ann) return;
-
         const rect = this.container.getBoundingClientRect();
         this.dragOffset = {
             x: clientX - rect.left - ann.xPct * rect.width,
@@ -585,11 +561,8 @@ export class PdfWorkspace extends LitElement {
     startResize(e: MouseEvent | TouchEvent, id: string) {
         e.preventDefault();
         e.stopPropagation();
-
         this.isResizing = true;
         this.selectedId = id;
-
-        // Reset interaction flags
         this.interactionSnapshotTaken = false;
         this.interactionChanged = false;
     }
@@ -597,14 +570,11 @@ export class PdfWorkspace extends LitElement {
     handleGlobalMove = (e: MouseEvent | TouchEvent) => {
         if (!this.selectedId || (!this.isDragging && !this.isResizing)) return;
         e.preventDefault();
-
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
         const rect = this.container.getBoundingClientRect();
-
         const ann = this.annotations.find((a) => a.id === this.selectedId);
         if (!ann) return;
-
         const takeSnapshotIfNeeded = () => {
             if (!this.interactionSnapshotTaken) {
                 this.snapshot();
@@ -615,11 +585,8 @@ export class PdfWorkspace extends LitElement {
         if (this.isDragging) {
             const newX = clientX - rect.left - this.dragOffset.x;
             const newY = clientY - rect.top - this.dragOffset.y;
-
             const nextXPct = Math.max(0, Math.min(0.95, newX / rect.width));
             const nextYPct = Math.max(0, Math.min(0.95, newY / rect.height));
-
-            // Only apply if meaningful change
             if (Math.abs(nextXPct - ann.xPct) > 0.0005 || Math.abs(nextYPct - ann.yPct) > 0.0005) {
                 takeSnapshotIfNeeded();
                 this.interactionChanged = true;
@@ -629,7 +596,6 @@ export class PdfWorkspace extends LitElement {
             const mouseRelX = clientX - rect.left;
             const newWidthPx = Math.max(mouseRelX - ann.xPct * rect.width, rect.width * 0.05);
             const nextWidthPct = newWidthPx / rect.width;
-
             if (Math.abs(nextWidthPct - (ann.widthPct || 0)) > 0.0005) {
                 takeSnapshotIfNeeded();
                 this.interactionChanged = true;
@@ -642,10 +608,8 @@ export class PdfWorkspace extends LitElement {
         const changed = this.interactionChanged;
         this.isDragging = false;
         this.isResizing = false;
-
         this.interactionSnapshotTaken = false;
         this.interactionChanged = false;
-
         if (changed) this.isDirty = true;
     };
 
@@ -679,29 +643,22 @@ export class PdfWorkspace extends LitElement {
     }
 
     public reset() {
-        // 1. Tell the Engine to forget the file
         pdfEngine.destroy();
-
-        // 2. Clear Local State
         this.annotations = [];
         this.history = [];
         this.future = [];
         this.lastSaved = null;
         this.lastSavedBytes = null;
         this.pdfName = '';
-        this.outputFilename = ''; // From the previous fix
+        this.outputFilename = '';
         this.isDirty = false;
-
-        // 3. Clear the Canvas Visuals
         if (this.canvas) {
             const context = this.canvas.getContext('2d');
             context?.clearRect(0, 0, this.canvas.width, this.canvas.height);
-            this.canvas.height = 0; // Collapse it
+            this.canvas.height = 0;
         }
     }
 
-    // 🌟 UPDATED SAVE DOCUMENT 🌟
-    // Now captures 'docId' and handles the Proof Modal
     async saveDocument(opts?: { silentWeb?: boolean; showToast?: boolean }) {
         const silentWeb = !!opts?.silentWeb;
         const showToast = opts?.showToast ?? true;
@@ -716,11 +673,9 @@ export class PdfWorkspace extends LitElement {
 
         try {
             const filename = `${this.outputFilename}.pdf`;
-
-            // 🛡️ MEMORY GUARD START 🛡️
-            // ✨ We now get docId here
             let finalBytes: Uint8Array;
             let finalDocId: string;
+
             try {
                 const result = await pdfEngine.saveProfessional(this.annotations, this.pdfName, this.includeAudit);
                 finalBytes = result.pdfBytes;
@@ -728,15 +683,13 @@ export class PdfWorkspace extends LitElement {
             } catch (saveError: any) {
                 console.error("PDF Generation Failed:", saveError);
                 if (saveError.toString().includes('memory') || saveError.toString().includes('allocation')) {
-                    throw new Error('OOM'); // Out Of Memory
+                    throw new Error('OOM');
                 }
-                throw saveError; // Re-throw other errors
+                throw saveError;
             }
-            // 🛡️ MEMORY GUARD END 🛡️
 
             this.lastSavedBytes = finalBytes;
 
-            // ✅ Web: if silentWeb, do NOT download now (Share will handle download fallback if needed)
             if (!Capacitor.isNativePlatform() && silentWeb) {
                 this.lastSaved = {filename};
             } else {
@@ -745,11 +698,9 @@ export class PdfWorkspace extends LitElement {
 
             this.isDirty = false;
 
-            // ✨ NEW LOGIC: IDENTITY CHECK
             const hasIdentity = this.annotations.some(a => a.type === 'identity');
 
             if (hasIdentity) {
-                // STOP here and show the proof modal instead of the toast
                 this.lastSavedId = finalDocId;
                 this.showProofModal = true;
             } else if (showToast) {
@@ -772,16 +723,13 @@ export class PdfWorkspace extends LitElement {
         if (input.files && input.files[0]) {
             const file = input.files[0];
             const reader = new FileReader();
-
             reader.onload = (evt) => {
                 const result = evt.target?.result as string;
                 const img = new Image();
-
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     canvas.width = img.width;
                     canvas.height = img.height;
-
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
                         ctx.drawImage(img, 0, 0);
@@ -802,13 +750,10 @@ export class PdfWorkspace extends LitElement {
             this.toast((i18n.t('noChanges') as string) || 'No changes to share.');
             return;
         }
-
         if (this.isDirty || !this.lastSavedBytes || !this.lastSaved) {
             await this.saveDocument({silentWeb: !Capacitor.isNativePlatform(), showToast: false});
         }
-
         if (!this.lastSaved || !this.lastSavedBytes) return;
-
         await fileService.sharePdf(this.lastSaved, this.lastSavedBytes);
     }
 
@@ -866,14 +811,10 @@ export class PdfWorkspace extends LitElement {
                 <button @click=${this.addDateStamp} title="${i18n.t('addDate')}">
                     📅<span class="btn-label">${i18n.t('addDate')}</span>
                 </button>
-
                 <div style="width: 1px; height: 20px; background: #ddd; margin: 0 4px; flex-shrink: 0;"></div>
-
                 <button @click=${this.undo} ?disabled=${this.history.length === 0} title="${i18n.t('undo')}">↩</button>
                 <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}">↪</button>
-
                 <div style="flex:1"></div>
-
                 <label style="display:flex; align-items:center; gap:6px; margin-right:10px; font-size:0.8rem; cursor:pointer;"
                        title="${i18n.t('addAuditPage')}">
                     <input type="checkbox" ?checked=${this.includeAudit} @change=${(e: Event) => {
@@ -883,7 +824,6 @@ export class PdfWorkspace extends LitElement {
                     <span class="btn-label">${i18n.t('auditTrail')}</span>
                     <span class="mobile-hide" style="font-size:1rem;">📋</span>
                 </label>
-
                 <button class="primary" @click=${() => this.saveDocument({silentWeb: false, showToast: true})}
                         ?disabled=${saveDisabled}
                         title=${saveDisabled ? ((i18n.t('noChanges') as string) || 'No changes to save') : (i18n.t('savePdf') as string)}>
@@ -914,25 +854,18 @@ export class PdfWorkspace extends LitElement {
             <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
                 <div class="page-container">
                     <canvas id="pdf-canvas"></canvas>
-
                     ${this.annotations
                             .filter((ann) => ann.page === this.currentPage - 1)
                             .map((ann) => {
                                 const isSelected = this.selectedId === ann.id;
-
-                                // 🛡️ FIX 1: Check if it's text (Date OR Identity)
                                 const isText = ann.type === 'date' || ann.type === 'identity';
-
-                                // 🛡️ FIX 2: If text, use 'auto' width so it wraps/flows naturally. Images use % width.
                                 const boxStyle = `left:${ann.xPct * 100}%; top:${ann.yPct * 100}%; width:${isText ? 'auto' : (ann.widthPct ? ann.widthPct * 100 + '%' : 'auto')};`;
                                 const textStyle = `font-size:${ann.fontSize || 12}px; font-weight:${ann.fontWeight || 'normal'};`;
 
                                 return html`
-                                    <div
-                                            class="draggable ${isSelected ? 'selected' : ''}"
-                                            style="${boxStyle}"
-                                            @mousedown=${(e: any) => this.startDrag(e, ann.id)}
-                                            @touchstart=${(e: any) => this.startDrag(e, ann.id)}
+                                    <div class="draggable ${isSelected ? 'selected' : ''}" style="${boxStyle}"
+                                         @mousedown=${(e: any) => this.startDrag(e, ann.id)}
+                                         @touchstart=${(e: any) => this.startDrag(e, ann.id)}
                                     >
                                         <button class="delete-btn"
                                                 @mousedown=${(e: Event) => {
@@ -946,53 +879,47 @@ export class PdfWorkspace extends LitElement {
                                         >×
                                         </button>
 
-                                        ${isSelected && isText
-                                                ? html`
-                                                    <div class="style-popup"
-                                                         @mousedown=${(e: Event) => e.stopPropagation()}
-                                                         @touchstart=${(e: Event) => e.stopPropagation()}>
-                                                        <button @click=${(e: Event) => {
+                                        ${isSelected && isText ? html`
+                                            <div class="style-popup" @mousedown=${(e: Event) => e.stopPropagation()}
+                                                 @touchstart=${(e: Event) => e.stopPropagation()}>
+                                                <button @click=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.handleTextEdit(ann.id, ann.data);
+                                                }}>✎
+                                                </button>
+                                                <div style="width:1px; background:#444; margin:0 2px;"></div>
+                                                <button class="${ann.fontWeight === 'bold' ? 'active' : ''}"
+                                                        @click=${(e: Event) => {
                                                             e.stopPropagation();
-                                                            this.handleTextEdit(ann.id, ann.data);
-                                                        }}>✎
-                                                        </button>
-                                                        <div style="width:1px; background:#444; margin:0 2px;"></div>
-                                                        <button class="${ann.fontWeight === 'bold' ? 'active' : ''}"
-                                                                @click=${(e: Event) => {
-                                                                    e.stopPropagation();
-                                                                    this.updateStyle(ann.id, {fontWeight: ann.fontWeight === 'bold' ? 'normal' : 'bold'});
-                                                                }}>B
-                                                        </button>
-                                                        <button @click=${(e: Event) => {
-                                                            e.stopPropagation();
-                                                            this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
-                                                        }}>A-
-                                                        </button>
-                                                        <button @click=${(e: Event) => {
-                                                            e.stopPropagation();
-                                                            this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
-                                                        }}>A+
-                                                        </button>
-                                                    </div>
-                                                ` : ''}
+                                                            this.updateStyle(ann.id, {fontWeight: ann.fontWeight === 'bold' ? 'normal' : 'bold'});
+                                                        }}>B
+                                                </button>
+                                                <button @click=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
+                                                }}>A-
+                                                </button>
+                                                <button @click=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
+                                                }}>A+
+                                                </button>
+                                            </div>
+                                        ` : ''}
 
-                                        ${!isText
-                                                ? html`
-                                                    <div class="resize-handle"
-                                                         @mousedown=${(e: any) => this.startResize(e, ann.id)}
-                                                         @touchstart=${(e: any) => this.startResize(e, ann.id)}></div>
-                                                    <img src="${ann.data}" alt="User annotation"/>
-                                                `
-                                                : html`
-                                                    <span class="text-content" style="${textStyle}"
-                                                          @dblclick=${(e: Event) => {
-                                                              e.stopPropagation();
-                                                              this.handleTextEdit(ann.id, ann.data);
-                                                          }}
-                                                    >
-                                                ${ann.data}
-                                            </span>
-                                                `}
+                                        ${!isText ? html`
+                                            <div class="resize-handle"
+                                                 @mousedown=${(e: any) => this.startResize(e, ann.id)}
+                                                 @touchstart=${(e: any) => this.startResize(e, ann.id)}></div>
+                                            <img src="${ann.data}" alt="User annotation"/>
+                                        ` : html`
+                                            <span class="text-content" style="${textStyle}" @dblclick=${(e: Event) => {
+                                                e.stopPropagation();
+                                                this.handleTextEdit(ann.id, ann.data);
+                                            }}>
+                                            ${ann.data}
+                                        </span>
+                                        `}
                                     </div>
                                 `;
                             })}
@@ -1020,6 +947,10 @@ export class PdfWorkspace extends LitElement {
                                 style="width:100%; justify-content:center; padding:12px; background:transparent; color:#6b7280; border:1px solid #e5e7eb;">
                             ${i18n.t('justDownload') || 'No, Just Download'}
                         </button>
+
+                        <p style="font-size:0.75rem; color:#9ca3af; margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
+                            ${i18n.t('sharedDeviceWarning') || 'Shared Device? Clear your data on the Home Screen to remove your saved email.'}
+                        </p>
                     </div>
                 </div>
             ` : ''}
