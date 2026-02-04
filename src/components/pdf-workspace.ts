@@ -811,8 +811,8 @@ export class PdfWorkspace extends LitElement {
                     T<span class="btn-label">${i18n.t('addText')}</span>
                 </button>
                 <button @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
-                        title="Add Company Stamp/Logo">
-                    🏢<span class="btn-label">Stamp</span>
+                        title="${i18n.t('addStamp')}">
+                    🏢<span class="btn-label">${i18n.t('addStamp')}</span>
                 </button>
                 <button @click=${this.addDateStamp} title="${i18n.t('addDate')}">
                     📅<span class="btn-label">${i18n.t('addDate')}</span>

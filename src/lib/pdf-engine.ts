@@ -2,6 +2,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 import {PageSizes, PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker?url';
 import {Annotation} from '../types';
+import QRCode from 'qrcode';
+import {AppConfig} from '../config'; //
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -9,8 +11,11 @@ export class PdfEngine {
     private pdfDoc: any = null;
     private pdfBytes: Uint8Array | null = null;
 
+    /**
+     * 🛡️ MEMORY SAFE Text-To-Image
+     * Explicitly destroys canvas references to prevent iOS Safari crashes.
+     */
     private async textToImage(text: string, fontSize: number = 12, isBold: boolean = false): Promise<Uint8Array> {
-        // 1. Create canvas
         let canvas: HTMLCanvasElement | null = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Canvas context not available');
@@ -24,7 +29,6 @@ export class PdfEngine {
         const width = Math.ceil(metrics.width);
         const height = Math.ceil(fontSizePx * 1.5);
 
-        // 2. Resize & Draw
         canvas.width = width;
         canvas.height = height;
 
@@ -34,10 +38,8 @@ export class PdfEngine {
         ctx.direction = 'inherit';
         ctx.fillText(text, 0, height / 2);
 
-        // 3. Convert & CLEANUP
         return new Promise((resolve, reject) => {
             if (!canvas) return reject('Canvas lost');
-
             canvas.toBlob(async (blob) => {
                 if (blob) {
                     const buffer = await blob.arrayBuffer();
@@ -45,7 +47,6 @@ export class PdfEngine {
                 } else {
                     reject(new Error('Canvas conversion failed'));
                 }
-
                 // 🗑️ CRITICAL MEMORY CLEANUP
                 if (canvas) {
                     canvas.width = 0;
@@ -57,9 +58,26 @@ export class PdfEngine {
         });
     }
 
+    private async generateQRCode(text: string): Promise<Uint8Array> {
+        try {
+            const dataUrl = await QRCode.toDataURL(text, {
+                errorCorrectionLevel: 'M',
+                margin: 0,
+                width: 200,
+                color: {dark: '#000000', light: '#ffffff'}
+            });
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            return new Uint8Array(await blob.arrayBuffer());
+        } catch (err) {
+            console.error("QR Gen Error", err);
+            return new Uint8Array(0);
+        }
+    }
+
     destroy() {
         if (this.pdfDoc) {
-            this.pdfDoc.destroy(); // PDF.js cleanup if available
+            this.pdfDoc.destroy();
             this.pdfDoc = null;
         }
         this.pdfBytes = null;
@@ -67,15 +85,9 @@ export class PdfEngine {
 
     async load(data: Uint8Array) {
         this.pdfBytes = new Uint8Array(data.buffer.slice(0));
-
-        // 🔧 FIX: Determine the correct base path for assets
-        // If we are at https://site.com/app/, this returns "https://site.com/app/"
-        // If we are at localhost, it returns "http://localhost:port/"
         const baseUrl = window.location.href.replace(/index\.html.*/, '');
-        // Remove trailing slash if present to avoid double slashes, though browsers handle it.
         const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 
-        // Standard PDF.js loading (No custom fonts needed here)
         const loadingTask = pdfjsLib.getDocument({
             data: new Uint8Array(data),
             cMapUrl: `${cleanBase}cmaps/`,
@@ -95,34 +107,28 @@ export class PdfEngine {
         await page.render({canvasContext: canvas.getContext('2d')!, viewport}).promise;
     }
 
-    private async appendAuditPage(pdfDoc: PDFDocument, annotations: Annotation[], filename: string) {
+    private async appendAuditPage(pdfDoc: PDFDocument, annotations: Annotation[], filename: string, docId: string) {
         const page = pdfDoc.addPage(PageSizes.A4);
         const {width, height} = page.getSize();
-
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-        // Helper: Check if string is pure ASCII (English/Numbers/Symbols)
         const isAscii = (str: string) => /^[\x00-\x7F]*$/.test(str);
 
         const drawLabel = (text: string, x: number, y: number, size = 10, bold = false) => {
             page.drawText(text, {x, y, size, font: bold ? fontBold : font, color: rgb(0, 0, 0)});
         };
 
-        // Smart Draw: Vector if possible, Image if necessary
         const drawSmart = async (text: string, x: number, y: number, size = 10) => {
             if (isAscii(text)) {
                 drawLabel(text, x, y, size);
             } else {
-                // Fallback for Arabic/Chinese/Emoji
                 try {
                     const imgBuffer = await this.textToImage(text, size, false);
                     const img = await pdfDoc.embedPng(imgBuffer);
                     const w = img.width / 3;
                     const h = img.height / 3;
                     page.drawImage(img, {x, y: y - (h / 4), width: w, height: h});
-                } catch (e) {
-                    // Fallback if image generation fails (rare)
+                } catch {
                     drawLabel("[Complex Text]", x, y, size);
                 }
             }
@@ -131,21 +137,33 @@ export class PdfEngine {
         let y = height - 50;
         const dateStr = new Date().toLocaleString();
 
-        drawLabel("AUDIT TRAIL / CERTIFICATE OF COMPLETION", 50, y, 16, true);
-        y -= 35;
 
-        drawLabel("Document Name:", 50, y, 10, true);
-        await drawSmart(filename, 160, y, 10); // ⚡ Optimized
-        y -= 20;
+        // 🔗 USE CONFIG URL HERE
+        const verifyUrl = `${AppConfig.website}/verify?id=${docId}`;
 
-        drawLabel("Signed Date:", 50, y, 10, true);
-        await drawSmart(dateStr, 160, y, 10); // ⚡ Optimized
-        y -= 20;
+        // Header
+        drawLabel("AUDIT TRAIL / CERTIFICATE", 50, y, 16, true);
 
-        drawLabel("Generator:", 50, y, 10, true);
-        drawLabel("Open Waqf Signer (Offline/Local)", 160, y, 10);
+        // QR Code (Top Right)
+        const qrBytes = await this.generateQRCode(verifyUrl);
+        if (qrBytes.length > 0) {
+            const qrImg = await pdfDoc.embedPng(qrBytes);
+            const qrSize = 80;
+            page.drawImage(qrImg, {x: width - qrSize - 50, y: y - 10, width: qrSize, height: qrSize});
+            drawLabel(`Ref: ${docId}`, width - qrSize - 50, y - 22, 8);
+        }
+
         y -= 40;
+        drawLabel("Document:", 50, y, 10, true);
+        await drawSmart(filename, 140, y, 10);
+        y -= 20;
+        drawLabel("Date:", 50, y, 10, true);
+        await drawSmart(dateStr, 140, y, 10);
+        y -= 20;
+        drawLabel("Validator:", 50, y, 10, true);
+        drawLabel("Open Waqf Signer (Local/Offline)", 140, y, 10);
 
+        y -= 40;
         page.drawLine({start: {x: 50, y}, end: {x: width - 50, y}, thickness: 1, color: rgb(0.8, 0.8, 0.8)});
         y -= 30;
 
@@ -154,11 +172,8 @@ export class PdfEngine {
 
         const events = [
             `Document Loaded`,
-            ...annotations.map((a, i) => {
-                const type = a.type.charAt(0).toUpperCase() + a.type.slice(1);
-                return `Action ${i + 1}: Added ${type} on Page ${a.page + 1}`;
-            }),
-            `Finalized & Exported`
+            ...annotations.map((a, i) => `Action ${i + 1}: Added ${a.type.toUpperCase()} (Pg ${a.page + 1})`),
+            `Finalized with ID: ${docId}`
         ];
 
         for (const evt of events) {
@@ -168,8 +183,7 @@ export class PdfEngine {
             }
         }
 
-        drawLabel("Disclaimer: This audit trail tracks visual modifications applied locally.", 50, 50, 8);
-        drawLabel("It does not represent a PKI digital signature.", 50, 40, 8);
+        drawLabel("Valid only if digital structure is intact.", 50, 40, 8);
     }
 
     async saveProfessional(annotations: Annotation[], filename: string, includeAuditTrail: boolean): Promise<Uint8Array> {
@@ -180,56 +194,47 @@ export class PdfEngine {
         pdfDoc.setProducer('Open Waqf Signer');
         pdfDoc.setModificationDate(new Date());
 
-        const pages = pdfDoc.getPages();
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica); // Needed for footer
+        const docId = Math.random().toString(36).substr(2, 9).toUpperCase();
 
-        // 1. ✨ LEGAL HARDENING: Add specific footnote to EVERY page
-        const footerText = `Signed via Open Waqf | ID: ${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+        const pages = pdfDoc.getPages();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+        // 🔐 FOOTER on Every Page
+        const footerText = `Signed via Open Waqf | Ref: ${docId}`;
 
         for (const page of pages) {
             const {width} = page.getSize();
-            // Draw tiny gray text at bottom center
             page.drawText(footerText, {
-                x: width / 2 - 80, // Approximate center
-                y: 5,
+                x: width / 2 - 90,
+                y: 8,
                 size: 6,
-                font: font,
+                font,
                 color: rgb(0.6, 0.6, 0.6),
             });
         }
 
-        // 2. Process Annotations
         for (const ann of annotations) {
             if (ann.page < 0 || ann.page >= pages.length) continue;
             const page = pages[ann.page];
             const {width, height} = page.getSize();
 
             if (ann.type === 'date' && ann.data) {
-                // --- STRATEGY: TEXT AS IMAGE ---
-                // 1. Generate PNG buffer from browser canvas
-                const imgBuffer = await this.textToImage(
-                    ann.data,
-                    ann.fontSize || 12,
-                    ann.fontWeight === 'bold'
-                );
+                const imgBuffer = await this.textToImage(ann.data, ann.fontSize || 12, ann.fontWeight === 'bold');
                 const pngImage = await pdfDoc.embedPng(imgBuffer);
-                const pdfWidth = pngImage.width / 3;
-                const pdfHeight = pngImage.height / 3;
-                const finalX = width * ann.xPct;
-                const finalY = height - (height * ann.yPct) - (pdfHeight * 0.7);
-
-                page.drawImage(pngImage, {x: finalX, y: finalY, width: pdfWidth, height: pdfHeight});
-
-            } else if (
-                (ann.type === 'signature' || ann.type === 'initials' || ann.type === 'stamp') // <--- ✨ Added 'stamp'
-                && ann.data
-            ) {
-                // --- STANDARD IMAGE STAMP ---
+                const w = pngImage.width / 3;
+                const h = pngImage.height / 3;
+                page.drawImage(pngImage, {
+                    x: width * ann.xPct,
+                    y: height - (height * ann.yPct) - (h * 0.7),
+                    width: w, height: h
+                });
+            } else if (ann.data) {
+                // Signatures, Initials, AND Stamps
                 const pngImage = await pdfDoc.embedPng(ann.data);
-                const targetWidth = width * (ann.widthPct || 0.2); // Stamps use widthPct same as sigs
+                const targetWidth = width * (ann.widthPct || 0.2);
                 const imgDims = pngImage.scale(1);
-                const aspectRatio = imgDims.height / imgDims.width;
-                const targetHeight = targetWidth * aspectRatio;
+                const ratio = imgDims.height / imgDims.width;
+                const targetHeight = targetWidth * ratio;
 
                 page.drawImage(pngImage, {
                     x: width * ann.xPct,
@@ -241,7 +246,7 @@ export class PdfEngine {
         }
 
         if (includeAuditTrail) {
-            await this.appendAuditPage(pdfDoc, annotations, filename);
+            await this.appendAuditPage(pdfDoc, annotations, filename, docId);
         }
 
         return await pdfDoc.save();

@@ -176,6 +176,7 @@ export class AppRoot extends LitElement {
             ` : ''}
 
             <div class="toast ${this.toastMsg ? 'show' : ''}">${this.toastMsg}</div>
+
             ${this.updateAvailable ? html`
                 <div class="toast show" style="bottom: 80px; background: #333; color: white;">
                     <span>🚀 ${i18n.t('updateAvailable') || 'New version available'}</span>
@@ -188,20 +189,24 @@ export class AppRoot extends LitElement {
             ` : ''}
 
             <div class="drop-zone ${this.mode === 'workspace' ? 'hidden' : ''}"
+                 style="height: 100vh; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 0;"
                  @dragover=${(e: DragEvent) => e.preventDefault()}
                  @drop=${this.handleDrop}>
 
-                <div style="position: absolute; top: 20px; right: 20px;">
+                <div style="width: 100%; display: flex; justify-content: flex-end; padding: 20px; box-sizing: border-box; flex-shrink: 0;">
                     <select @change=${this.handleLangChange}
-                            style="padding: 6px; border-radius: 6px; border: 1px solid #ddd;">
+                            style="padding: 8px; border-radius: 8px; border: 1px solid #ddd; background: white; font-size: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                         <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
                         <option value="ar" ?selected=${i18n.lang === 'ar'}>العربية</option>
                         <option value="fr" ?selected=${i18n.lang === 'fr'}>Français</option>
                     </select>
                 </div>
 
-                <div class="drop-card">
-                    <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}" @error=${this.handleImageError}/>
+                <div class="drop-card" style="margin: auto 20px; width: 90%; max-width: 400px; flex-shrink: 0;">
+
+                    <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}"
+                         style="width: 80px; height: 80px; margin-bottom: 20px; border-radius: 16px;"
+                         @error=${this.handleImageError}/>
 
                     <h1>${i18n.t('appTitle')}</h1>
                     <p class="sub">v${packageJson.version} • ${i18n.t('tagline')}</p>
@@ -213,9 +218,11 @@ export class AppRoot extends LitElement {
                             ⚠️ ${i18n.t('performanceHint')}
                         </p>
                     </div>
+
                     <div style="margin-top: 16px; font-size: 0.8rem; color: #10b981; font-weight: 500; background: #ecfdf5; padding: 6px 12px; border-radius: 20px;">
                         🛡️ ${i18n.t('privacyBadge')}
                     </div>
+
                     <div style="margin-top: 24px; display: flex; gap: 15px; font-size: 0.85rem;">
                         <a href="#" class="footer-link" @click=${(e: Event) => {
                             e.preventDefault();
@@ -236,10 +243,12 @@ export class AppRoot extends LitElement {
                         navigator.clipboard.writeText(url);
                         this.showToast(i18n.t('linkCopied'));
                     }}
-                            style="margin-top:10px; background:#fff; color:#333; border:1px solid #ddd; padding: 12px 30px; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600;">
-                        ${i18n.t('shareApp')}
+                            style="margin-top:20px; background:white; color:#333; border:1px solid #ddd; padding: 10px 20px; border-radius: 8px; font-size: 0.9rem; cursor: pointer;">
+                        🔗 ${i18n.t('shareApp')}
                     </button>
                 </div>
+
+                <div style="height: 20px; flex-shrink: 0;"></div>
             </div>
 
             <pdf-workspace
@@ -256,9 +265,7 @@ export class AppRoot extends LitElement {
                 <div class="dialog-content">
                     <h2>${i18n.t('privacyTitle')}</h2>
                     <p>${i18n.t('privacyContent')}</p>
-
                     <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;"/>
-
                     <button @click=${this.clearAppCache}
                             style="background: #fee2e2; color: #b91c1c; border: none; width: 100%; margin-bottom: 10px;">
                         ${i18n.t('forgetData')}
