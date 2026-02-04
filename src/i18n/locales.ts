@@ -84,6 +84,7 @@ export const resources = {
         emailBody: "I confirm that I have digitally signed document {id} using Open Signer.\n\nPlease verify that the Document ID in this email matches the footer code on the attached PDF.",
 
         justDownload: "No, Just Download",
+        sharedDeviceWarning: "Shared Device? Clear your data on the Home Screen to remove your saved email.",
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -158,6 +159,7 @@ export const resources = {
         emailBody: "أؤكد أنني قمت بتوقيع المستند {id} رقمياً باستخدام الموقّع المفتوح.\n\nيرجى التأكد من تطابق رمز المستند في هذا البريد مع الكود الموجود أسفل ملف PDF المرفق.",
 
         justDownload: "لا، تحميل فقط",
+        sharedDeviceWarning: "جهاز مشترك؟ قم بمسح بياناتك من الشاشة الرئيسية لإزالة البريد المحفوظ.",
     },
     fr: {
         appTitle: "Open Signer",
@@ -232,6 +234,7 @@ export const resources = {
         emailBody: "Je confirme avoir signé le document {id} via Open Signer.\n\nVeuillez vérifier que l'ID dans cet e-mail correspond au code en bas du PDF ci-joint.",
 
         justDownload: "Non, Télécharger",
+        sharedDeviceWarning: "Appareil partagé ? Effacez vos données sur l'écran d'accueil pour supprimer votre e-mail.",
     }
 } as const;
 
