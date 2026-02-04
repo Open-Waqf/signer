@@ -21,6 +21,7 @@ export default defineConfig({
             manifest: {
                 name: 'Open Waqf Signer',
                 short_name: 'Signer',
+                start_url: "/",
                 description: 'Secure, Offline, Free PDF Signer.',
                 theme_color: '#ffffff',
                 background_color: '#ffffff',

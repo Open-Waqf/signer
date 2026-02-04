@@ -212,12 +212,11 @@ export class PdfEngine {
         if (!this.pdfBytes) throw new Error('No PDF bytes available');
         const pdfDoc = await PDFDocument.load(this.pdfBytes);
 
-        // 1. Calculate Hash
+        // 1. Metadata & Hash Setup
         const signingDate = new Date();
         const fingerprint = filename + signingDate.toISOString() + JSON.stringify(annotations);
         const docId = await generateHashID(fingerprint);
 
-        // 2. Set Metadata
         pdfDoc.setTitle('Signed Document');
         pdfDoc.setProducer('Open Waqf Signer');
         pdfDoc.setModificationDate(signingDate);
@@ -226,33 +225,50 @@ export class PdfEngine {
         const pages = pdfDoc.getPages();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-        // 3. Footer
+        // 2. Footer on Every Page
         const footerText = `Signed via Open Waqf | Ref: ${docId}`;
         for (const page of pages) {
             const {width} = page.getSize();
-            page.drawText(footerText, {x: width / 2 - 90, y: 8, size: 6, font, color: rgb(0.6, 0.6, 0.6)});
+            page.drawText(footerText, {
+                x: width / 2 - 90,
+                y: 8,
+                size: 6,
+                font,
+                color: rgb(0.6, 0.6, 0.6),
+            });
         }
 
-        // 4. Process Annotations (Added 'identity')
+        // 3. Process Annotations
         for (const ann of annotations) {
             if (ann.page < 0 || ann.page >= pages.length) continue;
             const page = pages[ann.page];
             const {width, height} = page.getSize();
 
-            // ✨ HANDLE IDENTITY & DATES (Text Based)
+            // 🛡️ FIX 1: Group 'identity' with 'date' (Text Logic)
             if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
                 const imgBuffer = await this.textToImage(ann.data, ann.fontSize || 12, ann.fontWeight === 'bold');
                 const pngImage = await pdfDoc.embedPng(imgBuffer);
-                const w = pngImage.width / 3;
-                const h = pngImage.height / 3;
+
+                // 🛡️ FIX 2: Apply 0.75 Scale Factor (CSS px -> PDF pt conversion)
+                // 96px on screen = 72pt on PDF. So we multiply by 0.75.
+                const scaleFactor = 0.75;
+                const w = (pngImage.width / 3) * scaleFactor;
+                const h = (pngImage.height / 3) * scaleFactor;
+
+                // 🛡️ FIX 3: Correct Y Positioning
+                // PDF Y=0 is bottom. Screen 'top' is distance from top.
+                // We calculate Top Y, then subtract Height to draw downwards.
+                const pdfY = height - (height * ann.yPct) - h;
+
                 page.drawImage(pngImage, {
                     x: width * ann.xPct,
-                    y: height - (height * ann.yPct) - (h * 0.7),
-                    width: w, height: h
+                    y: pdfY,
+                    width: w,
+                    height: h
                 });
-            }
-            // ✨ HANDLE IMAGES (Sig, Initials, Stamp)
-            else if (ann.data) {
+
+            } else if (ann.data) {
+                // Images (Signatures/Stamps) - Keep existing logic
                 const pngImage = await pdfDoc.embedPng(ann.data);
                 const targetWidth = width * (ann.widthPct || 0.2);
                 const imgDims = pngImage.scale(1);
@@ -273,8 +289,6 @@ export class PdfEngine {
         }
 
         const savedBytes = await pdfDoc.save();
-
-        // ✨ RETURN BOTH
         return {pdfBytes: savedBytes, docId};
     }
 
