@@ -1,4 +1,4 @@
-export type AnnotationType = 'signature' | 'initials' | 'date' | 'stamp';
+export type AnnotationType = 'signature' | 'initials' | 'date' | 'stamp' | 'identity';
 
 export interface Annotation {
     id: string;            // Unique ID to track items

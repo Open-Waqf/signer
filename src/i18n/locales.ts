@@ -70,7 +70,20 @@ export const resources = {
         validDocHint: "Please check that this ID matches the footer on every page.",
         invalidDocTitle: "⚠️ CAUTION",
         invalidDocMsg: "No Digital ID found.\n\nThis document may not have been signed by Open Signer, or it has been modified externally.",
-        errorReadingFile: "Error reading file."
+        errorReadingFile: "Error reading file.",
+
+        addIdentity: "+ Identity",
+        identityPrompt: "Enter your email address to claim this signature:",
+        signedBy: "Digitally Signed by",
+
+        // The Email Logic
+        proveIdentityTitle: "✅ Document Saved!",
+        proveIdentityMsg: "Do you want to send a verification receipt to the receiver?",
+        sendProofEmail: "📧 Send Proof Email",
+        emailSubject: "Signature Receipt for Document: {id}",
+        emailBody: "I confirm that I have digitally signed document {id} using Open Signer.\n\nPlease verify that the Document ID in this email matches the footer code on the attached PDF.",
+
+        justDownload: "No, Just Download",
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -133,7 +146,18 @@ export const resources = {
         validDocHint: "يرجى التأكد من تطابق هذا المعرف مع التذييل في كل صفحة.",
         invalidDocTitle: "⚠️ تنبيه",
         invalidDocMsg: "لم يتم العثور على معرف رقمي.\n\nقد يكون هذا المستند غير موقع بواسطة الموقّع المفتوح، أو تم تعديله خارجيًا.",
-        errorReadingFile: "خطأ في قراءة الملف."
+        errorReadingFile: "خطأ في قراءة الملف.",
+        addIdentity: "+ الهوية",
+        identityPrompt: "أدخل بريدك الإلكتروني لتوثيق هذا التوقيع:",
+        signedBy: "موقع رقمياً بواسطة",
+
+        proveIdentityTitle: "✅ تم الحفظ!",
+        proveIdentityMsg: "هل تريد إرسال إيصال توثيق للمستلم؟",
+        sendProofEmail: "📧 إرسال إيصال بريدي",
+        emailSubject: "إيصال توقيع للمستند: {id}",
+        emailBody: "أؤكد أنني قمت بتوقيع المستند {id} رقمياً باستخدام الموقّع المفتوح.\n\nيرجى التأكد من تطابق رمز المستند في هذا البريد مع الكود الموجود أسفل ملف PDF المرفق.",
+
+        justDownload: "لا، تحميل فقط",
     },
     fr: {
         appTitle: "Open Signer",
@@ -196,7 +220,18 @@ export const resources = {
         validDocHint: "Veuillez vérifier que cet ID correspond au pied de page de chaque page.",
         invalidDocTitle: "⚠️ ATTENTION",
         invalidDocMsg: "Aucun ID numérique trouvé.\n\nCe document n'a peut-être pas été signé par Open Signer ou a été modifié.",
-        errorReadingFile: "Erreur de lecture du fichier."
+        errorReadingFile: "Erreur de lecture du fichier.",
+        addIdentity: "+ Identité",
+        identityPrompt: "Entrez votre email pour certifier cette signature :",
+        signedBy: "Signé numériquement par",
+
+        proveIdentityTitle: "✅ Enregistré !",
+        proveIdentityMsg: "Voulez-vous envoyer un reçu de vérification au destinataire ?",
+        sendProofEmail: "📧 Envoyer Preuve",
+        emailSubject: "Reçu de signature pour : {id}",
+        emailBody: "Je confirme avoir signé le document {id} via Open Signer.\n\nVeuillez vérifier que l'ID dans cet e-mail correspond au code en bas du PDF ci-joint.",
+
+        justDownload: "Non, Télécharger",
     }
 } as const;
 

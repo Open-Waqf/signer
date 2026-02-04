@@ -205,16 +205,19 @@ export class PdfEngine {
         drawLabel("Valid only if digital structure is intact.", 50, 40, 8);
     }
 
-    async saveProfessional(annotations: Annotation[], filename: string, includeAuditTrail: boolean): Promise<Uint8Array> {
+    async saveProfessional(annotations: Annotation[], filename: string, includeAuditTrail: boolean): Promise<{
+        pdfBytes: Uint8Array,
+        docId: string
+    }> {
         if (!this.pdfBytes) throw new Error('No PDF bytes available');
         const pdfDoc = await PDFDocument.load(this.pdfBytes);
 
-        // 1. ✨ CALCULATE HASH
+        // 1. Calculate Hash
         const signingDate = new Date();
         const fingerprint = filename + signingDate.toISOString() + JSON.stringify(annotations);
         const docId = await generateHashID(fingerprint);
 
-        // 2. ✨ SAVE ID IN METADATA (Invisible)
+        // 2. Set Metadata
         pdfDoc.setTitle('Signed Document');
         pdfDoc.setProducer('Open Waqf Signer');
         pdfDoc.setModificationDate(signingDate);
@@ -223,27 +226,21 @@ export class PdfEngine {
         const pages = pdfDoc.getPages();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-        // 3. ✨ ADD FOOTER
+        // 3. Footer
         const footerText = `Signed via Open Waqf | Ref: ${docId}`;
-
         for (const page of pages) {
             const {width} = page.getSize();
-            page.drawText(footerText, {
-                x: width / 2 - 90,
-                y: 8,
-                size: 6,
-                font,
-                color: rgb(0.6, 0.6, 0.6),
-            });
+            page.drawText(footerText, {x: width / 2 - 90, y: 8, size: 6, font, color: rgb(0.6, 0.6, 0.6)});
         }
 
-        // 4. DRAW ANNOTATIONS
+        // 4. Process Annotations (Added 'identity')
         for (const ann of annotations) {
             if (ann.page < 0 || ann.page >= pages.length) continue;
             const page = pages[ann.page];
             const {width, height} = page.getSize();
 
-            if (ann.type === 'date' && ann.data) {
+            // ✨ HANDLE IDENTITY & DATES (Text Based)
+            if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
                 const imgBuffer = await this.textToImage(ann.data, ann.fontSize || 12, ann.fontWeight === 'bold');
                 const pngImage = await pdfDoc.embedPng(imgBuffer);
                 const w = pngImage.width / 3;
@@ -253,8 +250,9 @@ export class PdfEngine {
                     y: height - (height * ann.yPct) - (h * 0.7),
                     width: w, height: h
                 });
-            } else if (ann.data) {
-                // Signatures, Initials, AND Stamps
+            }
+            // ✨ HANDLE IMAGES (Sig, Initials, Stamp)
+            else if (ann.data) {
                 const pngImage = await pdfDoc.embedPng(ann.data);
                 const targetWidth = width * (ann.widthPct || 0.2);
                 const imgDims = pngImage.scale(1);
@@ -274,7 +272,10 @@ export class PdfEngine {
             await this.appendAuditPage(pdfDoc, annotations, filename, docId);
         }
 
-        return await pdfDoc.save();
+        const savedBytes = await pdfDoc.save();
+
+        // ✨ RETURN BOTH
+        return {pdfBytes: savedBytes, docId};
     }
 
     // 5. ✨ READ METADATA FOR VERIFICATION
