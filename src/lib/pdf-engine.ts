@@ -58,6 +58,14 @@ export class PdfEngine {
         });
     }
 
+    destroy() {
+        if (this.pdfDoc) {
+            this.pdfDoc.destroy(); // PDF.js cleanup if available
+            this.pdfDoc = null;
+        }
+        this.pdfBytes = null;
+    }
+
     async load(data: Uint8Array) {
         this.pdfBytes = new Uint8Array(data.buffer.slice(0));
 

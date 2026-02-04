@@ -32,6 +32,7 @@ export class PdfWorkspace extends LitElement {
     // Save/share cache
     @state() lastSaved: { filename: string; uri?: string } | null = null;
     private lastSavedBytes: Uint8Array | null = null;
+    @state() outputFilename = '';
 
     // Dirty flag
     @state() isDirty = false;
@@ -401,6 +402,10 @@ export class PdfWorkspace extends LitElement {
         this.history = [];
         this.future = [];
 
+        // Initialize output name ONCE. Clean the input name (remove .pdf, remove old _signed_ dates)
+        const cleanName = name.replace(/_signed_\d{4}-\d{2}-\d{2}.*$/, '').replace(/\.pdf$/i, '');
+        this.outputFilename = `${cleanName}_signed_${new Date().toISOString().slice(0, 10)}`;
+
         await this.updateComplete;
         void this.renderPage();
     }
@@ -625,6 +630,28 @@ export class PdfWorkspace extends LitElement {
         this.dispatchEvent(new CustomEvent('toast', {detail: msg, bubbles: true, composed: true}));
     }
 
+    public reset() {
+        // 1. Tell the Engine to forget the file
+        pdfEngine.destroy();
+
+        // 2. Clear Local State
+        this.annotations = [];
+        this.history = [];
+        this.future = [];
+        this.lastSaved = null;
+        this.lastSavedBytes = null;
+        this.pdfName = '';
+        this.outputFilename = ''; // From the previous fix
+        this.isDirty = false;
+
+        // 3. Clear the Canvas Visuals
+        if (this.canvas) {
+            const context = this.canvas.getContext('2d');
+            context?.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.canvas.height = 0; // Collapse it
+        }
+    }
+
     async saveDocument(opts?: { silentWeb?: boolean; showToast?: boolean }) {
         const silentWeb = !!opts?.silentWeb;
         const showToast = opts?.showToast ?? true;
@@ -638,11 +665,22 @@ export class PdfWorkspace extends LitElement {
         await new Promise((r) => setTimeout(r, 50));
 
         try {
-            const dateStr = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-            const cleanName = this.pdfName.replace(/\.pdf$/i, '');
-            const filename = `${cleanName}_signed_${dateStr}.pdf`;
+            const filename = `${this.outputFilename}.pdf`;
 
-            const finalBytes = await pdfEngine.saveProfessional(this.annotations, this.pdfName, this.includeAudit);
+            // 🛡️ MEMORY GUARD START 🛡️
+            let finalBytes: Uint8Array;
+            try {
+                finalBytes = await pdfEngine.saveProfessional(this.annotations, this.pdfName, this.includeAudit);
+            } catch (saveError: any) {
+                console.error("PDF Generation Failed:", saveError);
+
+                // Check for likely memory errors or huge allocations
+                if (saveError.toString().includes('memory') || saveError.toString().includes('allocation')) {
+                    throw new Error('OOM'); // Out Of Memory
+                }
+                throw saveError; // Re-throw other errors
+            }
+            // 🛡️ MEMORY GUARD END 🛡️
             this.lastSavedBytes = finalBytes;
 
             // ✅ Web: if silentWeb, do NOT download now (Share will handle download fallback if needed)
@@ -657,9 +695,15 @@ export class PdfWorkspace extends LitElement {
             if (showToast) {
                 this.toast(((i18n.t('savedMsg') as string) || 'Saved') as string);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            this.toast('Error Saving');
+
+            // CUSTOM USER FEEDBACK
+            if (e.message === 'OOM') {
+                this.toast("⚠️ Device out of memory. Try a smaller file.");
+            } else {
+                this.toast("❌ Error Saving: " + (e.message || "Unknown error"));
+            }
         } finally {
             this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
         }

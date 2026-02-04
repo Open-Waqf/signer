@@ -105,6 +105,7 @@ export const resources = {
         addAuditPage: "إرفاق صفحة سجل التدقيق",
         auditTrail: "سجل التدقيق",
         sharePdf: "مشاركة PDF",
+        noChanges: "لا توجد تغييرات للحفظ أو المشاركة.",
     },
     fr: {
         appTitle: "Open Signer",
@@ -153,6 +154,7 @@ export const resources = {
         addAuditPage: "Joindre une page d'audit",
         auditTrail: "Journal d'audit",
         sharePdf: "Partager PDF",
+        noChanges: "Aucun changement à enregistrer/partager.",
     }
 } as const;
 

@@ -34,11 +34,13 @@ export class AppRoot extends LitElement {
                 this.closePrivacy();
                 return;
             }
+            const sigModal = document.querySelector('signature-modal');
+            if (sigModal) {
+                sigModal.remove(); // Remove it from DOM (effectively closing it)
+                return;
+            }
             if (this.mode === 'workspace') {
-                if (confirm(i18n.t('exitConfirm'))) {
-                    this.mode = 'home';
-                    window.location.reload();
-                }
+                this.handleExitWorkspace(); // Use our new "Soft Reset" handler
                 return;
             }
             App.exitApp();
@@ -152,8 +154,9 @@ export class AppRoot extends LitElement {
 
     handleExitWorkspace() {
         if (confirm(i18n.t('exitConfirm'))) {
+            // Use the new soft reset
+            this.workspace.reset();
             this.mode = 'home';
-            window.location.reload(); // Hard reset (Safest for memory)
         }
     }
 
