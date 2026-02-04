@@ -709,6 +709,45 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
+    handleStampUpload(e: Event) {
+        const input = e.target as HTMLInputElement;
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            const reader = new FileReader();
+
+            reader.onload = (evt) => {
+                const result = evt.target?.result as string;
+                const img = new Image();
+
+                img.onload = () => {
+                    // 🛡️ FIX: Convert everything (WebP, JPEG, etc.) to PNG
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(img, 0, 0);
+
+                        // 1. Force conversion to PNG string
+                        const pngData = canvas.toDataURL('image/png');
+
+                        // 2. Add the CLEAN PNG data to your app state
+                        this.addAnnotation('stamp', pngData, img.height / img.width);
+
+                        // 3. Memory Cleanup
+                        canvas.width = 0;
+                        canvas.height = 0;
+                        canvas.remove();
+                    }
+                };
+                img.src = result; // Load the original (WebP) to trigger conversion
+            };
+            reader.readAsDataURL(file);
+        }
+        input.value = ''; // Allow selecting the same file again
+    }
+
     async shareLatest() {
         if (!this.hasEdits) {
             this.toast((i18n.t('noChanges') as string) || 'No changes to share.');
@@ -771,6 +810,10 @@ export class PdfWorkspace extends LitElement {
                 <button @click=${this.addTextAnnotation} title="${i18n.t('addText')}">
                     T<span class="btn-label">${i18n.t('addText')}</span>
                 </button>
+                <button @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
+                        title="Add Company Stamp/Logo">
+                    🏢<span class="btn-label">Stamp</span>
+                </button>
                 <button @click=${this.addDateStamp} title="${i18n.t('addDate')}">
                     📅<span class="btn-label">${i18n.t('addDate')}</span>
                 </button>
@@ -815,6 +858,14 @@ export class PdfWorkspace extends LitElement {
                     📤<span class="btn-label">${i18n.t('sharePdf')}</span>
                 </button>
             </div>
+
+            <input
+                    type="file"
+                    id="stamp-input"
+                    accept="image/*"
+                    style="display: none"
+                    @change=${this.handleStampUpload}
+            />
 
             <div class="toolbar toolbar-secondary">
                 <div class="tool-group">

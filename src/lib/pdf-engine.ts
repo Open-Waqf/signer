@@ -181,7 +181,24 @@ export class PdfEngine {
         pdfDoc.setModificationDate(new Date());
 
         const pages = pdfDoc.getPages();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica); // Needed for footer
 
+        // 1. ✨ LEGAL HARDENING: Add specific footnote to EVERY page
+        const footerText = `Signed via Open Waqf | ID: ${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+
+        for (const page of pages) {
+            const {width} = page.getSize();
+            // Draw tiny gray text at bottom center
+            page.drawText(footerText, {
+                x: width / 2 - 80, // Approximate center
+                y: 5,
+                size: 6,
+                font: font,
+                color: rgb(0.6, 0.6, 0.6),
+            });
+        }
+
+        // 2. Process Annotations
         for (const ann of annotations) {
             if (ann.page < 0 || ann.page >= pages.length) continue;
             const page = pages[ann.page];
@@ -195,29 +212,21 @@ export class PdfEngine {
                     ann.fontSize || 12,
                     ann.fontWeight === 'bold'
                 );
-
-                // 2. Embed & Scale
                 const pngImage = await pdfDoc.embedPng(imgBuffer);
-                const pdfWidth = pngImage.width / 3; // Undo the 3x scale
+                const pdfWidth = pngImage.width / 3;
                 const pdfHeight = pngImage.height / 3;
-
-                // 3. Position (Adjust for PDF coordinate system)
                 const finalX = width * ann.xPct;
-                // Center vertically on the intended line
                 const finalY = height - (height * ann.yPct) - (pdfHeight * 0.7);
 
-                // 4. Draw
-                page.drawImage(pngImage, {
-                    x: finalX,
-                    y: finalY,
-                    width: pdfWidth,
-                    height: pdfHeight,
-                });
+                page.drawImage(pngImage, {x: finalX, y: finalY, width: pdfWidth, height: pdfHeight});
 
-            } else if ((ann.type === 'signature' || ann.type === 'initials') && ann.data) {
+            } else if (
+                (ann.type === 'signature' || ann.type === 'initials' || ann.type === 'stamp') // <--- ✨ Added 'stamp'
+                && ann.data
+            ) {
                 // --- STANDARD IMAGE STAMP ---
                 const pngImage = await pdfDoc.embedPng(ann.data);
-                const targetWidth = width * (ann.widthPct || 0.2);
+                const targetWidth = width * (ann.widthPct || 0.2); // Stamps use widthPct same as sigs
                 const imgDims = pngImage.scale(1);
                 const aspectRatio = imgDims.height / imgDims.width;
                 const targetHeight = targetWidth * aspectRatio;
