@@ -16,7 +16,9 @@ export default defineConfig({
                 cleanupOutdatedCaches: true,
                 skipWaiting: false,
                 clientsClaim: false,
-                globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,bcmap,pfb,ttf}']
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,json,woff2,wasm,bcmap,pfb,ttf,mjs}'],
+                maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+                dontCacheBustURLsMatching: /\.[0-9a-f]{8}\./,
             },
             manifest: {
                 name: 'Open Waqf Signer',

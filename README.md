@@ -1,39 +1,59 @@
-# ✒️ Open Waqf Signer
+# ✒️ Open Waqf Signer (الموقّع)
 
-> **Secure. Offline. Free.**
-> A privacy-first PDF signer and form-filler.
+> **Secure. Offline. Verifiable.**
+> A privacy-first PDF signer with cryptographic integrity.
 
-Open Waqf Signer allows users to visually sign and edit PDF documents directly in their browser or on their mobile
-device without uploading data to any server. It is built on the principles of **Amanah** (Trust) and **Privacy**.
+<div align="center">
+<a href="[https://sign.open-waqf.org](https://sign.open-waqf.org)">
+<img src="public/icons/icon-512.webp" alt="Logo" width="100" height="100" style="border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+</a>
+
+
+
+
+
+
+</div>
+
+Open Waqf Signer allows users to sign, edit, and **verify** PDF documents directly in their browser. It is built on the principles of **Amanah** (Trust) and **Privacy**.
+
+Unlike other free tools, **no data is ever uploaded to a server**. All cryptographic processing happens locally on your device.
+
+---
 
 ## 🌟 Key Features
 
-* **Offline First (PWA):** Works without internet. Installable as a native app on Android, iOS, and Desktop.
-* **Professional Tools:**
-    * ✍️ **Signatures:** Smooth, pressure-sensitive pen strokes (simulates real ink).
-    * 📝 **Text Tool:** Add Names, Titles, or fill out forms.
-    * 📅 **Date Stamp:** One-click auto-date with editing capabilities.
-    * 🔤 **Initials:** Quick insertion for multi-page contracts.
-* **Advanced Editing:**
-    * **Undo / Redo** (Ctrl+Z / Ctrl+Y) history support.
-    * Drag-and-drop positioning.
-    * Resize handles for all elements.
-    * Font styling (Bold, Size adjustment).
-* **Mobile Optimized:**
-    * Responsive toolbar (icons-only on small screens).
-    * Thicker pen for touch screens.
-    * Native Android back-button handling.
-* **Global:** Fully localized in **English**, **Arabic (RTL)**, and **French**.
+### 🛡️ Security & Trust
+
+* **Zero-Knowledge:** Documents never leave your device (RAM-only processing).
+* **Cryptographic Hashing:** Every saved document is stamped with a unique SHA-256 fingerprint.
+* **🆔 Identity Verification:** innovative "Self-Sovereign" verification. Link your email to a document hash to prove ownership without a central server.
+* **Tamper Detection:** Drag & drop a signed PDF to instantly verify if it has been altered since signing.
+* **Audit Trail:** Automatically appends a verification page with a QR code and event log.
+
+### ✍️ Professional Tools
+
+* **Natural Ink:** Smooth, pressure-sensitive signature drawing.
+* **Smart Annotation:** Add Names, Dates, Initials, and Free Text.
+* **Custom Stamps:** Upload company seals or logos.
+* **History:** Full Undo/Redo support (`Ctrl+Z`, `Ctrl+Y`).
+* **Layout Control:** Drag, resize, and position elements with precision.
+
+### 🌍 Universal Access
+
+* **Offline First (PWA):** Installs as a native app on Android, iOS, Windows, and Mac.
+* **Multilingual:** Native support for **English**, **Arabic (RTL)**, and **French**.
+* **Mobile Optimized:** Touch-friendly interface with native back-button handling on Android.
 
 ---
 
 ## 🏗️ Architecture
 
-* **Stack:** TypeScript, Vite, Lit (Web Components), Capacitor.
+* **Core:** TypeScript, Vite, Lit (Web Components).
+* **Native Layer:** Capacitor (for Android/iOS).
 * **PDF Engine:** `pdf-lib` (modification) & `pdfjs-dist` (rendering).
-* **Privacy:** Zero analytics, zero remote dependencies (fonts & scripts are embedded locally).
-* **Storage:** Zero-knowledge. Files are processed in RAM and saved back to the user's device.
-* **License:** Polyform Noncommercial 1.0.0.
+* **State Management:** Reactive Controllers (MobX-like pattern with Lit).
+* **Storage:** `IndexedDB` (for preferences only). Files are transient.
 
 ---
 
@@ -42,7 +62,7 @@ device without uploading data to any server. It is built on the principles of **
 ### Prerequisites
 
 * Node.js 20+
-* Android Studio (required only for building the APK)
+* Android Studio (only if building the APK)
 
 ### 1. Installation
 
@@ -89,14 +109,16 @@ npx cap open android
 
 ---
 
-## 🤖 Workflow Commands
+## 🔒 The Trust Model (How it works)
 
-**"INIT [Name]" Routine**
+We use a **"Triangulated Proof"** system to ensure document integrity without storing your data:
 
-When preparing for a release or device sync:
+1. **The PDF Hash:** When you save, we calculate a SHA-256 hash of the document content + annotations. This ID is embedded in the PDF metadata.
+2. **The Visual Audit:** This ID is printed on the footer of every page and the final Audit Page.
+3. **The Identity Loop:** If you use the Identity tool, the app generates a pre-filled email containing this ID. You send this email to the recipient.
+* *Result:* The Recipient has the PDF (with ID `XYZ`) and an Email from you (referencing ID `XYZ`). This proves **You** signed **That File**.
 
-1. **Run** `npm run build`: Always regenerate `dist` before syncing to ensure the latest code is used.
-2. **Run** `npx cap sync`: Update native plugins and copy the built web assets to the Android layer.
+
 
 ---
 
@@ -104,48 +126,29 @@ When preparing for a release or device sync:
 
 The project uses **GitHub Actions** to deploy to GitHub Pages (PWA).
 
-1. **Develop:** Push changes to the `develop` branch.
-2. **Action:** The "Deploy Open Waqf Signer" action runs automatically.
+1. **Push:** Commit changes to the `main` branch.
+2. **Build:** The Action compiles TypeScript and optimizes assets.
+3. **Deploy:** The site updates automatically at `https://sign.open-waqf.org`.
 
-* It compiles TypeScript.
-* It cleans comments and optimizes code.
-* It pushes the result to the `deploy` branch.
+---
 
-
-3. **Live:** The site updates at `https://sign.open-waqf.org`.
-
-## 📱 Android Release
-
-The GitHub Action does **not** build the APK to the store automatically. To release an APK:
-
-1. Run `npm run build`.
-2. Run `npx cap sync`.
-3. Open **Android Studio** -> **Build** -> **Generate Signed Bundle / APK**.
-4. Copy the resulting APK to `public/app/signer.apk` manually if distributing via the website.
-
-## ⚠️ Important Disclaimers
+## ⚠️ Disclaimers
 
 ### Visual vs. Digital Signatures
 
-Open Waqf Signer applies a **visual electronic signature** (drawing an image on a PDF page).
+Open Waqf Signer applies a **Cryptographically Linked Electronic Signature**.
 
-* ✅ **Good for:** Contracts, internal approvals, invoices, waivers, and general business use where visual consent is
-  sufficient.
-* ❌ **Not for:** Scenarios requiring legally mandated **PKI / Digital Certificates** (e.g., eIDAS Qualified Electronic
-  Signatures) that require a cryptographic USB token or Smart Card.
-
-### Privacy & Security
-
-* **No Uploads:** Your documents **never** leave your device. All processing is done in the browser's memory.
-* **Audit Trail:** The app generates a local "Event Log" page attached to the end of your PDF to track when signatures
-  were applied.
+* ✅ **Valid for:** Business contracts, invoices, internal approvals, waivers, and general agreements.
+* ❌ **Not for:** Scenarios requiring **eIDAS Qualified Electronic Signatures (QES)** that mandate a specific hardware token (Smart Card/USB) issued by a government authority.
 
 ### Performance Limits
 
 * **Recommended:** Files under **25MB**.
-* **Large Files:** Since everything runs in your RAM (memory), opening files larger than 50MB-100MB on mobile devices
-  may cause the browser tab to crash. This is a security feature of the browser sandbox.
+* **Large Files:** Since processing occurs in your browser's RAM, files larger than 50MB may cause the tab to crash on older mobile devices.
 
 ---
 
-*Built with ❤️ for the Ummah and Humanity.*
+<div align="center">
+<p><em>Built with ❤️ for the Ummah and Humanity.</em></p>
+<p><small>Released under Polyform Noncommercial License 1.0.0</small></p>
+</div>
