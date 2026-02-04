@@ -9,50 +9,49 @@ export class PdfEngine {
     private pdfDoc: any = null;
     private pdfBytes: Uint8Array | null = null;
 
-    /**
-     * 🎨 TEXT-TO-IMAGE ENGINE
-     * Uses the browser's native text rendering to create a high-quality PNG.
-     * This solves 100% of Arabic/RTL issues without extra libraries.
-     */
     private async textToImage(text: string, fontSize: number = 12, isBold: boolean = false): Promise<Uint8Array> {
-        const canvas = document.createElement('canvas');
+        // 1. Create canvas
+        let canvas: HTMLCanvasElement | null = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Canvas context not available');
 
-        // 1. High Resolution Scale (3x) for crisp printing
-        const scale = 3;
+        const scale = 3; // High Res
         const fontSizePx = fontSize * scale;
-        // Use system fonts that support Arabic naturally
         const font = `${isBold ? 'bold' : 'normal'} ${fontSizePx}px "Amiri", "Segoe UI", "Helvetica", "Arial", sans-serif`;
 
         ctx.font = font;
-
-        // 2. Measure Text
         const metrics = ctx.measureText(text);
         const width = Math.ceil(metrics.width);
-        // Add generous height padding to prevent clipping of accents
         const height = Math.ceil(fontSizePx * 1.5);
 
-        // 3. Resize Canvas
+        // 2. Resize & Draw
         canvas.width = width;
         canvas.height = height;
 
-        // 4. Draw Text
-        ctx.font = font; // Re-apply after resize
+        ctx.font = font;
         ctx.fillStyle = 'black';
         ctx.textBaseline = 'middle';
-        // Force LTR context but allow browser to handle RTL inside it
         ctx.direction = 'inherit';
         ctx.fillText(text, 0, height / 2);
 
-        // 5. Convert to PNG Buffer
+        // 3. Convert & CLEANUP
         return new Promise((resolve, reject) => {
+            if (!canvas) return reject('Canvas lost');
+
             canvas.toBlob(async (blob) => {
                 if (blob) {
                     const buffer = await blob.arrayBuffer();
                     resolve(new Uint8Array(buffer));
                 } else {
                     reject(new Error('Canvas conversion failed'));
+                }
+
+                // 🗑️ CRITICAL MEMORY CLEANUP
+                if (canvas) {
+                    canvas.width = 0;
+                    canvas.height = 0;
+                    canvas.remove();
+                    canvas = null;
                 }
             }, 'image/png');
         });
@@ -96,32 +95,37 @@ export class PdfEngine {
         await page.render({canvasContext: canvas.getContext('2d')!, viewport}).promise;
     }
 
-    /**
-     * Draws the Audit Page
-     * Uses StandardFonts for static English labels to keep file size small.
-     * Uses textToImage for dynamic fields (Filename/Dates) so Arabic doesn't break.
-     */
     private async appendAuditPage(pdfDoc: PDFDocument, annotations: Annotation[], filename: string) {
         const page = pdfDoc.addPage(PageSizes.A4);
         const {width, height} = page.getSize();
 
-        // Standard Font for labels
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-        // Helper to draw standard Latin text
+        // Helper: Check if string is pure ASCII (English/Numbers/Symbols)
+        const isAscii = (str: string) => /^[\x00-\x7F]*$/.test(str);
+
         const drawLabel = (text: string, x: number, y: number, size = 10, bold = false) => {
             page.drawText(text, {x, y, size, font: bold ? fontBold : font, color: rgb(0, 0, 0)});
         };
 
-        // Helper to draw Dynamic (possibly Arabic) text as Image
-        const drawDynamic = async (text: string, x: number, y: number, size = 10) => {
-            const imgBuffer = await this.textToImage(text, size, false);
-            const img = await pdfDoc.embedPng(imgBuffer);
-            const w = img.width / 3; // Scale back down
-            const h = img.height / 3;
-            // Center the image vertically relative to text line
-            page.drawImage(img, {x, y: y - (h / 4), width: w, height: h});
+        // Smart Draw: Vector if possible, Image if necessary
+        const drawSmart = async (text: string, x: number, y: number, size = 10) => {
+            if (isAscii(text)) {
+                drawLabel(text, x, y, size);
+            } else {
+                // Fallback for Arabic/Chinese/Emoji
+                try {
+                    const imgBuffer = await this.textToImage(text, size, false);
+                    const img = await pdfDoc.embedPng(imgBuffer);
+                    const w = img.width / 3;
+                    const h = img.height / 3;
+                    page.drawImage(img, {x, y: y - (h / 4), width: w, height: h});
+                } catch (e) {
+                    // Fallback if image generation fails (rare)
+                    drawLabel("[Complex Text]", x, y, size);
+                }
+            }
         };
 
         let y = height - 50;
@@ -131,18 +135,17 @@ export class PdfEngine {
         y -= 35;
 
         drawLabel("Document Name:", 50, y, 10, true);
-        await drawDynamic(filename, 160, y, 10); // Handle Arabic Filename
+        await drawSmart(filename, 160, y, 10); // ⚡ Optimized
         y -= 20;
 
         drawLabel("Signed Date:", 50, y, 10, true);
-        await drawDynamic(dateStr, 160, y, 10); // Handle Localized Date
+        await drawSmart(dateStr, 160, y, 10); // ⚡ Optimized
         y -= 20;
 
         drawLabel("Generator:", 50, y, 10, true);
         drawLabel("Open Waqf Signer (Offline/Local)", 160, y, 10);
         y -= 40;
 
-        // Divider
         page.drawLine({start: {x: 50, y}, end: {x: width - 50, y}, thickness: 1, color: rgb(0.8, 0.8, 0.8)});
         y -= 30;
 
