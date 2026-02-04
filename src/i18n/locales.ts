@@ -57,6 +57,7 @@ export const resources = {
         auditTrail: "Audit Trail",
         sharePdf: "Share PDF",
         noChanges: "No changes to save/share.",
+        updateAvailable: "New update available",
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -106,6 +107,7 @@ export const resources = {
         auditTrail: "سجل التدقيق",
         sharePdf: "مشاركة PDF",
         noChanges: "لا توجد تغييرات للحفظ أو المشاركة.",
+        updateAvailable: "يتوفر تحديث جديد"
     },
     fr: {
         appTitle: "Open Signer",
@@ -155,6 +157,7 @@ export const resources = {
         auditTrail: "Journal d'audit",
         sharePdf: "Partager PDF",
         noChanges: "Aucun changement à enregistrer/partager.",
+        updateAvailable: "Nouvelle mise à jour disponible"
     }
 } as const;
 

@@ -14,6 +14,8 @@ export class AppRoot extends LitElement {
     @state() mode: 'home' | 'workspace' = 'home';
     @state() isLoading = false;
     @state() toastMsg: string | null = null;
+    @state() updateAvailable = false;
+    private updateSW: ((reload: boolean) => void) | undefined;
 
     @query('pdf-workspace') workspace: any;
     @query('dialog') privacyDialog!: HTMLDialogElement;
@@ -50,13 +52,11 @@ export class AppRoot extends LitElement {
     // New Method to handle PWA logic cleanly
     setupPWA() {
         if (!Capacitor.isNativePlatform()) {
-            // We capture the return function to trigger the update later
             const updateSW = registerSW({
-                onNeedRefresh() {
-                    // Logic: The browser has found a new version but is waiting
-                    if (confirm("New version available! Reload to apply updates?")) {
-                        updateSW(true); // This tells the SW to 'skipWaiting'
-                    }
+                onNeedRefresh: () => {
+                    // Don't alert()! Just show the UI button.
+                    this.updateSW = updateSW;
+                    this.updateAvailable = true;
                 },
                 onOfflineReady() {
                     console.log("App ready for offline use.");
@@ -175,6 +175,16 @@ export class AppRoot extends LitElement {
             ` : ''}
 
             <div class="toast ${this.toastMsg ? 'show' : ''}">${this.toastMsg}</div>
+            ${this.updateAvailable ? html`
+                <div class="toast show" style="bottom: 80px; background: #333; color: white;">
+                    <span>🚀 ${i18n.t('updateAvailable') || 'New version available'}</span>
+                    <button
+                            @click=${() => this.updateSW && this.updateSW(true)}
+                            style="margin-left:10px; padding:4px 8px; font-size:0.8rem; background:white; color:black; border:none; border-radius:4px;">
+                        Reload
+                    </button>
+                </div>
+            ` : ''}
 
             <div class="drop-zone ${this.mode === 'workspace' ? 'hidden' : ''}"
                  @dragover=${(e: DragEvent) => e.preventDefault()}

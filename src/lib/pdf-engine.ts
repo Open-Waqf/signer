@@ -69,12 +69,19 @@ export class PdfEngine {
     async load(data: Uint8Array) {
         this.pdfBytes = new Uint8Array(data.buffer.slice(0));
 
+        // 🔧 FIX: Determine the correct base path for assets
+        // If we are at https://site.com/app/, this returns "https://site.com/app/"
+        // If we are at localhost, it returns "http://localhost:port/"
+        const baseUrl = window.location.href.replace(/index\.html.*/, '');
+        // Remove trailing slash if present to avoid double slashes, though browsers handle it.
+        const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+
         // Standard PDF.js loading (No custom fonts needed here)
         const loadingTask = pdfjsLib.getDocument({
             data: new Uint8Array(data),
-            cMapUrl: '/cmaps/', // Keep CMaps for READING PDFs
+            cMapUrl: `${cleanBase}cmaps/`,
             cMapPacked: true,
-            standardFontDataUrl: '/standard_fonts/'
+            standardFontDataUrl: `${cleanBase}standard_fonts/`
         });
         this.pdfDoc = await loadingTask.promise;
         return this.pdfDoc.numPages;
