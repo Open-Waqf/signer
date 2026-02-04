@@ -58,7 +58,6 @@ export class AppRoot extends LitElement {
                 onNeedRefresh: () => {
                     this.updateSW = updateSW;
                     this.updateAvailable = true;
-                    this.showToast(i18n.t('updateAvailable') || 'New update available!');
                 },
                 onOfflineReady() {
                     console.log("App ready for offline use.");
