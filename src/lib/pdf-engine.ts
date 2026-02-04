@@ -3,9 +3,20 @@ import {PageSizes, PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker?url';
 import {Annotation} from '../types';
 import QRCode from 'qrcode';
-import {AppConfig} from '../config'; //
+import {AppConfig} from '../config';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+/**
+ * Helper: Generate a SHA-256 Hash of the document content
+ */
+async function generateHashID(text: string): Promise<string> {
+    const msgBuffer = new TextEncoder().encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    // Convert to Hex and take first 12 chars -> "A1B2C3D4E5F6"
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 12).toUpperCase();
+}
 
 export class PdfEngine {
     private pdfDoc: any = null;
@@ -137,20 +148,28 @@ export class PdfEngine {
         let y = height - 50;
         const dateStr = new Date().toLocaleString();
 
-
-        // 🔗 USE CONFIG URL HERE
+        // 🔗 USE CONFIG URL
         const verifyUrl = `${AppConfig.website}/verify?id=${docId}`;
 
         // Header
         drawLabel("AUDIT TRAIL / CERTIFICATE", 50, y, 16, true);
 
-        // QR Code (Top Right)
+        // --- 🔧 QR CODE FIX ---
         const qrBytes = await this.generateQRCode(verifyUrl);
         if (qrBytes.length > 0) {
             const qrImg = await pdfDoc.embedPng(qrBytes);
             const qrSize = 80;
-            page.drawImage(qrImg, {x: width - qrSize - 50, y: y - 10, width: qrSize, height: qrSize});
-            drawLabel(`Ref: ${docId}`, width - qrSize - 50, y - 22, 8);
+
+            // FIX: Subtract qrSize so it draws downwards from the header line
+            const qrY = y - qrSize + 10;
+
+            page.drawImage(qrImg, {
+                x: width - qrSize - 50,
+                y: qrY,
+                width: qrSize,
+                height: qrSize
+            });
+            drawLabel(`Ref: ${docId}`, width - qrSize - 50, qrY - 15, 8);
         }
 
         y -= 40;
@@ -190,16 +209,21 @@ export class PdfEngine {
         if (!this.pdfBytes) throw new Error('No PDF bytes available');
         const pdfDoc = await PDFDocument.load(this.pdfBytes);
 
+        // 1. ✨ CALCULATE HASH
+        const signingDate = new Date();
+        const fingerprint = filename + signingDate.toISOString() + JSON.stringify(annotations);
+        const docId = await generateHashID(fingerprint);
+
+        // 2. ✨ SAVE ID IN METADATA (Invisible)
         pdfDoc.setTitle('Signed Document');
         pdfDoc.setProducer('Open Waqf Signer');
-        pdfDoc.setModificationDate(new Date());
-
-        const docId = Math.random().toString(36).substr(2, 9).toUpperCase();
+        pdfDoc.setModificationDate(signingDate);
+        pdfDoc.setKeywords([`ref:${docId}`]);
 
         const pages = pdfDoc.getPages();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-        // 🔐 FOOTER on Every Page
+        // 3. ✨ ADD FOOTER
         const footerText = `Signed via Open Waqf | Ref: ${docId}`;
 
         for (const page of pages) {
@@ -213,6 +237,7 @@ export class PdfEngine {
             });
         }
 
+        // 4. DRAW ANNOTATIONS
         for (const ann of annotations) {
             if (ann.page < 0 || ann.page >= pages.length) continue;
             const page = pages[ann.page];
@@ -250,6 +275,22 @@ export class PdfEngine {
         }
 
         return await pdfDoc.save();
+    }
+
+    // 5. ✨ READ METADATA FOR VERIFICATION
+    async readMetadataID(fileData: Uint8Array): Promise<string | null> {
+        try {
+            const pdfDoc = await PDFDocument.load(fileData, {updateMetadata: false});
+            const keywords = pdfDoc.getKeywords();
+            if (!keywords) return null;
+
+            // Look for our tag "ref:XYZ..."
+            const match = keywords.split(' ').find(k => k.startsWith('ref:'));
+            return match ? match.replace('ref:', '') : null;
+        } catch (e) {
+            console.error("Read Error", e);
+            return null;
+        }
     }
 }
 

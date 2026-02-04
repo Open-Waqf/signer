@@ -8,6 +8,7 @@ import './components/pdf-workspace';
 import {Capacitor} from '@capacitor/core';
 import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
+import {pdfEngine} from './lib/pdf-engine';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -15,6 +16,10 @@ export class AppRoot extends LitElement {
     @state() isLoading = false;
     @state() toastMsg: string | null = null;
     @state() updateAvailable = false;
+    @state() verifyMode = false;
+    @state() verifyResult: { status: 'success' | 'fail' | null, id?: string } = {status: null};
+    @query('dialog#verify-dialog') verifyDialog!: HTMLDialogElement;
+
     private updateSW: ((reload: boolean) => void) | undefined;
 
     @query('pdf-workspace') workspace: any;
@@ -27,8 +32,6 @@ export class AppRoot extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         window.addEventListener('lang-changed', () => this.requestUpdate());
-
-        // Setup Manual PWA Registration here (cleaner than outside class)
         this.setupPWA();
 
         App.addListener('backButton', () => {
@@ -38,23 +41,21 @@ export class AppRoot extends LitElement {
             }
             const sigModal = document.querySelector('signature-modal');
             if (sigModal) {
-                sigModal.remove(); // Remove it from DOM (effectively closing it)
+                sigModal.remove();
                 return;
             }
             if (this.mode === 'workspace') {
-                this.handleExitWorkspace(); // Use our new "Soft Reset" handler
+                this.handleExitWorkspace();
                 return;
             }
             App.exitApp();
         });
     }
 
-    // New Method to handle PWA logic cleanly
     setupPWA() {
         if (!Capacitor.isNativePlatform()) {
             const updateSW = registerSW({
                 onNeedRefresh: () => {
-                    // Don't alert()! Just show the UI button.
                     this.updateSW = updateSW;
                     this.updateAvailable = true;
                     this.showToast(i18n.t('updateAvailable') || 'New update available!');
@@ -73,18 +74,45 @@ export class AppRoot extends LitElement {
         }, 3000);
     }
 
-    async handleFile(data: Uint8Array, name: string) {
-        // --- 🛡️ PERFORMANCE GUARDRAIL ---
-        const sizeInMB = data.byteLength / (1024 * 1024);
+    async handleVerify(file: File) {
+        this.isLoading = true;
+        this.requestUpdate();
 
-        // Stricter limit for Mobile (assuming Capacitor is Native)
+        try {
+            const buffer = await file.arrayBuffer();
+            const id = await pdfEngine.readMetadataID(new Uint8Array(buffer));
+            this.isLoading = false;
+
+            if (id) {
+                // ✅ SUCCESS
+                this.verifyResult = {status: 'success', id};
+            } else {
+                // ❌ FAILURE
+                this.verifyResult = {status: 'fail'};
+            }
+            // Open the new nice dialog
+            this.verifyDialog.showModal();
+
+        } catch (e) {
+            this.isLoading = false;
+            this.showToast(i18n.t('errorReadingFile') || 'Error reading file');
+        }
+    }
+
+    closeVerify() {
+        this.verifyDialog.close();
+        this.verifyResult = {status: null}; // Reset
+    }
+
+    async handleFile(data: Uint8Array, name: string) {
+        const sizeInMB = data.byteLength / (1024 * 1024);
         const isMobile = Capacitor.isNativePlatform() || window.innerWidth < 768;
         const limit = isMobile ? 25 : 50;
 
         if (sizeInMB > limit) {
             const msg = i18n.t('fileTooBigMsg').replace('{size}', sizeInMB.toFixed(1));
             if (!confirm(msg)) {
-                return; // User cancelled
+                return;
             }
         }
 
@@ -96,8 +124,6 @@ export class AppRoot extends LitElement {
             this.mode = 'workspace';
             await this.updateComplete;
             if (this.workspace) {
-                // Pass a COPY of the data to keep the original clean?
-                // No, for memory reasons, we pass the reference.
                 await this.workspace.loadPdf(data, name);
             }
         } catch (e) {
@@ -111,11 +137,18 @@ export class AppRoot extends LitElement {
 
     async openFile() {
         try {
-            // 1. Get BOTH data and name
             const {data, name} = await fileService.openPdf();
 
-            // 2. Pass the REAL name to handleFile
-            await this.handleFile(data, name);
+            // 🛡️ FIX: Check Mode!
+            if (this.verifyMode) {
+                // If in Verify Mode, run the check immediately
+                // We create a "File" object manually to reuse handleVerify logic
+                const file = new File([data as any], name, {type: 'application/pdf'});
+                await this.handleVerify(file);
+            } else {
+                // Normal Edit Mode
+                await this.handleFile(data, name);
+            }
         } catch (e) {
             // User cancelled
         }
@@ -125,10 +158,16 @@ export class AppRoot extends LitElement {
         e.preventDefault();
         if (e.dataTransfer?.files[0]) {
             const file = e.dataTransfer.files[0];
-            if (file.type === 'application/pdf') {
-                file.arrayBuffer().then(buffer => {
-                    this.handleFile(new Uint8Array(buffer), file.name);
-                });
+
+            // ✨ BRANCH LOGIC
+            if (this.verifyMode) {
+                this.handleVerify(file);
+            } else {
+                if (file.type === 'application/pdf') {
+                    file.arrayBuffer().then(buffer => {
+                        this.handleFile(new Uint8Array(buffer), file.name);
+                    });
+                }
             }
         }
     }
@@ -155,7 +194,6 @@ export class AppRoot extends LitElement {
 
     handleExitWorkspace() {
         if (confirm(i18n.t('exitConfirm'))) {
-            // Use the new soft reset
             this.workspace.reset();
             this.mode = 'home';
         }
@@ -211,11 +249,25 @@ export class AppRoot extends LitElement {
                     <h1>${i18n.t('appTitle')}</h1>
                     <p class="sub">v${packageJson.version} • ${i18n.t('tagline')}</p>
 
+                    <div style="display:flex; background:#f3f4f6; padding:4px; border-radius:8px; margin-bottom:20px; width:100%;">
+                        <button
+                                @click=${() => this.verifyMode = false}
+                                style="flex:1; background: ${!this.verifyMode ? '#fff' : 'transparent'}; color: ${!this.verifyMode ? '#000' : '#666'}; box-shadow: ${!this.verifyMode ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'}; padding:8px; font-size:0.9rem;">
+                            ✍️ ${i18n.t('signMode') || 'Sign'}
+                        </button>
+                        <button
+                                @click=${() => this.verifyMode = true}
+                                style="flex:1; background: ${this.verifyMode ? '#fff' : 'transparent'}; color: ${this.verifyMode ? '#000' : '#666'}; box-shadow: ${this.verifyMode ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'}; padding:8px; font-size:0.9rem;">
+                            🔍 ${i18n.t('verifyMode') || 'Verify'}
+                        </button>
+                    </div>
+
                     <div class="drop-area-visual">
-                        <button @click=${this.openFile}>${i18n.t('selectFile')}</button>
-                        <p class="sub" style="margin: 12px 0 0 0; font-size: 0.85rem;">${i18n.t('dragDropHint')}</p>
-                        <p style="font-size: 0.75rem; color: #f59e0b; margin-top: 8px;">
-                            ⚠️ ${i18n.t('performanceHint')}
+                        <button @click=${this.openFile}>
+                            ${this.verifyMode ? (i18n.t('selectFileVerify') || 'Select PDF to Verify') : i18n.t('selectFile')}
+                        </button>
+                        <p class="sub" style="margin: 12px 0 0 0; font-size: 0.85rem;">
+                            ${this.verifyMode ? (i18n.t('dropHintVerify') || 'Drop a signed document here to check its digital ID') : i18n.t('dragDropHint')}
                         </p>
                     </div>
 
@@ -273,6 +325,50 @@ export class AppRoot extends LitElement {
                 </div>
                 <div class="dialog-footer">
                     <button @click=${this.closePrivacy}>${i18n.t('close')}</button>
+                </div>
+            </dialog>
+
+            <dialog id="verify-dialog"
+                    style="border-radius: 20px; padding: 0; border: none; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%;">
+                <div style="padding: 30px; text-align: center;">
+
+                    ${this.verifyResult.status === 'success' ? html`
+                        <div style="width: 80px; height: 80px; background: #dcfce7; color: #16a34a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin: 0 auto 20px;">
+                            ✓
+                        </div>
+                        <h2 style="margin: 0 0 10px 0; color: #166534;">
+                            ${i18n.t('validDocTitle') || 'Valid Document'}</h2>
+                        <p style="color: #4b5563; font-size: 0.95rem; line-height: 1.5;">
+                            ${i18n.t('validDocMsg') || 'This document has a valid digital ID embedded by Open Signer.'}
+                        </p>
+
+                        <div style="background: #f3f4f6; padding: 15px; border-radius: 12px; margin: 20px 0; font-family: monospace; font-size: 1.1rem; letter-spacing: 1px; color: #111;">
+                            ${this.verifyResult.id}
+                        </div>
+
+                        <p style="font-size: 0.8rem; color: #6b7280;">
+                            ℹ️
+                            ${i18n.t('validDocHint') || 'Please ensure this ID matches the footer code on every page of the document.'}
+                        </p>
+
+                    ` : html`
+                        <div style="width: 80px; height: 80px; background: #fee2e2; color: #dc2626; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin: 0 auto 20px;">
+                            !
+                        </div>
+                        <h2 style="margin: 0 0 10px 0; color: #991b1b;">
+                            ${i18n.t('invalidDocTitle') || 'No ID Found'}</h2>
+                        <p style="color: #4b5563; font-size: 0.95rem; line-height: 1.5;">
+                            ${i18n.t('invalidDocMsg') || 'This document does not contain a valid digital signature ID from this app.'}
+                        </p>
+                        <div style="margin-top: 20px; font-size: 0.8rem; color: #dc2626; background: #fef2f2; padding: 10px; border-radius: 8px;">
+                            ⚠️ Warning: The file may have been modified or tampererd with.
+                        </div>
+                    `}
+
+                    <button @click=${() => this.closeVerify()}
+                            style="margin-top: 25px; width: 100%; padding: 12px; background: #111827; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                        ${i18n.t('close') || 'Close'}
+                    </button>
                 </div>
             </dialog>
         `;

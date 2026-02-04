@@ -20,6 +20,7 @@ export const resources = {
         addSig: "+ Signature",
         addInitials: "+ Initials",
         addDate: "+ Date",
+        addStamp: "+ Stamp", // ✨ NEW
         savePdf: "Save PDF",
         savedMsg: "Document Saved!",
         privacyTitle: "🔒 Privacy Promise (Amanah)",
@@ -34,7 +35,7 @@ export const resources = {
         exitConfirm: "Exit editing? Unsaved changes will be lost.",
         forgetData: "🗑️ Forget My Data",
         confirmClear: "Delete saved signature, initials, and language preference?",
-        shareApp: "🔗 Share App",
+        shareApp: "Share App",
         linkCopied: "Link copied! Share it anywhere.",
         shareTitle: "Signed Document",
         shareText: "Here is your signed PDF.",
@@ -58,7 +59,18 @@ export const resources = {
         sharePdf: "Share PDF",
         noChanges: "No changes to save/share.",
         updateAvailable: "New update available",
-        addStamp: "Add Stamp",
+
+        // ✨ NEW: Verify Mode Keys
+        signMode: "Sign",
+        verifyMode: "Verify",
+        selectFileVerify: "Select PDF to Verify",
+        dropHintVerify: "Drop a signed document here to check its digital ID",
+        validDocTitle: "✅ VALID DOCUMENT",
+        validDocMsg: "Digital ID found:",
+        validDocHint: "Please check that this ID matches the footer on every page.",
+        invalidDocTitle: "⚠️ CAUTION",
+        invalidDocMsg: "No Digital ID found.\n\nThis document may not have been signed by Open Signer, or it has been modified externally.",
+        errorReadingFile: "Error reading file."
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -71,6 +83,7 @@ export const resources = {
         addSig: "+ توقيع",
         addInitials: "+ أحرف",
         addDate: "+ تاريخ",
+        addStamp: "+ ختم", // ✨ NEW
         savePdf: "حفظ الملف",
         savedMsg: "تم حفظ المستند!",
         privacyTitle: "🔒 وعد الأمانة",
@@ -85,7 +98,7 @@ export const resources = {
         exitConfirm: "هل تريد الخروج؟ ستفقد التغييرات غير المحفوظة.",
         forgetData: "🗑️ مسح بياناتي",
         confirmClear: "هل تريد حذف التوقيع والأحرف المحفوظة وإعدادات اللغة؟",
-        shareApp: "🔗 شارك التطبيق",
+        shareApp: "شارك التطبيق",
         linkCopied: "تم نسخ الرابط! شاركه في أي مكان.",
         shareTitle: "مستند موقع",
         shareText: "إليك ملف PDF الموقع.",
@@ -109,7 +122,18 @@ export const resources = {
         sharePdf: "مشاركة PDF",
         noChanges: "لا توجد تغييرات للحفظ أو المشاركة.",
         updateAvailable: "يتوفر تحديث جديد",
-        addStamp: "إضافة ختم",
+
+        // ✨ NEW: Verify Mode Keys
+        signMode: "توقيع",
+        verifyMode: "تحقق",
+        selectFileVerify: "اختر ملف للتحقق",
+        dropHintVerify: "اسحب الملف الموقع هنا للتحقق من هويته الرقمية",
+        validDocTitle: "✅ مستند سليم",
+        validDocMsg: "تم العثور على المعرف الرقمي:",
+        validDocHint: "يرجى التأكد من تطابق هذا المعرف مع التذييل في كل صفحة.",
+        invalidDocTitle: "⚠️ تنبيه",
+        invalidDocMsg: "لم يتم العثور على معرف رقمي.\n\nقد يكون هذا المستند غير موقع بواسطة الموقّع المفتوح، أو تم تعديله خارجيًا.",
+        errorReadingFile: "خطأ في قراءة الملف."
     },
     fr: {
         appTitle: "Open Signer",
@@ -122,6 +146,7 @@ export const resources = {
         addSig: "+ Signature",
         addInitials: "+ Initiales",
         addDate: "+ Date",
+        addStamp: "+ Tampon", // ✨ NEW
         savePdf: "Enregistrer PDF",
         savedMsg: "Document enregistré !",
         privacyTitle: "🔒 Promesse de Confidentialité",
@@ -136,7 +161,7 @@ export const resources = {
         exitConfirm: "Quitter ? Les modifications seront perdues.",
         forgetData: "🗑️ Oublier mes données",
         confirmClear: "Supprimer la signature, les initiales et les préférences ?",
-        shareApp: "🔗 Partager l'app",
+        shareApp: "Partager l'app",
         linkCopied: "Lien copié ! Partagez-le partout.",
         shareTitle: "Document signé",
         shareText: "Voici votre PDF signé.",
@@ -160,7 +185,18 @@ export const resources = {
         sharePdf: "Partager PDF",
         noChanges: "Aucun changement à enregistrer/partager.",
         updateAvailable: "Nouvelle mise à jour disponible",
-        addStamp: "Ajouter un tampon"
+
+        // ✨ NEW: Verify Mode Keys
+        signMode: "Signer",
+        verifyMode: "Vérifier",
+        selectFileVerify: "Choisir un PDF à vérifier",
+        dropHintVerify: "Déposez un document signé ici pour vérifier son ID numérique",
+        validDocTitle: "✅ DOCUMENT VALIDE",
+        validDocMsg: "ID numérique trouvé :",
+        validDocHint: "Veuillez vérifier que cet ID correspond au pied de page de chaque page.",
+        invalidDocTitle: "⚠️ ATTENTION",
+        invalidDocMsg: "Aucun ID numérique trouvé.\n\nCe document n'a peut-être pas été signé par Open Signer ou a été modifié.",
+        errorReadingFile: "Erreur de lecture du fichier."
     }
 } as const;
 
