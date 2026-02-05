@@ -4,20 +4,16 @@
 > A privacy-first PDF signer with cryptographic integrity checks.
 
 <div align="center">
-<a href="[https://sign.open-waqf.org](https://sign.open-waqf.org)">
+<a href="https://sign.open-waqf.org">
 <img src="public/icons/icon-512.webp" alt="Logo" width="100" height="100" style="border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
 </a>
-
-
-
-
-
-
 </div>
 
-Open Waqf Signer allows users to sign, edit, and **verify** PDF documents directly in their browser. It is built on the principles of **Amanah** (Trust) and **Privacy**.
+Open Waqf Signer allows users to sign, edit, and **verify** PDF documents directly in their browser. It is built on the
+principles of **Amanah** (Trust) and **Privacy**.
 
-Unlike other free tools, **no data is ever uploaded to a server**. All cryptographic processing happens locally on your device.
+Unlike other free tools, **no data is ever uploaded to a server**. All cryptographic processing happens locally on your
+device.
 
 ---
 
@@ -27,13 +23,16 @@ Unlike other free tools, **no data is ever uploaded to a server**. All cryptogra
 
 * **Zero-Knowledge:** Documents never leave your device (RAM-only processing).
 * **Dual-Layer Verification:**
-1. **Metadata Check (Internal):** Instantly identifies files signed by the app.
-2. **Strict Integrity Check (External):** Uses SHA-256 hashing to prove mathematically that a document has not been tampered with since signing.
+    1. **Metadata Check (Internal):** Instantly identifies files signed by the app.
+    2. **Strict Integrity Check (External):** Uses SHA-256 hashing to prove mathematically that a document has not been
+       tampered with since signing.
+* **Audit Trail:** Automatically appends a verification page with a **QR code**, Event Log, and Digital Fingerprint.
 
+### 🤝 Multi-Party Workflows (New!)
 
-* **🆔 Identity Linking:** Optionally link an email address to a signature for audit trails.
-* **Tamper Detection:** Drag & drop a signed PDF to instantly verify its integrity.
-* **Audit Trail:** Automatically appends a verification page with a QR code and event log.
+* **The "Handover" Protocol:** Securely pass documents between multiple signers (e.g., You -> Manager -> Client).
+* **Pre-Sign Validation:** When you open a document signed by someone else, the app automatically detects it and asks
+  you to verify their signature *before* you add yours.
 
 ### ✍️ Professional Tools
 
@@ -46,33 +45,54 @@ Unlike other free tools, **no data is ever uploaded to a server**. All cryptogra
 
 * **Offline First (PWA):** Installs as a native app on Android, iOS, Windows, and Mac.
 * **Multilingual:** Native support for **English**, **Arabic (RTL)**, and **French**.
-* **Mobile Optimized:** Touch-friendly interface with native back-button handling.
 
 ---
 
-## 🚀 How to Verify a Document (The Trust Model)
+## 🛡️ Privacy & "No Tracking" Promise
+
+We believe in **Data Sovereignty**.
+
+* **No Uploads:** Your PDF never touches our cloud.
+* **No Profiling:** We do not use cookies or trackers to build user profiles.
+* **Usage Counting:** We use privacy-preserving telemetry (e.g., Plausible/Umami) solely to count aggregate usage (
+  e.g., "100 documents signed today") to ensure the project remains sustainable. No personal data is ever collected.
+
+---
+
+## 🚀 Workflows: How to Sign & Verify
 
 We use an **"External Key"** model to ensure document integrity without storing your data on a central server.
 
-### Step 1: Signing & Sending
+### Scenario A: The "Handover" (Two Parties Signing)
 
-1. **Sign:** The user signs the PDF.
-2. **Hash Generation:** The app generates a **Security Hash** (e.g., `a1b2c3...`) representing the final file state.
-3. **Send:** The user emails the **PDF** (attachment) + the **Hash** (in the email body) to the recipient.
+1. **Person A (Alice)** signs the document.
+    * *System generates Hash: `a1b2...`*
+    * Alice sends the PDF + Hash to **Person B (Bob)**.
+2. **Person B (Bob)** opens the PDF in Open Waqf Signer.
+    * 🚨 **Auto-Detection:** The app detects Alice's signature immediately.
+    * **Verify:** Bob enters Alice's hash to confirm the file wasn't tampered with during transit.
+3. **Bob Signs:** Once verified, Bob adds his signature and saves.
+    * *System generates a NEW Hash: `f9e8...`* that secures both signatures.
 
-### Step 2: Verifying (The Receiver)
+### Scenario B: Verification (The Receiver)
 
-The recipient opens the "Verify" tool in the app:
+Anyone receiving a signed document can verify it in two ways:
 
-1. **Drop:** Upload the signed PDF.
-* *Result:* ✅ **"Record Found"** (Confirms the file metadata is present).
+#### Option 1: One-Click Scan (QR Code)
 
+Every signed PDF includes an **Audit Page** at the end.
 
-2. **Strict Check:** Paste the **Security Hash** from the email.
-* *Result:* ✅ **"SECURE VERIFIED"** (Proves the file is 100% authentic and unmodified).
-* *Result:* ❌ **"MISMATCH"** (Detects if even a single byte was altered).
+1. Scan the **QR Code** on the last page.
+2. Or click the **Verification Link** (if viewing digitally).
+3. **Result:** The app opens instantly and validates the document ID against the digital fingerprint.
 
+#### Option 2: Manual Check (Strict)
 
+1. Go to **Verify Mode** in the app.
+2. Drop the signed PDF.
+3. Paste the **Security Hash** provided by the sender.
+    * ✅ **"SECURE VERIFIED":** The document is 100% authentic.
+    * ❌ **"MISMATCH":** The document has been altered (even by 1 byte).
 
 ---
 
@@ -120,22 +140,6 @@ npm run build
 
 ```
 
-### 4. Android Local Test
-
-Syncs the `dist/` folder to the Android project and opens Android Studio.
-
-```bash
-# 1. Build web assets
-npm run build
-
-# 2. Sync to Native
-npx cap sync
-
-# 3. Open IDE
-npx cap open android
-
-```
-
 ---
 
 ## ⚠️ Disclaimers
@@ -145,12 +149,14 @@ npx cap open android
 Open Waqf Signer applies a **Cryptographically Linked Electronic Signature**.
 
 * ✅ **Valid for:** Business contracts, invoices, internal approvals, waivers, and general agreements.
-* ❌ **Not for:** Scenarios requiring **eIDAS Qualified Electronic Signatures (QES)** that mandate a specific hardware token (Smart Card/USB) issued by a government authority.
+* ❌ **Not for:** Scenarios requiring **eIDAS Qualified Electronic Signatures (QES)** that mandate a specific hardware
+  token (Smart Card/USB) issued by a government authority.
 
 ### Performance Limits
 
 * **Recommended:** Files under **25MB**.
-* **Large Files:** Since processing occurs in your browser's RAM, files larger than 50MB may cause the tab to crash on older mobile devices.
+* **Large Files:** Since processing occurs in your browser's RAM, files larger than 50MB may cause the tab to crash on
+  older mobile devices.
 
 ---
 

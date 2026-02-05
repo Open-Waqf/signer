@@ -1,4 +1,4 @@
-import {html, LitElement} from 'lit';
+import {html, LitElement, PropertyValues} from 'lit';
 import {customElement, query, state} from 'lit/decorators.js';
 import {App} from '@capacitor/app';
 import {fileService} from './lib/file-service';
@@ -30,6 +30,29 @@ export class AppRoot extends LitElement {
 
     createRenderRoot() {
         return this;
+    }
+
+    async firstUpdated(_changedProperties: PropertyValues) {
+        super.firstUpdated(_changedProperties);
+
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+
+        if (id) {
+            this.verifyMode = true;
+
+            this.verifyResult = {
+                status: 'success', // or just null if you want them to verify first
+                id: id
+            };
+
+            await this.updateComplete;
+
+            // Open the dialog
+            if (this.verifyDialog) {
+                this.verifyDialog.showModal();
+            }
+        }
     }
 
     connectedCallback() {
@@ -395,7 +418,7 @@ export class AppRoot extends LitElement {
                     </div>
 
                     <button @click=${() => this.closeVerify()}
-                            style="margin-top:20px; width:100%; padding:12px; background:white; border:1px solid #ddd; border-radius:8px;">
+                            style="margin-top: 20px; width: 100%; padding: 12px; background: transparent; color: #4b5563; border: 1px solid #e5e7eb; border-radius: 8px; font-weight: 500; cursor: pointer;">
                         ${i18n.t('close')}
                     </button>
                 </div>
