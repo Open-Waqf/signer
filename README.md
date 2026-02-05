@@ -28,7 +28,7 @@ device.
        tampered with since signing.
 * **Audit Trail:** Automatically appends a verification page with a **QR code**, Event Log, and Digital Fingerprint.
 
-### 🤝 Multi-Party Workflows (New!)
+### 🤝 Multi-Party Workflows
 
 * **The "Handover" Protocol:** Securely pass documents between multiple signers (e.g., You -> Manager -> Client).
 * **Pre-Sign Validation:** When you open a document signed by someone else, the app automatically detects it and asks
@@ -56,6 +56,21 @@ We believe in **Data Sovereignty**.
 * **No Profiling:** We do not use cookies or trackers to build user profiles.
 * **Usage Counting:** We use privacy-preserving telemetry (e.g., Plausible/Umami) solely to count aggregate usage (
   e.g., "100 documents signed today") to ensure the project remains sustainable. No personal data is ever collected.
+
+---
+
+## 🧪 Engineering & Stability
+
+We don't just "hope" the code works; we prove it before every release.
+
+* **Automated Audit (The Robot):** We use **Playwright** to run end-to-end tests simulating real user behavior.
+* **Coverage:**
+    * ✅ **Cryptography:** Verifies that SHA-256 hashes are calculated correctly.
+    * ✅ **Workflows:** Simulates Alice signing, downloading, and Bob verifying the file.
+    * ✅ **Deep Linking:** Checks that QR codes (`?id=...`) correctly open the Verification Tool.
+    * ✅ **Internationalization:** Ensures RTL layouts (Arabic) render correctly.
+* **CI/CD Guardrails:** Deployment is physically blocked by GitHub Actions if any test fails, ensuring no broken code
+  ever reaches production.
 
 ---
 
@@ -100,6 +115,7 @@ Every signed PDF includes an **Audit Page** at the end.
 
 * **Core:** TypeScript, Vite, Lit (Web Components).
 * **Native Layer:** Capacitor (for Android/iOS).
+* **Testing:** Playwright (End-to-End & Crypto Logic).
 * **PDF Engine:** `pdf-lib` (modification) & `pdfjs-dist` (rendering).
 * **Cryptography:** Native `crypto.subtle` API for SHA-256 hashing (no external libraries).
 * **Storage:** `IndexedDB` (for preferences only). Files are transient.
@@ -131,7 +147,20 @@ npm run dev
 
 ```
 
-### 3. Build for Production (PWA)
+### 3. Run Tests (The Audit)
+
+Runs the Playwright robot to verify all core features (Sign, Verify, Handover).
+
+```bash
+# Installs browsers if running for the first time
+npx playwright install
+
+# Run the test suite
+npm test
+
+```
+
+### 4. Build for Production (PWA)
 
 Compiles TypeScript to optimized, offline-ready JS in `dist/`.
 
