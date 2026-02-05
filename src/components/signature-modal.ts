@@ -28,7 +28,7 @@ export class SignatureModal extends LitElement {
             align-items: center;
             z-index: 1000;
             direction: ltr;
-            backdrop-filter: blur(2px); /* Makes it look nicer */
+            backdrop-filter: blur(2px);
         }
 
         .card {
@@ -90,10 +90,8 @@ export class SignatureModal extends LitElement {
 
         this.resizeCanvas();
 
-        // Handle window resizing
         this._resizeHandler = () => {
             this.resizeCanvas();
-            // If we have an original image and user hasn't drawn new stuff, restore it after resize
             if (!this.isDirty && this.originalData) {
                 this.drawFromData(this.originalData);
             }
@@ -121,7 +119,6 @@ export class SignatureModal extends LitElement {
     drawFromData(dataUrl: string) {
         const img = new Image();
         img.onload = () => {
-            // Draw image to fill the canvas (strech to fit)
             this.ctx?.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
         };
         img.src = dataUrl;
@@ -130,21 +127,14 @@ export class SignatureModal extends LitElement {
     resizeCanvas() {
         const rect = this.canvas.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
-
-            // 🚀 FIX 1: FORCE HIGH RESOLUTION
-            // We multiply physical pixels by 3 for Retina quality
             const ratio = 3;
-
             this.canvas.width = rect.width * ratio;
             this.canvas.height = rect.height * ratio;
 
             if (this.ctx) {
                 this.ctx.lineJoin = 'round';
                 this.ctx.lineCap = 'round';
-
-                // Scale line width too (4 * 3 = 12px) so it doesn't look like a needle
                 this.ctx.lineWidth = 4 * ratio;
-
                 this.ctx.fillStyle = '#000';
                 this.ctx.strokeStyle = '#000';
             }
@@ -153,8 +143,6 @@ export class SignatureModal extends LitElement {
 
     getMousePos(e: { clientX: number, clientY: number }) {
         const rect = this.canvas.getBoundingClientRect();
-        // Since canvas.width is now 3x rect.width, this scaleX will automatically be 3.
-        // This preserves your existing drawing logic perfectly!
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
         return {
@@ -180,34 +168,26 @@ export class SignatureModal extends LitElement {
 
     start(e: { clientX: number, clientY: number }) {
         this.isDrawing = true;
-        this.isDirty = true; // ✨ User is modifying the signature
+        this.isDirty = true;
         this.points = [];
         const pos = this.getMousePos(e);
         this.points.push(pos);
-
-        // Draw a single dot for a click/tap
         this.ctx?.beginPath();
-        // Adjust dot size for high-res (2 * ratio approx)
         this.ctx?.arc(pos.x, pos.y, this.ctx.lineWidth / 2, 0, Math.PI * 2);
         this.ctx?.fill();
     }
 
     draw(e: { clientX: number, clientY: number }) {
         if (!this.isDrawing || !this.ctx) return;
-
         const pos = this.getMousePos(e);
         this.points.push(pos);
-
-        // SMOOTHING ALGORITHM
         if (this.points.length > 2) {
             const lastTwo = this.points.slice(-3);
             const p1 = lastTwo[0];
             const p2 = lastTwo[1];
             const p3 = lastTwo[2];
-
             const mid1 = {x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2};
             const mid2 = {x: (p2.x + p3.x) / 2, y: (p2.y + p3.y) / 2};
-
             this.ctx.beginPath();
             this.ctx.moveTo(mid1.x, mid1.y);
             this.ctx.quadraticCurveTo(p2.x, p2.y, mid2.x, mid2.y);
@@ -222,33 +202,22 @@ export class SignatureModal extends LitElement {
 
     clear() {
         this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.isDirty = true; // ✨ We modified it
-        this.originalData = null; // ✨ Clean slate
+        this.isDirty = true;
+        this.originalData = null;
         localStorage.removeItem(`signer_${this.mode}`);
     }
 
     save() {
-        // 🚀 FIX 2: NO-TOUCH LOGIC
-        // If we have original data and the user didn't draw anything new,
-        // return the clean original. DO NOT re-save/re-compress.
         if (!this.isDirty && this.originalData) {
             this.dispatchEvent(new CustomEvent('signed', {detail: this.originalData}));
             this.remove();
             return;
         }
-
-        // If user drew something but cleared it (empty canvas)
         if (!this.isDirty && !this.originalData) {
             this.remove();
             return;
         }
-
-        // Only reach here if user actually DREW something new.
-        // We export the High-Res canvas directly.
-        // Note: I removed the downscaling loop because it causes blur.
-        // A 1500px wide signature is fine for modern devices.
         const dataUrl = this.canvas.toDataURL('image/png');
-
         localStorage.setItem(`signer_${this.mode}`, dataUrl);
         this.dispatchEvent(new CustomEvent('signed', {detail: dataUrl}));
         this.remove();
@@ -259,13 +228,12 @@ export class SignatureModal extends LitElement {
     }
 
     render() {
-        // ✨ FIX 3: TRANSLATIONS
         const title = this.mode === 'initials' ? i18n.t('addInitials') : i18n.t('addSig');
 
         return html`
             <div class="card">
                 <h3>${title}</h3>
-                <canvas></canvas>
+                <canvas id="signature-pad"></canvas>
                 <div class="actions">
                     <button class="btn-close" @click=${this.close}>${i18n.t('cancel')}</button>
                     <button class="btn-clear" @click=${this.clear}>${i18n.t('clear')}</button>
