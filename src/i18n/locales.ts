@@ -84,6 +84,9 @@ export const resources = {
 
         justDownload: "No, Just Download",
         sharedDeviceWarning: "Shared Device? Clear your data on the Home Screen to remove your saved email.",
+        pageFooter: "Page ID",
+        addPageFooter: "Print Reference ID on bottom of every page",
+        previousSigDetected: "Previous signature detected. Audit Trail enabled to preserve history.",
         recordFound: "Record Found",
         recordFoundDisclaimer: "ℹ️ This confirms the file was processed by us. However, standard PDF readers can modify content without removing this tag.",
         noRecordFound: "No Record Found",
@@ -99,6 +102,11 @@ export const resources = {
         // Workspace Modal
         internalRefLabel: "Internal Ref ID:",
         integrityHashLabel: "🔐 Integrity Hash (Anti-Tamper):",
+        verifyPreviousSigPrompt: "Previous signature detected. Do you have the Security Hash to verify integrity before signing?",
+        pasteHashPrompt: "Paste the Hash provided by the sender:",
+        statusVerified: "✅ <strong>Verified!</strong> Integrity confirmed.",
+        statusMismatch: "❌ <strong>Mismatch!</strong> The file has been modified.",
+        btnSkip: "Skip / Close",
 
         emailBody: "Document Ref: {id}\n\n🔐 INTEGRITY HASH (Security Check):\n{hash}\n\nIf you wish to verify this document is authentic and unmodified, use the 'Verify' tool on Open Waqf Signer and paste the code above.",
     },
@@ -175,7 +183,9 @@ export const resources = {
 
         justDownload: "لا، تحميل فقط",
         sharedDeviceWarning: "جهاز مشترك؟ قم بمسح بياناتك من الشاشة الرئيسية لإزالة البريد المحفوظ.",
-        // ✅ ARABIC TRANSLATIONS
+        pageFooter: "رقم الصفحة",
+        addPageFooter: "طباعة الرقم المرجعي أسفل كل صفحة",
+        previousSigDetected: "تم اكتشاف توقيع سابق. تم تفعيل سجل التدقيق لحفظ التاريخ.",
         recordFound: "تم العثور على السجل",
         recordFoundDisclaimer: "ℹ️ هذا يؤكد أن الملف تمت معالجته بواسطتنا. ومع ذلك، يمكن لقراء PDF القياسيين تعديل المحتوى دون إزالة هذه العلامة.",
         noRecordFound: "لم يتم العثور على سجل",
@@ -190,6 +200,11 @@ export const resources = {
 
         internalRefLabel: "المعرف المرجعي الداخلي:",
         integrityHashLabel: "🔐 رمز النزاهة (ضد التلاعب):",
+        verifyPreviousSigPrompt: "تم اكتشاف توقيع سابق. هل لديك رمز الأمان (Hash) للتحقق من النزاهة قبل التوقيع؟",
+        pasteHashPrompt: "الصق الرمز المقدم من المرسل:",
+        statusVerified: "✅ <strong>تم التحقق!</strong> النزاهة مؤكدة.",
+        statusMismatch: "❌ <strong>عدم تطابق!</strong> تم تعديل الملف.",
+        btnSkip: "تخطي / إغلاق",
 
         emailBody: "مرجع المستند: {id}\n\n🔐 رمز النزاهة (فحص أمني):\n{hash}\n\nإذا كنت ترغب في التحقق من أن هذا المستند أصلي ولم يتم تعديله، استخدم أداة 'التحقق' في الموقّع المفتوح والصق الرمز أعلاه.",
     },
@@ -266,6 +281,9 @@ export const resources = {
 
         justDownload: "Non, Télécharger",
         sharedDeviceWarning: "Appareil partagé ? Effacez vos données sur l'écran d'accueil pour supprimer votre e-mail.",
+        pageFooter: "ID Page",
+        addPageFooter: "Imprimer l'ID de référence en bas de chaque page",
+        previousSigDetected: "Signature précédente détectée. Journal d'audit activé.",
         recordFound: "Enregistrement trouvé",
         recordFoundDisclaimer: "ℹ️ Cela confirme que le fichier a été traité par nous. Cependant, les lecteurs PDF standard peuvent modifier le contenu sans supprimer ce tag.",
         noRecordFound: "Aucun enregistrement trouvé",
@@ -280,6 +298,11 @@ export const resources = {
 
         internalRefLabel: "Réf. Interne :",
         integrityHashLabel: "🔐 Empreinte d'intégrité (Anti-Falsification) :",
+        verifyPreviousSigPrompt: "Signature précédente détectée. Avez-vous l'empreinte de sécurité pour vérifier l'intégrité ?",
+        pasteHashPrompt: "Collez l'empreinte fournie par l'expéditeur :",
+        statusVerified: "✅ <strong>Vérifié !</strong> Intégrité confirmée.",
+        statusMismatch: "❌ <strong>Non-concordance !</strong> Le fichier a été modifié.",
+        btnSkip: "Passer / Fermer",
 
         emailBody: "Réf Document : {id}\n\n🔐 EMPREINTE D'INTÉGRITÉ (Contrôle de Sécurité) :\n{hash}\n\nSi vous souhaitez vérifier que ce document est authentique et non modifié, utilisez l'outil 'Vérifier' sur Open Signer et collez le code ci-dessus.",
     }

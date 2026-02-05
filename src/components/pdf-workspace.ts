@@ -18,9 +18,17 @@ export class PdfWorkspace extends LitElement {
     @state() showProofModal = false;
     @state() lastSavedId: string | null = null;
     @state() lastSavedHash: string | null = null;
+    @state() includeFooter = false; // Controls the "Page ID" footer
+
+    @state() validationMsg: string | null = null;
 
     @state() annotations: Annotation[] = [];
     @state() includeAudit = false;
+
+    @state() showHandoverModal = false;
+    @state() handoverHashInput = '';
+    @state() handoverResult: 'idle' | 'success' | 'fail' = 'idle';
+    @state() detectedRefId = '';
 
     // Interaction State
     @state() selectedId: string | null = null;
@@ -40,6 +48,8 @@ export class PdfWorkspace extends LitElement {
     @state() isDirty = false;
     private interactionSnapshotTaken = false;
     private interactionChanged = false;
+
+    private loadedBytes: Uint8Array | null = null;
 
     @query('#pdf-canvas') canvas!: HTMLCanvasElement;
     @query('.page-container') container!: HTMLDivElement;
@@ -72,9 +82,9 @@ export class PdfWorkspace extends LitElement {
         const subject = (i18n.t('emailSubject') || 'Signature Receipt: {id}').replace('{id}', this.lastSavedId);
 
         // Replace BOTH {id} and {hash}
-        let body = (i18n.t('emailBody') || 'Ref: {id} Hash: {hash}');
+        let body = (i18n.t('emailBody') || '');
         body = body.replace('{id}', this.lastSavedId);
-        body = body.replace('{hash}', this.lastSavedHash || 'N/A');
+        body = body.replace('{hash}', this.lastSavedHash || 'N/A'); // Adds the hash
 
         const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.open(mailto, '_blank');
@@ -440,12 +450,27 @@ export class PdfWorkspace extends LitElement {
 
     async loadPdf(file: Uint8Array, name: string) {
         this.pdfName = name;
+        this.loadedBytes = file;
+        this.validationMsg = null;
+        this.lastSavedId = null;
+        this.lastSavedHash = null;
         this.totalPages = await pdfEngine.load(file);
+        const existingID = await pdfEngine.readMetadataID(file);
+        if (existingID) {
+            this.includeAudit = true;
+            this.toast(i18n.t('previousSigDetected'));
+
+            this.detectedRefId = existingID;
+            this.handoverHashInput = '';
+            this.handoverResult = 'idle';
+            this.showHandoverModal = true;
+        } else {
+            this.includeAudit = false;
+        }
         this.currentPage = 1;
         this.scale = 1.0;
         this.annotations = [];
         this.selectedId = null;
-        this.includeAudit = false;
         this.isDirty = false;
         this.lastSaved = null;
         this.lastSavedBytes = null;
@@ -457,6 +482,26 @@ export class PdfWorkspace extends LitElement {
 
         await this.updateComplete;
         void this.renderPage();
+    }
+
+    async checkHandover() {
+        if (!this.loadedBytes) return;
+
+        const input = this.handoverHashInput.trim().toLowerCase();
+
+        // Calculate hash of what we currently have in memory
+        const actual = await pdfEngine.getFileHash(this.loadedBytes);
+
+        if (input === actual.toLowerCase()) {
+            this.handoverResult = 'success';
+            this.validationMsg = `Validated integrity of Ref: ${this.detectedRefId}`;
+
+            // Auto-close after 1.5s on success
+            setTimeout(() => this.showHandoverModal = false, 1500);
+        } else {
+            this.handoverResult = 'fail';
+            this.validationMsg = `FAILED validation of Ref: ${this.detectedRefId}`;
+        }
     }
 
     async renderPage() {
@@ -683,7 +728,10 @@ export class PdfWorkspace extends LitElement {
             let finalHash: string;
 
             try {
-                const result = await pdfEngine.saveProfessional(this.annotations, this.pdfName, this.includeAudit);
+                const result = await pdfEngine.saveProfessional(
+                    this.annotations, this.pdfName, this.includeAudit,
+                    this.includeFooter,
+                    this.validationMsg);
                 finalBytes = result.pdfBytes;
                 finalDocId = result.docId;
                 finalHash = result.finalHash;
@@ -823,9 +871,17 @@ export class PdfWorkspace extends LitElement {
                 <button @click=${this.undo} ?disabled=${this.history.length === 0} title="${i18n.t('undo')}">↩</button>
                 <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}">↪</button>
                 <div style="flex:1"></div>
+                <label style="display:flex; align-items:center; gap:6px; margin-right:15px; font-size:0.8rem; cursor:pointer;"
+                       title="${i18n.t('addPageFooter')}">
+                    <input type="checkbox" .checked=${this.includeFooter} @change=${(e: Event) => {
+                        this.includeFooter = (e.target as HTMLInputElement).checked;
+                        this.isDirty = true;
+                    }}/>
+                    <span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
+                </label>
                 <label style="display:flex; align-items:center; gap:6px; margin-right:10px; font-size:0.8rem; cursor:pointer;"
                        title="${i18n.t('addAuditPage')}">
-                    <input type="checkbox" ?checked=${this.includeAudit} @change=${(e: Event) => {
+                    <input type="checkbox" .checked=${this.includeAudit} @change=${(e: Event) => {
                         this.includeAudit = (e.target as HTMLInputElement).checked;
                         this.isDirty = true;
                     }}/>
@@ -933,6 +989,53 @@ export class PdfWorkspace extends LitElement {
                             })}
                 </div>
             </div>
+
+            ${this.showHandoverModal ? html`
+                <div class="modal-overlay">
+                    <div class="modal">
+                        <h3 style="margin-top:0;">${i18n.t('previousSigDetected')}</h3>
+                        <p style="font-size:0.9rem; color:#555; margin-bottom:15px;">
+                            ${i18n.t('verifyPreviousSigPrompt')}
+                        </p>
+
+                        <div style="background:#f3f4f6; padding:10px; margin-bottom:15px; border-radius:6px; font-size:0.85rem;">
+                            <strong>Ref ID:</strong> ${this.detectedRefId}
+                        </div>
+
+                        <input type="text"
+                               .value="${this.handoverHashInput}"
+                               @input="${(e: any) => {
+                                   this.handoverHashInput = e.target.value;
+                                   this.handoverResult = 'idle';
+                               }}"
+                               placeholder="${i18n.t('pasteHashPlaceholder')}"
+                               style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; margin-bottom:15px;">
+
+                        ${this.handoverResult === 'success' ? html`
+                            <div style="color:#166534; background:#dcfce7; padding:10px; border-radius:6px; margin-bottom:15px; font-size:0.9rem; border:1px solid #bbf7d0;">
+                                <span .innerHTML=${i18n.t('statusVerified')}></span>
+                            </div>
+                        ` : ''}
+
+                        ${this.handoverResult === 'fail' ? html`
+                            <div style="color:#991b1b; background:#fee2e2; padding:10px; border-radius:6px; margin-bottom:15px; font-size:0.9rem; border:1px solid #fecaca;">
+                                <span .innerHTML=${i18n.t('statusMismatch')}></span>
+                            </div>
+                        ` : ''}
+
+                        <div style="display:flex; gap:10px;">
+                            <button class="primary" @click=${this.checkHandover}
+                                    style="flex:1; justify-content:center;">
+                                ${i18n.t('verifyBtn')}
+                            </button>
+                            <button @click=${() => this.showHandoverModal = false}
+                                    style="flex:1; background:transparent; border:1px solid #ddd; color:#555; justify-content:center;">
+                                ${i18n.t('btnSkip')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
 
             ${this.showProofModal ? html`
                 <div class="modal-overlay">
