@@ -904,13 +904,22 @@ export class PdfWorkspace extends LitElement {
 
             <div class="toolbar toolbar-secondary">
                 <div class="tool-group">
-                    <button @click=${() => this.zoom(-0.2)}>－</button>
-                    <button @click=${() => this.zoom(0.2)}>＋</button>
+                    <button title=${i18n.t('zoomOut')} aria-label=${i18n.t('zoomOut')}
+                            @click=${() => this.zoom(-0.2)}>
+                        －
+                    </button>
+                    <button title=${i18n.t('zoomIn')} aria-label=${i18n.t('zoomIn')}
+                            @click=${() => this.zoom(0.2)}>
+                        ＋
+                    </button>
                 </div>
                 <div class="tool-group">
-                    <button @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>‹</button>
+                    <button title=${i18n.t('prev')} aria-label=${i18n.t('prev')}
+                            @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>‹
+                    </button>
                     <span class="page-indicator">${this.currentPage} / ${this.totalPages}</span>
-                    <button @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>›
+                    <button title=${i18n.t('next')} aria-label=${i18n.t('next')}
+                            @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>›
                     </button>
                 </div>
             </div>

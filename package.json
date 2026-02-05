@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "npx playwright test"
+    "test": "npx playwright test",
+    "check-i18n": "node check-i18n.js"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
