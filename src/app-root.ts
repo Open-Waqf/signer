@@ -18,6 +18,8 @@ export class AppRoot extends LitElement {
     @state() updateAvailable = false;
     @state() verifyMode = false;
     @state() verifyResult: { status: 'success' | 'fail' | null, id?: string } = {status: null};
+    @state() verifyHashInput = '';
+    @state() verifyFileHash = '';
     @query('dialog#verify-dialog') verifyDialog!: HTMLDialogElement;
 
     private updateSW: ((reload: boolean) => void) | undefined;
@@ -79,22 +81,31 @@ export class AppRoot extends LitElement {
 
         try {
             const buffer = await file.arrayBuffer();
+            const data = new Uint8Array(buffer);
             const id = await pdfEngine.readMetadataID(new Uint8Array(buffer));
+            this.verifyFileHash = await pdfEngine.getFileHash(data)
             this.isLoading = false;
 
-            if (id) {
-                // ✅ SUCCESS
-                this.verifyResult = {status: 'success', id};
-            } else {
-                // ❌ FAILURE
-                this.verifyResult = {status: 'fail'};
-            }
-            // Open the new nice dialog
+            this.verifyResult = {status: id ? 'success' : 'fail', id: id || undefined};
+            this.verifyHashInput = ''; // Clear previous input
             this.verifyDialog.showModal();
 
         } catch (e) {
             this.isLoading = false;
             this.showToast(i18n.t('errorReadingFile') || 'Error reading file');
+        }
+    }
+
+    checkHash() {
+        const input = this.verifyHashInput.trim().toLowerCase();
+        const actual = this.verifyFileHash.toLowerCase();
+
+        if (!input) return;
+
+        if (input === actual) {
+            alert(i18n.t('verifyHashSuccess'));
+        } else {
+            alert(i18n.t('verifyHashFail'));
         }
     }
 
@@ -328,46 +339,63 @@ export class AppRoot extends LitElement {
             </dialog>
 
             <dialog id="verify-dialog"
-                    style="border-radius: 20px; padding: 0; border: none; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%;">
-                <div style="padding: 30px; text-align: center;">
-
+                    style="border-radius: 20px; padding: 0; border: none; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); max-width: 450px; width: 90%;">
+                <div style="text-align:center; padding-bottom: 20px;padding-top: 10px;">
                     ${this.verifyResult.status === 'success' ? html`
-                        <div style="width: 80px; height: 80px; background: #dcfce7; color: #16a34a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin: 0 auto 20px;">
+                        <div style="width: 60px; height: 60px; background: #dcfce7; color: #16a34a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 15px;">
                             ✓
                         </div>
-                        <h2 style="margin: 0 0 10px 0; color: #166534;">
-                            ${i18n.t('validDocTitle') || 'Valid Document'}</h2>
-                        <p style="color: #4b5563; font-size: 0.95rem; line-height: 1.5;">
-                            ${i18n.t('validDocMsg') || 'This document has a valid digital ID embedded by Open Signer.'}
+                        <h2 style="margin: 0 0 5px 0; color: #166534;">${i18n.t('recordFound')}</h2>
+                        <p style="color: #4b5563; font-size: 0.9rem; margin: 0;">
+                            ${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong>
                         </p>
-
-                        <div style="background: #f3f4f6; padding: 15px; border-radius: 12px; margin: 20px 0; font-family: monospace; font-size: 1.1rem; letter-spacing: 1px; color: #111;">
-                            ${this.verifyResult.id}
-                        </div>
-
-                        <p style="font-size: 0.8rem; color: #6b7280;">
-                            ℹ️
-                            ${i18n.t('validDocHint') || 'Please ensure this ID matches the footer code on every page of the document.'}
+                        <p style="font-size: 0.75rem; color: #9ca3af; margin-top: 8px; line-height: 1.4;">
+                            ${i18n.t('recordFoundDisclaimer')}
                         </p>
-
                     ` : html`
-                        <div style="width: 80px; height: 80px; background: #fee2e2; color: #dc2626; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin: 0 auto 20px;">
+                        <div style="width: 60px; height: 60px; background: #fee2e2; color: #dc2626; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 15px;">
                             !
                         </div>
-                        <h2 style="margin: 0 0 10px 0; color: #991b1b;">
-                            ${i18n.t('invalidDocTitle') || 'No ID Found'}</h2>
-                        <p style="color: #4b5563; font-size: 0.95rem; line-height: 1.5;">
-                            ${i18n.t('invalidDocMsg') || 'This document does not contain a valid digital signature ID from this app.'}
+                        <h2 style="margin: 0 0 5px 0; color: #991b1b;">${i18n.t('noRecordFound')}</h2>
+                        <p style="color: #4b5563; font-size: 0.9rem;">
+                            ${i18n.t('noRecordMsg')}
                         </p>
-                        <div style="margin-top: 20px; font-size: 0.8rem; color: #dc2626; background: #fef2f2; padding: 10px; border-radius: 8px;">
-                            ⚠️ Warning: The file may have been modified or tampererd with.
-                        </div>
                     `}
+                </div>
 
-                    <button @click=${() => this.closeVerify()}
-                            style="margin-top: 25px; width: 100%; padding: 12px; background: #111827; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                        ${i18n.t('close') || 'Close'}
-                    </button>
+                <hr style="border: 0; border-top: 1px dashed #e5e7eb; margin: 0 0 20px 0;"/>
+
+                <div style="background: #f9fafb; padding: 15px; border-radius: 12px; border: 1px solid #f3f4f6;">
+                    <h3 style="font-size: 0.9rem; margin: 0 0 10px 0; display:flex; align-items:center; gap:6px;">
+                        ${i18n.t('integrityCheck')}
+                        <span style="font-weight:normal; font-size:0.75rem; color:#6b7280;">${i18n.t('strictMode')}</span>
+                    </h3>
+
+                    <p style="font-size: 0.8rem; color: #4b5563; margin-bottom: 10px;"
+                       .innerHTML=${i18n.t('pasteHashHint')}>
+                    </p>
+
+                    <div style="display: flex; gap: 8px;">
+                        <input
+                                type="text"
+                                .value="${this.verifyHashInput}"
+                                @input="${(e: any) => this.verifyHashInput = e.target.value}"
+                                placeholder="${i18n.t('pasteHashPlaceholder')}"
+                                style="flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.85rem;"
+                        >
+                        <button
+                                @click="${this.checkHash}"
+                                ?disabled="${!this.verifyHashInput}"
+                                style="background: #2563eb; color: white; border: none; padding: 0 15px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+                            ${i18n.t('verifyBtn')}
+                        </button>
+                    </div>
+                </div>
+
+                <button @click=${() => this.closeVerify()}
+                        style="margin-top: 20px; width: 100%; padding: 12px; background: transparent; color: #4b5563; border: 1px solid #e5e7eb; border-radius: 8px; font-weight: 500; cursor: pointer;">
+                    ${i18n.t('close')}
+                </button>
                 </div>
             </dialog>
         `;

@@ -17,6 +17,7 @@ export class PdfWorkspace extends LitElement {
     // Proof Modal State
     @state() showProofModal = false;
     @state() lastSavedId: string | null = null;
+    @state() lastSavedHash: string | null = null;
 
     @state() annotations: Annotation[] = [];
     @state() includeAudit = false;
@@ -67,12 +68,16 @@ export class PdfWorkspace extends LitElement {
     sendProofEmail() {
         if (!this.lastSavedId) return;
 
+        // Use translation with replacements
         const subject = (i18n.t('emailSubject') || 'Signature Receipt: {id}').replace('{id}', this.lastSavedId);
-        const body = (i18n.t('emailBody') || 'Ref ID: {id}').replace('{id}', this.lastSavedId);
+
+        // Replace BOTH {id} and {hash}
+        let body = (i18n.t('emailBody') || 'Ref: {id} Hash: {hash}');
+        body = body.replace('{id}', this.lastSavedId);
+        body = body.replace('{hash}', this.lastSavedHash || 'N/A');
 
         const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.open(mailto, '_blank');
-
         this.showProofModal = false;
     }
 
@@ -675,11 +680,13 @@ export class PdfWorkspace extends LitElement {
             const filename = `${this.outputFilename}.pdf`;
             let finalBytes: Uint8Array;
             let finalDocId: string;
+            let finalHash: string;
 
             try {
                 const result = await pdfEngine.saveProfessional(this.annotations, this.pdfName, this.includeAudit);
                 finalBytes = result.pdfBytes;
                 finalDocId = result.docId;
+                finalHash = result.finalHash;
             } catch (saveError: any) {
                 console.error("PDF Generation Failed:", saveError);
                 if (saveError.toString().includes('memory') || saveError.toString().includes('allocation')) {
@@ -702,6 +709,7 @@ export class PdfWorkspace extends LitElement {
 
             if (hasIdentity) {
                 this.lastSavedId = finalDocId;
+                this.lastSavedHash = finalHash;
                 this.showProofModal = true;
             } else if (showToast) {
                 this.toast(((i18n.t('savedMsg') as string) || 'Saved') as string);
@@ -932,10 +940,23 @@ export class PdfWorkspace extends LitElement {
                         <h2 style="color:#16a34a; margin-top:0;">
                             ${i18n.t('proveIdentityTitle') || 'Document Saved!'}</h2>
                         <p style="color:#4b5563; font-size:0.95rem;">
-                            ${i18n.t('proveIdentityMsg') || 'Do you want to send a verification receipt to the receiver?'}</p>
+                            ${i18n.t('proveIdentityMsg') || 'Send a verification receipt to the receiver:'}
+                        </p>
 
-                        <div style="background:#f3f4f6; padding:12px; margin:20px 0; font-family:monospace; border-radius:8px; font-size:1.1rem; letter-spacing:1px; color:#1f2937;">
-                            ID: ${this.lastSavedId}
+                        <div style="background:#f3f4f6; padding:12px; margin:15px 0; border-radius:8px; text-align:left;">
+                            <div style="font-size:0.8rem; color:#6b7280; margin-bottom:4px;">
+                                ${i18n.t('internalRefLabel')}
+                            </div>
+                            <div style="font-family:monospace; font-size:1rem; color:#1f2937; margin-bottom:12px;">
+                                ${this.lastSavedId}
+                            </div>
+
+                            <div style="font-size:0.8rem; color:#6b7280; margin-bottom:4px;">
+                                ${i18n.t('integrityHashLabel')}
+                            </div>
+                            <div style="font-family:monospace; font-size:0.75rem; color:#1f2937; word-break:break-all; background:#e5e7eb; padding:4px; border-radius:4px;">
+                                ${this.lastSavedHash}
+                            </div>
                         </div>
 
                         <button @click=${this.sendProofEmail} class="primary"
@@ -945,12 +966,8 @@ export class PdfWorkspace extends LitElement {
 
                         <button @click=${() => this.showProofModal = false}
                                 style="width:100%; justify-content:center; padding:12px; background:transparent; color:#6b7280; border:1px solid #e5e7eb;">
-                            ${i18n.t('justDownload') || 'No, Just Download'}
+                            ${i18n.t('justDownload') || 'Close'}
                         </button>
-
-                        <p style="font-size:0.75rem; color:#9ca3af; margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
-                            ${i18n.t('sharedDeviceWarning') || 'Shared Device? Clear your data on the Home Screen to remove your saved email.'}
-                        </p>
                     </div>
                 </div>
             ` : ''}

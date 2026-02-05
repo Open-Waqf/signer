@@ -18,13 +18,22 @@ async function generateHashID(text: string): Promise<string> {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 12).toUpperCase();
 }
 
+/**
+ * Helper: Calculate full SHA-256 hash of a file
+ */
+async function calculateSHA256(data: Uint8Array): Promise<string> {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data as any);
+    return Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
 export class PdfEngine {
     private pdfDoc: any = null;
     private pdfBytes: Uint8Array | null = null;
 
     /**
      * 🛡️ MEMORY SAFE Text-To-Image
-     * Explicitly destroys canvas references to prevent iOS Safari crashes.
      */
     private async textToImage(text: string, fontSize: number = 12, isBold: boolean = false): Promise<Uint8Array> {
         let canvas: HTMLCanvasElement | null = document.createElement('canvas');
@@ -58,7 +67,6 @@ export class PdfEngine {
                 } else {
                     reject(new Error('Canvas conversion failed'));
                 }
-                // 🗑️ CRITICAL MEMORY CLEANUP
                 if (canvas) {
                     canvas.width = 0;
                     canvas.height = 0;
@@ -95,7 +103,9 @@ export class PdfEngine {
     }
 
     async load(data: Uint8Array) {
-        this.pdfBytes = new Uint8Array(data.buffer.slice(0));
+        // ✅ OPTIMIZATION: Store reference instead of cloning (prevents Double RAM usage)
+        this.pdfBytes = data;
+
         const baseUrl = window.location.href.replace(/index\.html.*/, '');
         const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 
@@ -148,19 +158,14 @@ export class PdfEngine {
         let y = height - 50;
         const dateStr = new Date().toLocaleString();
 
-        // 🔗 USE CONFIG URL
         const verifyUrl = `${AppConfig.website}/verify?id=${docId}`;
 
-        // Header
         drawLabel("AUDIT TRAIL / CERTIFICATE", 50, y, 16, true);
 
-        // --- 🔧 QR CODE FIX ---
         const qrBytes = await this.generateQRCode(verifyUrl);
         if (qrBytes.length > 0) {
             const qrImg = await pdfDoc.embedPng(qrBytes);
             const qrSize = 80;
-
-            // FIX: Subtract qrSize so it draws downwards from the header line
             const qrY = y - qrSize + 10;
 
             page.drawImage(qrImg, {
@@ -201,20 +206,21 @@ export class PdfEngine {
                 y -= 15;
             }
         }
-
         drawLabel("Valid only if digital structure is intact.", 50, 40, 8);
     }
 
     async saveProfessional(annotations: Annotation[], filename: string, includeAuditTrail: boolean): Promise<{
         pdfBytes: Uint8Array,
-        docId: string
+        docId: string,
+        finalHash: string
     }> {
         if (!this.pdfBytes) throw new Error('No PDF bytes available');
         const pdfDoc = await PDFDocument.load(this.pdfBytes);
 
-        // 1. Metadata & Hash Setup
         const signingDate = new Date();
-        const fingerprint = filename + signingDate.toISOString() + JSON.stringify(annotations);
+        // 🛡️ SECURITY: Bind ID to content hash so different files get different IDs
+        const contentHash = await calculateSHA256(this.pdfBytes);
+        const fingerprint = contentHash + filename + signingDate.toISOString() + JSON.stringify(annotations);
         const docId = await generateHashID(fingerprint);
 
         pdfDoc.setTitle('Signed Document');
@@ -225,7 +231,6 @@ export class PdfEngine {
         const pages = pdfDoc.getPages();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-        // 2. Footer on Every Page
         const footerText = `Signed via Open Waqf | Ref: ${docId}`;
         for (const page of pages) {
             const {width} = page.getSize();
@@ -238,43 +243,26 @@ export class PdfEngine {
             });
         }
 
-        // 3. Process Annotations
         for (const ann of annotations) {
             if (ann.page < 0 || ann.page >= pages.length) continue;
             const page = pages[ann.page];
             const {width, height} = page.getSize();
 
-            // 🛡️ FIX 1: Group 'identity' with 'date' (Text Logic)
             if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
                 const imgBuffer = await this.textToImage(ann.data, ann.fontSize || 12, ann.fontWeight === 'bold');
                 const pngImage = await pdfDoc.embedPng(imgBuffer);
-
-                // 🛡️ FIX 2: Apply 0.75 Scale Factor (CSS px -> PDF pt conversion)
-                // 96px on screen = 72pt on PDF. So we multiply by 0.75.
                 const scaleFactor = 0.75;
                 const w = (pngImage.width / 3) * scaleFactor;
                 const h = (pngImage.height / 3) * scaleFactor;
-
-                // 🛡️ FIX 3: Correct Y Positioning
-                // PDF Y=0 is bottom. Screen 'top' is distance from top.
-                // We calculate Top Y, then subtract Height to draw downwards.
                 const pdfY = height - (height * ann.yPct) - h;
-
-                page.drawImage(pngImage, {
-                    x: width * ann.xPct,
-                    y: pdfY,
-                    width: w,
-                    height: h
-                });
+                page.drawImage(pngImage, {x: width * ann.xPct, y: pdfY, width: w, height: h});
 
             } else if (ann.data) {
-                // Images (Signatures/Stamps) - Keep existing logic
                 const pngImage = await pdfDoc.embedPng(ann.data);
                 const targetWidth = width * (ann.widthPct || 0.2);
                 const imgDims = pngImage.scale(1);
                 const ratio = imgDims.height / imgDims.width;
                 const targetHeight = targetWidth * ratio;
-
                 page.drawImage(pngImage, {
                     x: width * ann.xPct,
                     y: height - (height * ann.yPct) - targetHeight,
@@ -289,17 +277,23 @@ export class PdfEngine {
         }
 
         const savedBytes = await pdfDoc.save();
-        return {pdfBytes: savedBytes, docId};
+
+        // 🔐 SECURITY: Calculate hash of the FINAL output for "Strict Verification"
+        const finalHash = await calculateSHA256(savedBytes);
+
+        return {pdfBytes: savedBytes, docId, finalHash};
     }
 
-    // 5. ✨ READ METADATA FOR VERIFICATION
+    // New Helper: Calculate Hash for Verification
+    async getFileHash(fileData: Uint8Array): Promise<string> {
+        return calculateSHA256(fileData);
+    }
+
     async readMetadataID(fileData: Uint8Array): Promise<string | null> {
         try {
             const pdfDoc = await PDFDocument.load(fileData, {updateMetadata: false});
             const keywords = pdfDoc.getKeywords();
             if (!keywords) return null;
-
-            // Look for our tag "ref:XYZ..."
             const match = keywords.split(' ').find(k => k.startsWith('ref:'));
             return match ? match.replace('ref:', '') : null;
         } catch (e) {

@@ -81,10 +81,26 @@ export const resources = {
         proveIdentityMsg: "Do you want to send a verification receipt to the receiver?",
         sendProofEmail: "📧 Send Proof Email",
         emailSubject: "Signature Receipt for Document: {id}",
-        emailBody: "I confirm that I have digitally signed document {id} using Open Signer.\n\nPlease verify that the Document ID in this email matches the footer code on the attached PDF.",
 
         justDownload: "No, Just Download",
         sharedDeviceWarning: "Shared Device? Clear your data on the Home Screen to remove your saved email.",
+        recordFound: "Record Found",
+        recordFoundDisclaimer: "ℹ️ This confirms the file was processed by us. However, standard PDF readers can modify content without removing this tag.",
+        noRecordFound: "No Record Found",
+        noRecordMsg: "This file does not contain our digital signature tag.",
+        integrityCheck: "🔐 Integrity Check",
+        strictMode: "(Strict)",
+        pasteHashHint: "Paste the <strong>Security Hash</strong> provided by the sender to verify zero tampering:",
+        pasteHashPlaceholder: "Paste hash here (e.g. a1b2...)",
+        verifyBtn: "Verify",
+        verifyHashSuccess: "✅ SECURE VERIFIED!\n\nThis file is 100% authentic. It has NOT been modified since the signature was generated.",
+        verifyHashFail: "❌ DANGER: MISMATCH!\n\nThe file hash does not match your code.\n\nThis file has been modified, corrupted, or edited after signing.",
+
+        // Workspace Modal
+        internalRefLabel: "Internal Ref ID:",
+        integrityHashLabel: "🔐 Integrity Hash (Anti-Tamper):",
+
+        emailBody: "Document Ref: {id}\n\n🔐 INTEGRITY HASH (Security Check):\n{hash}\n\nIf you wish to verify this document is authentic and unmodified, use the 'Verify' tool on Open Waqf Signer and paste the code above.",
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -156,10 +172,26 @@ export const resources = {
         proveIdentityMsg: "هل تريد إرسال إيصال توثيق للمستلم؟",
         sendProofEmail: "📧 إرسال إيصال بريدي",
         emailSubject: "إيصال توقيع للمستند: {id}",
-        emailBody: "أؤكد أنني قمت بتوقيع المستند {id} رقمياً باستخدام الموقّع المفتوح.\n\nيرجى التأكد من تطابق رمز المستند في هذا البريد مع الكود الموجود أسفل ملف PDF المرفق.",
 
         justDownload: "لا، تحميل فقط",
         sharedDeviceWarning: "جهاز مشترك؟ قم بمسح بياناتك من الشاشة الرئيسية لإزالة البريد المحفوظ.",
+        // ✅ ARABIC TRANSLATIONS
+        recordFound: "تم العثور على السجل",
+        recordFoundDisclaimer: "ℹ️ هذا يؤكد أن الملف تمت معالجته بواسطتنا. ومع ذلك، يمكن لقراء PDF القياسيين تعديل المحتوى دون إزالة هذه العلامة.",
+        noRecordFound: "لم يتم العثور على سجل",
+        noRecordMsg: "لا يحتوي هذا الملف على علامة التوقيع الرقمي الخاصة بنا.",
+        integrityCheck: "🔐 فحص النزاهة",
+        strictMode: "(صارم)",
+        pasteHashHint: "الصق <strong>رمز الأمان (Hash)</strong> المقدم من المرسل للتحقق من عدم التلاعب:",
+        pasteHashPlaceholder: "الصق الرمز هنا (مثلاً a1b2...)",
+        verifyBtn: "تحقق",
+        verifyHashSuccess: "✅ تم التحقق بأمان!\n\nهذا الملف أصلي 100%. لم يتم تعديله منذ إنشاء التوقيع.",
+        verifyHashFail: "❌ خطر: عدم تطابق!\n\nرمز التجزئة (Hash) لا يطابق الملف.\n\nتم تعديل هذا الملف أو إتلافه أو تحريره بعد التوقيع.",
+
+        internalRefLabel: "المعرف المرجعي الداخلي:",
+        integrityHashLabel: "🔐 رمز النزاهة (ضد التلاعب):",
+
+        emailBody: "مرجع المستند: {id}\n\n🔐 رمز النزاهة (فحص أمني):\n{hash}\n\nإذا كنت ترغب في التحقق من أن هذا المستند أصلي ولم يتم تعديله، استخدم أداة 'التحقق' في الموقّع المفتوح والصق الرمز أعلاه.",
     },
     fr: {
         appTitle: "Open Signer",
@@ -231,10 +263,25 @@ export const resources = {
         proveIdentityMsg: "Voulez-vous envoyer un reçu de vérification au destinataire ?",
         sendProofEmail: "📧 Envoyer Preuve",
         emailSubject: "Reçu de signature pour : {id}",
-        emailBody: "Je confirme avoir signé le document {id} via Open Signer.\n\nVeuillez vérifier que l'ID dans cet e-mail correspond au code en bas du PDF ci-joint.",
 
         justDownload: "Non, Télécharger",
         sharedDeviceWarning: "Appareil partagé ? Effacez vos données sur l'écran d'accueil pour supprimer votre e-mail.",
+        recordFound: "Enregistrement trouvé",
+        recordFoundDisclaimer: "ℹ️ Cela confirme que le fichier a été traité par nous. Cependant, les lecteurs PDF standard peuvent modifier le contenu sans supprimer ce tag.",
+        noRecordFound: "Aucun enregistrement trouvé",
+        noRecordMsg: "Ce fichier ne contient pas notre tag de signature numérique.",
+        integrityCheck: "🔐 Contrôle d'intégrité",
+        strictMode: "(Strict)",
+        pasteHashHint: "Collez l'<strong>Empreinte de Sécurité</strong> fournie par l'expéditeur pour vérifier l'absence de falsification :",
+        pasteHashPlaceholder: "Collez l'empreinte ici (ex. a1b2...)",
+        verifyBtn: "Vérifier",
+        verifyHashSuccess: "✅ VÉRIFICATION SÉCURISÉE !\n\nCe fichier est 100% authentique. Il n'a PAS été modifié depuis la signature.",
+        verifyHashFail: "❌ DANGER : NON-CORRESPONDANCE !\n\nL'empreinte (Hash) ne correspond pas.\n\nCe fichier a été modifié, corrompu ou édité après la signature.",
+
+        internalRefLabel: "Réf. Interne :",
+        integrityHashLabel: "🔐 Empreinte d'intégrité (Anti-Falsification) :",
+
+        emailBody: "Réf Document : {id}\n\n🔐 EMPREINTE D'INTÉGRITÉ (Contrôle de Sécurité) :\n{hash}\n\nSi vous souhaitez vérifier que ce document est authentique et non modifié, utilisez l'outil 'Vérifier' sur Open Signer et collez le code ci-dessus.",
     }
 } as const;
 

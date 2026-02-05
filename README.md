@@ -1,7 +1,7 @@
 # ✒️ Open Waqf Signer (الموقّع)
 
 > **Secure. Offline. Verifiable.**
-> A privacy-first PDF signer with cryptographic integrity.
+> A privacy-first PDF signer with cryptographic integrity checks.
 
 <div align="center">
 <a href="[https://sign.open-waqf.org](https://sign.open-waqf.org)">
@@ -26,16 +26,19 @@ Unlike other free tools, **no data is ever uploaded to a server**. All cryptogra
 ### 🛡️ Security & Trust
 
 * **Zero-Knowledge:** Documents never leave your device (RAM-only processing).
-* **Cryptographic Hashing:** Every saved document is stamped with a unique SHA-256 fingerprint.
-* **🆔 Identity Verification:** innovative "Self-Sovereign" verification. Link your email to a document hash to prove ownership without a central server.
-* **Tamper Detection:** Drag & drop a signed PDF to instantly verify if it has been altered since signing.
+* **Dual-Layer Verification:**
+1. **Metadata Check (Internal):** Instantly identifies files signed by the app.
+2. **Strict Integrity Check (External):** Uses SHA-256 hashing to prove mathematically that a document has not been tampered with since signing.
+
+
+* **🆔 Identity Linking:** Optionally link an email address to a signature for audit trails.
+* **Tamper Detection:** Drag & drop a signed PDF to instantly verify its integrity.
 * **Audit Trail:** Automatically appends a verification page with a QR code and event log.
 
 ### ✍️ Professional Tools
 
 * **Natural Ink:** Smooth, pressure-sensitive signature drawing.
-* **Smart Annotation:** Add Names, Dates, Initials, and Free Text.
-* **Custom Stamps:** Upload company seals or logos.
+* **Smart Annotation:** Add Names, Dates, Initials, Stamps, and Free Text.
 * **History:** Full Undo/Redo support (`Ctrl+Z`, `Ctrl+Y`).
 * **Layout Control:** Drag, resize, and position elements with precision.
 
@@ -43,7 +46,33 @@ Unlike other free tools, **no data is ever uploaded to a server**. All cryptogra
 
 * **Offline First (PWA):** Installs as a native app on Android, iOS, Windows, and Mac.
 * **Multilingual:** Native support for **English**, **Arabic (RTL)**, and **French**.
-* **Mobile Optimized:** Touch-friendly interface with native back-button handling on Android.
+* **Mobile Optimized:** Touch-friendly interface with native back-button handling.
+
+---
+
+## 🚀 How to Verify a Document (The Trust Model)
+
+We use an **"External Key"** model to ensure document integrity without storing your data on a central server.
+
+### Step 1: Signing & Sending
+
+1. **Sign:** The user signs the PDF.
+2. **Hash Generation:** The app generates a **Security Hash** (e.g., `a1b2c3...`) representing the final file state.
+3. **Send:** The user emails the **PDF** (attachment) + the **Hash** (in the email body) to the recipient.
+
+### Step 2: Verifying (The Receiver)
+
+The recipient opens the "Verify" tool in the app:
+
+1. **Drop:** Upload the signed PDF.
+* *Result:* ✅ **"Record Found"** (Confirms the file metadata is present).
+
+
+2. **Strict Check:** Paste the **Security Hash** from the email.
+* *Result:* ✅ **"SECURE VERIFIED"** (Proves the file is 100% authentic and unmodified).
+* *Result:* ❌ **"MISMATCH"** (Detects if even a single byte was altered).
+
+
 
 ---
 
@@ -52,7 +81,7 @@ Unlike other free tools, **no data is ever uploaded to a server**. All cryptogra
 * **Core:** TypeScript, Vite, Lit (Web Components).
 * **Native Layer:** Capacitor (for Android/iOS).
 * **PDF Engine:** `pdf-lib` (modification) & `pdfjs-dist` (rendering).
-* **State Management:** Reactive Controllers (MobX-like pattern with Lit).
+* **Cryptography:** Native `crypto.subtle` API for SHA-256 hashing (no external libraries).
 * **Storage:** `IndexedDB` (for preferences only). Files are transient.
 
 ---
@@ -106,29 +135,6 @@ npx cap sync
 npx cap open android
 
 ```
-
----
-
-## 🔒 The Trust Model (How it works)
-
-We use a **"Triangulated Proof"** system to ensure document integrity without storing your data:
-
-1. **The PDF Hash:** When you save, we calculate a SHA-256 hash of the document content + annotations. This ID is embedded in the PDF metadata.
-2. **The Visual Audit:** This ID is printed on the footer of every page and the final Audit Page.
-3. **The Identity Loop:** If you use the Identity tool, the app generates a pre-filled email containing this ID. You send this email to the recipient.
-* *Result:* The Recipient has the PDF (with ID `XYZ`) and an Email from you (referencing ID `XYZ`). This proves **You** signed **That File**.
-
-
-
----
-
-## 📦 Deployment
-
-The project uses **GitHub Actions** to deploy to GitHub Pages (PWA).
-
-1. **Push:** Commit changes to the `main` branch.
-2. **Build:** The Action compiles TypeScript and optimizes assets.
-3. **Deploy:** The site updates automatically at `https://sign.open-waqf.org`.
 
 ---
 
