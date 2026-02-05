@@ -107,6 +107,9 @@ export const resources = {
         statusVerified: "✅ <strong>Verified!</strong> Integrity confirmed.",
         statusMismatch: "❌ <strong>Mismatch!</strong> The file has been modified.",
         btnSkip: "Skip / Close",
+        clear: "Clear",
+        cancel: "Cancel",
+        done: "Done",
 
         emailBody: "Document Ref: {id}\n\n🔐 INTEGRITY HASH (Security Check):\n{hash}\n\nIf you wish to verify this document is authentic and unmodified, use the 'Verify' tool on Open Waqf Signer and paste the code above.",
     },
@@ -205,6 +208,9 @@ export const resources = {
         statusVerified: "✅ <strong>تم التحقق!</strong> النزاهة مؤكدة.",
         statusMismatch: "❌ <strong>عدم تطابق!</strong> تم تعديل الملف.",
         btnSkip: "تخطي / إغلاق",
+        clear: "مسح",
+        cancel: "إلغاء",
+        done: "تم",
 
         emailBody: "مرجع المستند: {id}\n\n🔐 رمز النزاهة (فحص أمني):\n{hash}\n\nإذا كنت ترغب في التحقق من أن هذا المستند أصلي ولم يتم تعديله، استخدم أداة 'التحقق' في الموقّع المفتوح والصق الرمز أعلاه.",
     },
@@ -303,6 +309,9 @@ export const resources = {
         statusVerified: "✅ <strong>Vérifié !</strong> Intégrité confirmée.",
         statusMismatch: "❌ <strong>Non-concordance !</strong> Le fichier a été modifié.",
         btnSkip: "Passer / Fermer",
+        clear: "Effacer",
+        cancel: "Annuler",
+        done: "Terminé",
 
         emailBody: "Réf Document : {id}\n\n🔐 EMPREINTE D'INTÉGRITÉ (Contrôle de Sécurité) :\n{hash}\n\nSi vous souhaitez vérifier que ce document est authentique et non modifié, utilisez l'outil 'Vérifier' sur Open Signer et collez le code ci-dessus.",
     }
