@@ -155,6 +155,7 @@ export class FileService {
         }
 
         // Fallback: Just ensure it was downloaded (which savePdf does)
+        this.saveFileBrowser(file.filename, dataIfWeb);
         console.log("Web Share API not supported, file downloaded instead.");
     }
 
