@@ -120,6 +120,25 @@ export class PdfWorkspace extends LitElement {
             gap: 12px;
         }
 
+        button.toggle {
+            background: white;
+            color: #6b7280; /* Gray text */
+            border: 1px solid #e5e7eb;
+            transition: all 0.2s ease;
+        }
+
+        button.toggle.active {
+            background: #eff6ff; /* Light Blue Background */
+            color: #2563eb; /* Blue Text */
+            border: 1px solid #2563eb; /* Blue Border */
+            font-weight: 600;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+
+        button.toggle:hover {
+            background: #f9fafb;
+        }
+
         .brand img {
             height: 28px;
             width: 28px;
@@ -749,6 +768,13 @@ export class PdfWorkspace extends LitElement {
                 this.lastSaved = {filename};
             } else {
                 this.lastSaved = await fileService.savePdf(filename, finalBytes);
+                if (Capacitor.isNativePlatform() && showToast) {
+                    setTimeout(() => {
+                        const msg = (i18n.t('exportingFile') as string) || "📂 Exporting file...";
+                        this.toast(msg);
+                        fileService.sharePdf(this.lastSaved!, this.lastSavedBytes!);
+                    }, 200); // Short delay to ensure UI is ready
+                }
             }
 
             this.isDirty = false;
@@ -871,23 +897,31 @@ export class PdfWorkspace extends LitElement {
                 <button @click=${this.undo} ?disabled=${this.history.length === 0} title="${i18n.t('undo')}">↩</button>
                 <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}">↪</button>
                 <div style="flex:1"></div>
-                <label style="display:flex; align-items:center; gap:6px; margin-right:15px; font-size:0.8rem; cursor:pointer;"
-                       title="${i18n.t('addPageFooter')}">
-                    <input type="checkbox" .checked=${this.includeFooter} @change=${(e: Event) => {
-                        this.includeFooter = (e.target as HTMLInputElement).checked;
-                        this.isDirty = true;
-                    }}/>
-                    <span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
-                </label>
-                <label style="display:flex; align-items:center; gap:6px; margin-right:10px; font-size:0.8rem; cursor:pointer;"
-                       title="${i18n.t('addAuditPage')}">
-                    <input type="checkbox" .checked=${this.includeAudit} @change=${(e: Event) => {
-                        this.includeAudit = (e.target as HTMLInputElement).checked;
-                        this.isDirty = true;
-                    }}/>
-                    <span class="btn-label">${i18n.t('auditTrail')}</span>
-                    <span class="mobile-hide" style="font-size:1rem;">📋</span>
-                </label>
+                <button class="toggle ${this.includeFooter ? 'active' : ''}"
+                        @click=${() => {
+                            this.includeFooter = !this.includeFooter;
+                            this.isDirty = true;
+                            const msg = this.includeFooter
+                                    ? (i18n.t('footerOn') || "Footer Enabled")
+                                    : (i18n.t('footerOff') || "Footer Disabled");
+                            this.toast(msg as string);
+                        }}
+                        title="${i18n.t('addPageFooter')}">
+                    📄<span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
+                </button>
+
+                <button class="toggle ${this.includeAudit ? 'active' : ''}"
+                        @click=${() => {
+                            this.includeAudit = !this.includeAudit;
+                            this.isDirty = true;
+                            const msg = this.includeAudit
+                                    ? (i18n.t('auditOn') || "Audit Trail Enabled")
+                                    : (i18n.t('auditOff') || "Audit Trail Disabled");
+                            this.toast(msg as string);
+                        }}
+                        title="${i18n.t('addAuditPage')}">
+                    📋<span class="btn-label">${i18n.t('auditTrail')}</span>
+                </button>
                 <button class="primary" @click=${() => this.saveDocument({silentWeb: false, showToast: true})}
                         ?disabled=${saveDisabled}
                         title=${saveDisabled ? ((i18n.t('noChanges') as string) || 'No changes to save') : (i18n.t('savePdf') as string)}>

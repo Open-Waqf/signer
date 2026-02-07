@@ -327,7 +327,7 @@ export class AppRoot extends LitElement {
                     </div>
 
                     <button @click=${() => {
-                        const url = `${window.location.origin}/?lang=${i18n.lang}`;
+                        const url = `${AppConfig.website}/?lang=${i18n.lang}`;
                         navigator.clipboard.writeText(url);
                         this.showToast(i18n.t('linkCopied'));
                     }}

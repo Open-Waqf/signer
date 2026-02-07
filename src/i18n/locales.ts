@@ -110,8 +110,12 @@ export const resources = {
         clear: "Clear",
         cancel: "Cancel",
         done: "Done",
-
+        exportingFile: "📂 Exporting file...",
         emailBody: "Document Ref: {id}\n\n🔐 INTEGRITY HASH (Security Check):\n{hash}\n\nIf you wish to verify this document is authentic and unmodified, use the 'Verify' tool on Open Waqf Signer and paste the code above.",
+        footerOn: "ON: Reference ID will be printed on every page.",
+        footerOff: "OFF: Page footer removed.",
+        auditOn: "ON: A verification page will be added to the end.",
+        auditOff: "OFF: Audit trail removed.",
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -211,8 +215,12 @@ export const resources = {
         clear: "مسح",
         cancel: "إلغاء",
         done: "تم",
-
+        exportingFile: "📂 جارٍ تصدير الملف...",
         emailBody: "مرجع المستند: {id}\n\n🔐 رمز النزاهة (فحص أمني):\n{hash}\n\nإذا كنت ترغب في التحقق من أن هذا المستند أصلي ولم يتم تعديله، استخدم أداة 'التحقق' في الموقّع المفتوح والصق الرمز أعلاه.",
+        footerOn: "مفعل: سيتم طباعة الرقم المرجعي على كل صفحة.",
+        footerOff: "معطل: تم إزالة تذييل الصفحة.",
+        auditOn: "مفعل: سيتم إضافة صفحة التحقق في نهاية المستند.",
+        auditOff: "معطل: تم إزالة سجل التدقيق.",
     },
     fr: {
         appTitle: "Open Signer",
@@ -312,8 +320,12 @@ export const resources = {
         clear: "Effacer",
         cancel: "Annuler",
         done: "Terminé",
-
+        exportingFile: "📂 Exportation du fichier...",
         emailBody: "Réf Document : {id}\n\n🔐 EMPREINTE D'INTÉGRITÉ (Contrôle de Sécurité) :\n{hash}\n\nSi vous souhaitez vérifier que ce document est authentique et non modifié, utilisez l'outil 'Vérifier' sur Open Signer et collez le code ci-dessus.",
+        footerOn: "ACTIVÉ : L'ID de référence sera imprimé sur chaque page.",
+        footerOff: "DÉSACTIVÉ : Pied de page supprimé.",
+        auditOn: "ACTIVÉ : Une page de vérification sera ajoutée à la fin.",
+        auditOff: "DÉSACTIVÉ : Journal d'audit supprimé.",
     }
 } as const;
 

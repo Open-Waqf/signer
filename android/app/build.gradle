@@ -8,7 +8,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "0.14"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -43,34 +43,3 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
-
-
-tasks.register('copyToDist') {
-    doLast {
-        // Source: The release APK
-        def apkPath = "release" + File.separator + "app-release.apk"
-        def sourceFile = file("${project.buildDir}" + File.separator + "outputs" + File.separator + "apk" + File.separator + apkPath)
-
-        // Destination: The Vite 'public' folder (so it ends up in dist/app/)
-        // Go up 3 levels: app -> android -> root -> public/app
-        def destDir = file("..${File.separator}..${File.separator}public${File.separator}app")
-
-        if (sourceFile.exists()) {
-            println "Copying APK from ${sourceFile} to ${destDir}"
-            copy {
-                from sourceFile
-                into destDir
-                rename { "signer.apk" }
-            }
-        } else {
-            println "⚠️ APK not found at ${sourceFile}. Make sure you ran assembleRelease."
-        }
-    }
-}
-
-// Hook it into the build process
-tasks.whenTaskAdded { task ->
-    if (task.name == 'assembleRelease') {
-        task.finalizedBy 'copyToDist'
-    }
-}
