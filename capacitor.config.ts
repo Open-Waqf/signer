@@ -2,7 +2,7 @@ import type {CapacitorConfig} from '@capacitor/cli';
 
 const config: CapacitorConfig = {
     appId: 'org.openwaqf.signer',
-    appName: 'OpenWaqfSigner',
+    appName: 'Open Signer',
     webDir: 'dist',
     server: {
         androidScheme: 'https'
