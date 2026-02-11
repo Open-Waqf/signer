@@ -18,6 +18,7 @@ export default defineConfig({
                 clientsClaim: false,
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,json,woff2,wasm,bcmap,pfb,ttf,mjs}'],
                 maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+                navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/],
             },
             manifest: {
                 name: 'Open Waqf Signer',
