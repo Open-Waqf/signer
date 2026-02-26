@@ -249,8 +249,8 @@ export class PdfWorkspace extends LitElement {
 
             button {
                 padding: 0;
-                width: 40px;
-                height: 36px;
+                width: 44px;
+                height: 44px;
                 font-size: 1.2rem;
             }
 
@@ -532,7 +532,8 @@ export class PdfWorkspace extends LitElement {
 
     async renderPage() {
         if (!this.canvas) return;
-        await pdfEngine.renderPage(this.currentPage, this.canvas, 1.5 * this.scale);
+        const renderScale = Math.min(3.0, 1.5 * this.scale);
+        await pdfEngine.renderPage(this.currentPage, this.canvas, renderScale);
     }
 
     changePage(offset: number) {
@@ -934,8 +935,12 @@ export class PdfWorkspace extends LitElement {
                     📅<span class="btn-label">${i18n.t('addDate')}</span>
                 </button>
                 <div style="width: 1px; height: 20px; background: #ddd; margin: 0 4px; flex-shrink: 0;"></div>
-                <button @click=${this.undo} ?disabled=${this.history.length === 0} title="${i18n.t('undo')}">↩</button>
-                <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}">↪</button>
+                <button @click=${this.undo} ?disabled=${this.history.length === 0} title="${i18n.t('undo')}"
+                        aria-label="${i18n.t('undo') || 'Undo'}">↩
+                </button>
+                <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}"
+                        aria-label="${i18n.t('redo') || 'Redo'}">↪
+                </button>
                 <div style="flex:1"></div>
                 <button class="toggle ${this.includeFooter ? 'active' : ''}"
                         @click=${() => {

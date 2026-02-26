@@ -217,7 +217,25 @@ export class SignatureModal extends LitElement {
             this.remove();
             return;
         }
-        const dataUrl = this.canvas.toDataURL('image/png');
+
+        const exportCanvas = document.createElement('canvas');
+        const MAX_WIDTH = 600;
+        let exportWidth = this.canvas.width;
+        let exportHeight = this.canvas.height;
+
+        if (exportWidth > MAX_WIDTH) {
+            exportHeight = (MAX_WIDTH / exportWidth) * exportHeight;
+            exportWidth = MAX_WIDTH;
+        }
+
+        exportCanvas.width = exportWidth;
+        exportCanvas.height = exportHeight;
+        const outCtx = exportCanvas.getContext('2d');
+        if (outCtx) {
+            outCtx.drawImage(this.canvas, 0, 0, exportWidth, exportHeight);
+        }
+
+        const dataUrl = exportCanvas.toDataURL('image/png');
         localStorage.setItem(`signer_${this.mode}`, dataUrl);
         this.dispatchEvent(new CustomEvent('signed', {detail: dataUrl}));
         this.remove();

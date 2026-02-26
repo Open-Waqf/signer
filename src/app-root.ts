@@ -442,6 +442,14 @@ export class AppRoot extends LitElement {
                 <div class="dialog-content">
                     <h2>${i18n.t('privacyTitle')}</h2>
                     <p>${i18n.t('privacyContent')}</p>
+
+                    <div style="margin-top: 20px; font-size: 0.85rem; color: #6b7280; background: #f9fafb; padding: 12px; border-radius: 8px;">
+                        <p style="margin: 0 0 8px 0;">🔒 <strong>Open Source & Secure</strong></p>
+                        <a href="https://github.com/open-waqf/signer" target="_blank"
+                           style="color: #2563eb; text-decoration: none; display: block; margin-bottom: 4px;">View
+                            Source Code on GitHub ↗</a>
+                    </div>
+
                     <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;"/>
                     <button @click=${this.clearAppCache}
                             style="background: #fee2e2; color: #b91c1c; border: none; width: 100%; margin-bottom: 10px;">

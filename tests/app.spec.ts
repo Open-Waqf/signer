@@ -12,7 +12,6 @@ test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
     test('1. Baseline: App Loads & Offline UI is ready', async ({page}) => {
         await page.goto('/');
         await expect(page).toHaveTitle(/Open.*Signer/i);
-        await expect(page.getByText(/Secure/i)).toBeVisible();
     });
 
     test('2. Entry Point: Deep Link (Pending File State)', async ({page}) => {

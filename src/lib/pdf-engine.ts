@@ -231,6 +231,16 @@ export class PdfEngine {
         pdfDoc.setModificationDate(signingDate);
         pdfDoc.setKeywords([`ref:${docId}`]);
 
+        const identityAnn = annotations.find(a => a.type === 'identity');
+        if (identityAnn && identityAnn.data) {
+            // Extract just the email part from "Signed by: email@domain.com"
+            const emailMatch = identityAnn.data.split(':').pop()?.trim();
+            if (emailMatch) {
+                pdfDoc.setAuthor(emailMatch);
+                pdfDoc.setCreator(`Open Waqf Signer - ${emailMatch}`);
+            }
+        }
+
         const pages = pdfDoc.getPages();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
