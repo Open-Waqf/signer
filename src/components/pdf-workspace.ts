@@ -7,6 +7,71 @@ import {i18n} from '../lib/i18n-service';
 import {Annotation, AnnotationType} from '../types';
 import './signature-modal';
 
+const ICONS = {
+    sign: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>`,
+    text: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 7 4 4 20 4 20 7"/>
+            <line x1="9" y1="20" x2="15" y2="20"/>
+            <line x1="12" y1="4" x2="12" y2="20"/>
+        </svg>`,
+    identity: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <circle cx="8" cy="12" r="3"/>
+            <line x1="14" y1="10" x2="19" y2="10"/>
+            <line x1="14" y1="14" x2="19" y2="14"/>
+        </svg>`,
+    stamp: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14.5V17a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"/>
+            <path d="M8 10a4 4 0 0 1 8 0v4.5H8z"/>
+            <path d="M12 2v4"/>
+        </svg>`,
+    date: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>`,
+    footer: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>`,
+    audit: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+        </svg>`,
+    save: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+        </svg>`,
+    share: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+            <polyline points="16 6 12 2 8 6"/>
+            <line x1="12" y1="2" x2="12" y2="15"/>
+        </svg>`
+};
+
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
     @property() pdfName = '';
@@ -51,9 +116,14 @@ export class PdfWorkspace extends LitElement {
 
     private loadedBytes: Uint8Array | null = null;
 
+    @state() isVerified = false;
+
     @query('#pdf-canvas') canvas!: HTMLCanvasElement;
     @query('.page-container') container!: HTMLDivElement;
     @query('.viewport') viewport!: HTMLDivElement;
+
+    @state() guideX: number | null = null;
+    @state() guideY: number | null = null;
 
     private get hasEdits(): boolean {
         return this.annotations.length > 0 || this.includeAudit;
@@ -512,21 +582,19 @@ export class PdfWorkspace extends LitElement {
 
     async checkHandover() {
         if (!this.loadedBytes) return;
-
-        const input = this.handoverHashInput.trim().toLowerCase();
-
-        // Calculate hash of what we currently have in memory
+        const input = this.handoverHashInput.replace(/[\s\n-]/g, '').trim().toLowerCase();
         const actual = await pdfEngine.getFileHash(this.loadedBytes);
 
         if (input === actual.toLowerCase()) {
             this.handoverResult = 'success';
-            this.validationMsg = `Validated integrity of Ref: ${this.detectedRefId}`;
-
-            // Auto-close after 1.5s on success
-            setTimeout(() => this.showHandoverModal = false, 1500);
+            this.isVerified = true;
+            setTimeout(() => {
+                this.showHandoverModal = false;
+                this.toast("✅ Integrity Verified!");
+            }, 1500);
         } else {
             this.handoverResult = 'fail';
-            this.validationMsg = `FAILED validation of Ref: ${this.detectedRefId}`;
+            this.isVerified = false;
         }
     }
 
@@ -697,8 +765,37 @@ export class PdfWorkspace extends LitElement {
         if (this.isDragging) {
             const newX = clientX - rect.left - this.dragOffset.x;
             const newY = clientY - rect.top - this.dragOffset.y;
-            const nextXPct = Math.max(0, Math.min(0.95, newX / rect.width));
-            const nextYPct = Math.max(0, Math.min(0.95, newY / rect.height));
+
+            let nextXPct = Math.max(0, Math.min(0.95, newX / rect.width));
+            let nextYPct = Math.max(0, Math.min(0.95, newY / rect.height));
+
+            let visualWidthPct = ann.widthPct || 0.1;
+            let visualHeightPct = visualWidthPct * (ann.aspectRatio || 1);
+
+            const contentEl = this.shadowRoot?.querySelector('.draggable.selected img, .draggable.selected .text-content') as HTMLElement;
+            if (contentEl) {
+                visualWidthPct = contentEl.offsetWidth / rect.width;
+                visualHeightPct = contentEl.offsetHeight / rect.height;
+            }
+
+            const centerX = nextXPct + (visualWidthPct / 2);
+            const centerY = nextYPct + (visualHeightPct / 2);
+
+            this.guideX = null;
+            this.guideY = null;
+
+            // Snap to horizontal center
+            if (Math.abs(centerX - 0.5) < 0.02) {
+                nextXPct = 0.5 - (visualWidthPct / 2);
+                this.guideX = 0.5;
+            }
+
+            // Snap to vertical center
+            if (Math.abs(centerY - 0.5) < 0.02) {
+                nextYPct = 0.5 - (visualHeightPct / 2);
+                this.guideY = 0.5;
+            }
+
             if (Math.abs(nextXPct - ann.xPct) > 0.0005 || Math.abs(nextYPct - ann.yPct) > 0.0005) {
                 takeSnapshotIfNeeded();
                 this.interactionChanged = true;
@@ -723,6 +820,8 @@ export class PdfWorkspace extends LitElement {
         this.interactionSnapshotTaken = false;
         this.interactionChanged = false;
         if (changed) this.isDirty = true;
+        this.guideX = null;
+        this.guideY = null;
     };
 
     openSignModal() {
@@ -900,12 +999,11 @@ export class PdfWorkspace extends LitElement {
         return html`
             <header>
                 <div class="brand">
-                    <button @click=${this.requestExit}
-                            style="margin-right:10px; padding:0; width:40px; border:none; background:transparent; font-size: 1.5rem;">
-                        ←
-                    </button>
+                    <button @click=${this.requestExit} style="...">←</button>
                     <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}" @error=${this.handleImageError}/>
                     <span class="mobile-hide">${i18n.t('appTitle')}</span>
+                    ${this.isVerified ? html`<span
+                            style="background: #10b981; color: white; padding: 2px 6px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; margin-left: 8px;">VERIFIED</span>` : ''}
                 </div>
                 <select class="lang-select" @change=${this.handleLangChange}>
                     <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
@@ -916,30 +1014,38 @@ export class PdfWorkspace extends LitElement {
 
             <div class="toolbar">
                 <button class="primary" @click=${this.openSignModal} title="${i18n.t('addSig')}">
-                    ✒️<span class="btn-label">${i18n.t('addSig')}</span>
+                    ${ICONS.sign}<span class="btn-label">${i18n.t('addSig')}</span>
                 </button>
                 <button @click=${this.openInitialsModal} title="${i18n.t('addInitials')}">
-                    Aa<span class="btn-label">${i18n.t('addInitials')}</span>
+                    ${ICONS.text}<span class="btn-label">${i18n.t('addInitials')}</span>
                 </button>
                 <button @click=${this.addTextAnnotation} title="${i18n.t('addText')}">
-                    T<span class="btn-label">${i18n.t('addText')}</span>
+                    ${ICONS.text}<span class="btn-label">${i18n.t('addText')}</span>
                 </button>
                 <button @click=${this.addIdentity} title="${i18n.t('addIdentity')}">
-                    🆔<span class="btn-label">${i18n.t('addIdentity') || 'Identity'}</span>
+                    ${ICONS.identity}<span class="btn-label">${i18n.t('addIdentity') || 'Identity'}</span>
                 </button>
                 <button @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
                         title="${i18n.t('addStamp')}">
-                    🏢<span class="btn-label">${i18n.t('addStamp')}</span>
+                    ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
                 </button>
                 <button @click=${this.addDateStamp} title="${i18n.t('addDate')}">
-                    📅<span class="btn-label">${i18n.t('addDate')}</span>
+                    ${ICONS.date}<span class="btn-label">${i18n.t('addDate')}</span>
                 </button>
                 <div style="width: 1px; height: 20px; background: #ddd; margin: 0 4px; flex-shrink: 0;"></div>
                 <button @click=${this.undo} ?disabled=${this.history.length === 0} title="${i18n.t('undo')}"
-                        aria-label="${i18n.t('undo') || 'Undo'}">↩
+                        aria-label="${i18n.t('undo') || 'Undo'}">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 7v6h6"/>
+                        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+                    </svg>
                 </button>
                 <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}"
-                        aria-label="${i18n.t('redo') || 'Redo'}">↪
+                        aria-label="${i18n.t('redo') || 'Redo'}">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 7v6h-6"/>
+                        <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/>
+                    </svg>
                 </button>
                 <div style="flex:1"></div>
                 <button class="toggle ${this.includeFooter ? 'active' : ''}"
@@ -952,7 +1058,7 @@ export class PdfWorkspace extends LitElement {
                             this.toast(msg as string);
                         }}
                         title="${i18n.t('addPageFooter')}">
-                    📄<span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
+                    ${ICONS.footer}<span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
                 </button>
 
                 <button class="toggle ${this.includeAudit ? 'active' : ''}"
@@ -965,16 +1071,16 @@ export class PdfWorkspace extends LitElement {
                             this.toast(msg as string);
                         }}
                         title="${i18n.t('addAuditPage')}">
-                    📋<span class="btn-label">${i18n.t('auditTrail')}</span>
+                    ${ICONS.audit}<span class="btn-label">${i18n.t('auditTrail')}</span>
                 </button>
                 <button class="primary" @click=${() => this.saveDocument({silentWeb: false, showToast: true})}
                         ?disabled=${saveDisabled}
                         title=${saveDisabled ? ((i18n.t('noChanges') as string) || 'No changes to save') : (i18n.t('savePdf') as string)}>
-                    💾<span class="btn-label">${i18n.t('savePdf')}</span>
+                    ${ICONS.save}<span class="btn-label">${i18n.t('savePdf')}</span>
                 </button>
                 <button @click=${this.shareLatest} ?disabled=${shareDisabled}
                         title=${shareDisabled ? ((i18n.t('noChanges') as string) || 'No changes to share') : (i18n.t('sharePdf') as string)}>
-                    📤<span class="btn-label">${i18n.t('sharePdf')}</span>
+                    ${ICONS.share}<span class="btn-label">${i18n.t('sharePdf')}</span>
                 </button>
             </div>
 
@@ -1005,6 +1111,10 @@ export class PdfWorkspace extends LitElement {
 
             <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
                 <div class="page-container">
+                    ${this.guideX !== null ? html`
+                        <div style="position:absolute; left:${this.guideX * 100}%; top:0; bottom:0; width:1px; background:#ef4444; z-index:50;"></div>` : ''}
+                    ${this.guideY !== null ? html`
+                        <div style="position:absolute; top:${this.guideY * 100}%; left:0; right:0; height:1px; background:#ef4444; z-index:50;"></div>` : ''}
                     <canvas id="pdf-canvas"></canvas>
                     ${this.annotations
                             .filter((ann) => ann.page === this.currentPage - 1)

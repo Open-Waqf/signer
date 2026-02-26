@@ -9,7 +9,7 @@ import {Capacitor} from '@capacitor/core';
 import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
 import {pdfEngine} from './lib/pdf-engine';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -25,6 +25,10 @@ export class AppRoot extends LitElement {
     @query('dialog#verify-dialog') verifyDialog!: HTMLDialogElement;
     @state() integrityStatus: 'idle' | 'success' | 'fail' = 'idle';
 
+    @state() showDiagnostics = false;
+    private logoTapCount = 0;
+    private logoTapTimeout: any = null;
+
     private updateSW: ((reload: boolean) => void) | undefined;
 
     @query('pdf-workspace') workspace: any;
@@ -33,6 +37,20 @@ export class AppRoot extends LitElement {
     createRenderRoot() {
         return this;
     }
+
+    handleSecretTap = () => {
+        this.logoTapCount++;
+        clearTimeout(this.logoTapTimeout);
+        this.logoTapTimeout = setTimeout(() => {
+            this.logoTapCount = 0;
+        }, 1500);
+
+        if (this.logoTapCount >= 5) {
+            this.showDiagnostics = true;
+            this.requestUpdate();
+            this.logoTapCount = 0;
+        }
+    };
 
     async firstUpdated(_changedProperties: PropertyValues) {
         super.firstUpdated(_changedProperties);
@@ -114,15 +132,13 @@ export class AppRoot extends LitElement {
             let status: 'success' | 'fail' | null = null;
 
             if (this.expectedVerifyId) {
-                // Secure Check: Match file ID against the Deep Link ID
                 if (fileId && fileId.toLowerCase() === this.expectedVerifyId.toLowerCase()) {
                     status = 'success';
                 } else {
                     status = 'fail';
                 }
-                this.expectedVerifyId = null; // Clear it to prevent reuse
+                this.expectedVerifyId = null;
             } else {
-                // Standard manual upload check
                 status = fileId ? 'success' : 'fail';
             }
 
@@ -141,7 +157,7 @@ export class AppRoot extends LitElement {
     }
 
     checkHash() {
-        const input = this.verifyHashInput.trim().toLowerCase();
+        const input = this.verifyHashInput.replace(/[\s\n-]/g, '').trim().toLowerCase();
         const actual = this.verifyFileHash.toLowerCase();
 
         if (!input) return;
@@ -200,17 +216,24 @@ export class AppRoot extends LitElement {
     async loadSamplePdf() {
         this.isLoading = true;
         try {
-            // 1. Generate a blank A4 PDF in-memory
             const pdfDoc = await PDFDocument.create();
             const page = pdfDoc.addPage([595.28, 841.89]);
             const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-            // 2. Draw some placeholder text
-            page.drawText('Sample Document', { x: 50, y: 750, size: 24, font, color: rgb(0, 0.33, 0.71) });
-            page.drawText('Use the tools above to add your signature, initials, or stamp.', { x: 50, y: 700, size: 12, font });
-            page.drawText('When you save, this document will be cryptographically hashed.', { x: 50, y: 680, size: 12, font });
+            page.drawText('Sample Document', {x: 50, y: 750, size: 24, font, color: rgb(0, 0.33, 0.71)});
+            page.drawText('Use the tools above to add your signature, initials, or stamp.', {
+                x: 50,
+                y: 700,
+                size: 12,
+                font
+            });
+            page.drawText('When you save, this document will be cryptographically hashed.', {
+                x: 50,
+                y: 680,
+                size: 12,
+                font
+            });
 
-            // 3. Save to bytes and load into workspace
             const pdfBytes = await pdfDoc.save();
             this.mode = 'workspace';
             await this.updateComplete;
@@ -226,14 +249,10 @@ export class AppRoot extends LitElement {
         try {
             const {data, name} = await fileService.openPdf();
 
-            // 🛡️ FIX: Check Mode!
             if (this.verifyMode) {
-                // If in Verify Mode, run the check immediately
-                // We create a "File" object manually to reuse handleVerify logic
                 const file = new File([data as any], name, {type: 'application/pdf'});
                 await this.handleVerify(file);
             } else {
-                // Normal Edit Mode
                 await this.handleFile(data, name);
             }
         } catch (e) {
@@ -246,7 +265,6 @@ export class AppRoot extends LitElement {
         if (e.dataTransfer?.files[0]) {
             const file = e.dataTransfer.files[0];
 
-            // ✨ BRANCH LOGIC
             if (this.verifyMode) {
                 this.handleVerify(file);
             } else {
@@ -330,7 +348,8 @@ export class AppRoot extends LitElement {
                 <div class="drop-card" style="margin: auto 20px; width: 90%; max-width: 400px; flex-shrink: 0;">
 
                     <img src="./icons/icon-192.webp" alt="${i18n.t('appTitle')}"
-                         style="width: 80px; height: 80px; margin-bottom: 20px; border-radius: 16px;"
+                         style="width: 80px; height: 80px; margin-bottom: 20px; border-radius: 16px; cursor: pointer;"
+                         @click=${this.handleSecretTap}
                          @error=${this.handleImageError}/>
 
                     <h1>${i18n.t('appTitle')}</h1>
@@ -443,8 +462,15 @@ export class AppRoot extends LitElement {
                     <h2>${i18n.t('privacyTitle')}</h2>
                     <p>${i18n.t('privacyContent')}</p>
 
+                    <div style="margin-top: 15px; padding: 12px; border-left: 4px solid #10b981; background: #ecfdf5; border-radius: 4px;">
+                        <h4 style="margin: 0 0 5px 0; color: #065f46;">🛡️
+                            ${i18n.t('securityModel') || 'Amanah / Security Model'}</h4>
+                        <p style="margin: 0; font-size: 0.85rem; color: #047857; line-height: 1.4;">
+                            ${i18n.t('securityModelText') || 'Open Waqf Signer uses a Zero-Trust local architecture. Your documents never leave your device. When you save, the app calculates a military-grade SHA-256 cryptographic hash of the file bytes entirely in your browser. This hash acts as an unforgeable digital fingerprint to prove the document\'s integrity later.'}
+                        </p>
+                    </div>
+
                     <div style="margin-top: 20px; font-size: 0.85rem; color: #6b7280; background: #f9fafb; padding: 12px; border-radius: 8px;">
-                        <p style="margin: 0 0 8px 0;">🔒 <strong>Open Source & Secure</strong></p>
                         <a href="https://github.com/open-waqf/signer" target="_blank"
                            style="color: #2563eb; text-decoration: none; display: block; margin-bottom: 4px;">View
                             Source Code on GitHub ↗</a>
@@ -460,6 +486,41 @@ export class AppRoot extends LitElement {
                     <button @click=${this.closePrivacy}>${i18n.t('close')}</button>
                 </div>
             </dialog>
+
+            ${this.showDiagnostics ? html`
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 99999; backdrop-filter: blur(2px);"
+                     @click=${() => {
+                         this.showDiagnostics = false;
+                         this.requestUpdate();
+                     }}>
+
+                    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 90%; max-width: 500px;"
+                         @click=${(e: Event) => e.stopPropagation()}>
+
+                        <h2 style="margin-top:0; color: #1f2937;">⚙️
+                            ${i18n.t('diagnostics') || 'System Diagnostics'}</h2>
+
+                        <div style="background:#1f2937; color:#10b981; padding:15px; border-radius:8px; font-family:monospace; font-size:0.8rem; overflow-x:auto;">
+                            <div>App Version: ${packageJson.version}</div>
+                            <div>Platform: ${Capacitor.isNativePlatform() ? 'Native (Capacitor)' : 'Web'}</div>
+                            <div>User Agent: ${navigator.userAgent}</div>
+                            <div>Window Size: ${window.innerWidth}x${window.innerHeight}</div>
+                            <div>Connection: ${navigator.onLine ? 'Online' : 'Offline'}</div>
+                            <div>Storage Quota:
+                                ${'storage' in navigator && 'estimate' in navigator.storage ? 'Supported' : 'Unknown'}
+                            </div>
+                        </div>
+
+                        <button @click=${() => {
+                            this.showDiagnostics = false;
+                            this.requestUpdate();
+                        }}
+                                style="width:100%; margin-top:15px; padding:12px; background: #374151; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            ${i18n.t('close') || 'Close'}
+                        </button>
+                    </div>
+                </div>
+            ` : ''}
 
             <dialog id="verify-dialog"
                     @cancel=${this.closeVerify}
@@ -482,12 +543,16 @@ export class AppRoot extends LitElement {
                             </button>
                         ` : this.verifyResult.status === 'success' ? html`
                             <div style="width:60px; height:60px; background:#dcfce7; color:#16a34a; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 15px;">
-                                ✓
+                                ℹ️
                             </div>
-                            <h2 style="margin:0 0 5px 0; color:#166534;">${i18n.t('recordFound')}</h2>
-                            <p style="color:#4b5563; font-size:0.9rem; margin:0;">
+                            <h2 style="margin:0 0 5px 0; color:#166534;">
+                                ${i18n.t('recordFound') || 'Metadata Found'}</h2>
+                            <p style="color:#4b5563; font-size:0.9rem; margin:0 0 10px 0;">
                                 ${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong>
                             </p>
+                            <div style="background: #fffbeb; color: #b45309; padding: 10px; border-radius: 6px; font-size: 0.8rem; text-align: left; border: 1px solid #fde68a;">
+                                ${i18n.t('recordFoundDisclaimer') || 'This ID indicates the document was processed by this app, but does not prove it is unaltered. You must check the integrity hash below.'}
+                            </div>
                         ` : html`
                             <div style="width:60px; height:60px; background:#fee2e2; color:#dc2626; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 15px;">
                                 !

@@ -127,6 +127,11 @@ export const resources = {
         step2Desc: "Export your signed document and get a secure Verification Receipt.",
         step3Title: "3. Verify Integrity",
         step3Desc: "Anyone can drop the file here to prove it wasn't tampered with.",
+        securityModel: "Amanah / Security Model",
+        securityModelText: "Open Waqf Signer uses a Zero-Trust local architecture. Your documents never leave your device. When you save, the app calculates a military-grade SHA-256 cryptographic hash of the file bytes entirely in your browser. This hash acts as an unforgeable digital fingerprint to prove the document's integrity later.",
+        diagnostics: "System Diagnostics",
+        online: "Online",
+        offline: "Offline Mode",
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -243,6 +248,11 @@ export const resources = {
         step2Desc: "صدّر مستندك الموقّع واحصل على إيصال تحقق آمن.",
         step3Title: "3. تحقق من النزاهة",
         step3Desc: "يمكن لأي شخص سحب الملف هنا لإثبات عدم التلاعب به.",
+        securityModel: "نموذج الأمان / أمانة",
+        securityModelText: "يعتمد Open Waqf Signer على بنية محلية قائمة على مبدأ 'عدم الثقة المطلق' (Zero-Trust). مستنداتك لا تغادر جهازك أبداً. عند الحفظ، يقوم التطبيق بحساب بصمة تشفيرية من نوع SHA-256 بمعايير عسكرية لبيانات الملف بالكامل داخل متصفحك. تعمل هذه البصمة كبصمة رقمية غير قابلة للتزوير لإثبات سلامة المستند لاحقاً.",
+        diagnostics: "تشخيصات النظام",
+        online: "متصل",
+        offline: "وضع عدم الاتصال",
     },
     fr: {
         appTitle: "Open Signer",
@@ -359,6 +369,11 @@ export const resources = {
         step2Desc: "Exportez votre document signé et obtenez un reçu de vérification.",
         step3Title: "3. Vérifiez l'intégrité",
         step3Desc: "Déposez le fichier ici pour prouver qu'il n'a pas été falsifié.",
+        ecurityModel: "Modèle de Sécurité / Amanah",
+        securityModelText: "Open Waqf Signer utilise une architecture locale 'Zero-Trust'. Vos documents ne quittent jamais votre appareil. Lors de l'enregistrement, l'application calcule un hachage cryptographique SHA-256 de qualité militaire à partir des octets du fichier, entièrement dans votre navigateur. Ce hachage fait office d'empreinte numérique infalsifiable pour prouver l'intégrité du document ultérieurement.",
+        diagnostics: "Diagnostics du Système",
+        online: "En ligne",
+        offline: "Mode Hors-ligne"
     }
 } as const;
 
