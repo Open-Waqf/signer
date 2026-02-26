@@ -303,7 +303,7 @@ export class AppRoot extends LitElement {
 
                 <div class="drop-card" style="margin: auto 20px; width: 90%; max-width: 400px; flex-shrink: 0;">
 
-                    <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}"
+                    <img src="./icons/icon-192.webp" alt="${i18n.t('appTitle')}"
                          style="width: 80px; height: 80px; margin-bottom: 20px; border-radius: 16px;"
                          @error=${this.handleImageError}/>
 
