@@ -148,7 +148,7 @@ export class PdfEngine {
 
         let y = height - 50;
         const dateStr = new Date().toLocaleString();
-        const verifyUrl = `${AppConfig.website}/verify?id=${docId}`;
+        const verifyUrl = `${AppConfig.website}/?id=${docId}`;
 
         drawLabel("AUDIT TRAIL / CERTIFICATE", 50, y, 16, true);
 

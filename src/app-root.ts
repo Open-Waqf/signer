@@ -17,7 +17,8 @@ export class AppRoot extends LitElement {
     @state() toastMsg: string | null = null;
     @state() updateAvailable = false;
     @state() verifyMode = false;
-    @state() verifyResult: { status: 'success' | 'fail' | null, id?: string } = {status: null};
+    @state() verifyResult: { status: 'success' | 'fail' | 'pending_file' | null, id?: string } = {status: null};
+    @state() expectedVerifyId: string | null = null;
     @state() verifyHashInput = '';
     @state() verifyFileHash = '';
     @query('dialog#verify-dialog') verifyDialog!: HTMLDialogElement;
@@ -40,15 +41,14 @@ export class AppRoot extends LitElement {
 
         if (id) {
             this.verifyMode = true;
-
+            this.expectedVerifyId = id;
             this.verifyResult = {
-                status: 'success', // or just null if you want them to verify first
+                status: 'pending_file',
                 id: id
             };
 
             await this.updateComplete;
 
-            // Open the dialog
             if (this.verifyDialog) {
                 this.verifyDialog.showModal();
             }
@@ -106,14 +106,32 @@ export class AppRoot extends LitElement {
         try {
             const buffer = await file.arrayBuffer();
             const data = new Uint8Array(buffer);
-            const id = await pdfEngine.readMetadataID(new Uint8Array(buffer));
+            const fileId = await pdfEngine.readMetadataID(new Uint8Array(buffer));
             this.verifyFileHash = await pdfEngine.getFileHash(data)
             this.isLoading = false;
 
-            this.verifyResult = {status: id ? 'success' : 'fail', id: id || undefined};
-            this.verifyHashInput = ''; // Clear previous input
+            let status: 'success' | 'fail' | null = null;
+
+            if (this.expectedVerifyId) {
+                // Secure Check: Match file ID against the Deep Link ID
+                if (fileId && fileId.toLowerCase() === this.expectedVerifyId.toLowerCase()) {
+                    status = 'success';
+                } else {
+                    status = 'fail';
+                }
+                this.expectedVerifyId = null; // Clear it to prevent reuse
+            } else {
+                // Standard manual upload check
+                status = fileId ? 'success' : 'fail';
+            }
+
+            this.verifyResult = {status, id: fileId || undefined};
+            this.verifyHashInput = '';
             this.integrityStatus = 'idle';
-            this.verifyDialog.showModal();
+
+            if (!this.verifyDialog.open) {
+                this.verifyDialog.showModal();
+            }
 
         } catch (e) {
             this.isLoading = false;
@@ -137,7 +155,14 @@ export class AppRoot extends LitElement {
     closeVerify() {
         this.verifyDialog.close();
         this.verifyResult = {status: null};
+        this.expectedVerifyId = null;
         this.integrityStatus = 'idle';
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    async startPendingVerification() {
+        this.verifyDialog.close();
+        await this.openFile();
     }
 
     async handleFile(data: Uint8Array, name: string) {
@@ -365,10 +390,25 @@ export class AppRoot extends LitElement {
             </dialog>
 
             <dialog id="verify-dialog"
+                    @cancel=${this.closeVerify}
                     style="border-radius:20px; padding:0; border:none; box-shadow:0 20px 25px rgba(0,0,0,0.1); width:90%; max-width:450px;">
                 <div style="padding: 24px;">
                     <div style="text-align:center; padding-bottom: 20px;">
-                        ${this.verifyResult.status === 'success' ? html`
+                        ${this.verifyResult.status === 'pending_file' ? html`
+                            <div style="width:60px; height:60px; background:#e0f2fe; color:#0284c7; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 15px;">
+                                🔍
+                            </div>
+                            <h2 style="margin:0 0 5px 0; color:#0369a1;">
+                                ${i18n.t('linkDetected') || 'Link Detected'}</h2>
+                            <p style="color:#4b5563; font-size:0.9rem; margin:0 0 15px 0;">
+                                ${i18n.t('linkDetectedMsg') || 'Please select the document to verify against ID:'}
+                                <strong>${this.verifyResult.id}</strong>
+                            </p>
+                            <button @click=${this.startPendingVerification}
+                                    style="background:#2563eb; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; width: 100%; font-size: 1rem;">
+                                ${i18n.t('selectFileVerify')}
+                            </button>
+                        ` : this.verifyResult.status === 'success' ? html`
                             <div style="width:60px; height:60px; background:#dcfce7; color:#16a34a; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 15px;">
                                 ✓
                             </div>
@@ -384,38 +424,40 @@ export class AppRoot extends LitElement {
                         `}
                     </div>
 
-                    <hr style="border:0; border-top:1px dashed #e5e7eb; margin:0 0 20px 0;"/>
+                    ${this.verifyResult.status !== 'pending_file' ? html`
+                        <hr style="border:0; border-top:1px dashed #e5e7eb; margin:0 0 20px 0;"/>
 
-                    <div style="background:#f9fafb; padding:15px; border-radius:12px; border:1px solid #f3f4f6;">
-                        <h3 style="font-size:0.9rem; margin:0 0 10px 0;">${i18n.t('integrityCheck')}</h3>
+                        <div style="background:#f9fafb; padding:15px; border-radius:12px; border:1px solid #f3f4f6;">
+                            <h3 style="font-size:0.9rem; margin:0 0 10px 0;">${i18n.t('integrityCheck')}</h3>
 
-                        <div style="display:flex; gap:8px;">
-                            <input type="text"
-                                   .value="${this.verifyHashInput}"
-                                   @input="${(e: any) => {
-                                       this.verifyHashInput = e.target.value;
-                                       this.integrityStatus = 'idle'; // Reset if they type new text
-                                   }}"
-                                   placeholder="${i18n.t('pasteHashPlaceholder')}"
-                                   style="flex:1; padding:8px; border:1px solid #d1d5db; border-radius:6px;">
-                            <button @click="${this.checkHash}"
-                                    style="background:#2563eb; color:white; border:none; padding:0 15px; border-radius:6px; cursor:pointer;">
-                                ${i18n.t('verifyBtn')}
-                            </button>
+                            <div style="display:flex; gap:8px;">
+                                <input type="text"
+                                       .value="${this.verifyHashInput}"
+                                       @input="${(e: any) => {
+                                           this.verifyHashInput = e.target.value;
+                                           this.integrityStatus = 'idle';
+                                       }}"
+                                       placeholder="${i18n.t('pasteHashPlaceholder')}"
+                                       style="flex:1; padding:8px; border:1px solid #d1d5db; border-radius:6px;">
+                                <button @click="${this.checkHash}"
+                                        style="background:#2563eb; color:white; border:none; padding:0 15px; border-radius:6px; cursor:pointer;">
+                                    ${i18n.t('verifyBtn')}
+                                </button>
+                            </div>
+
+                            ${this.integrityStatus === 'success' ? html`
+                                <div style="margin-top:10px; padding:10px; background:#dcfce7; color:#166534; border-radius:6px; font-size:0.85rem; border:1px solid #bbf7d0;">
+                                    <span .innerHTML=${i18n.t('statusVerified')}></span>
+                                </div>
+                            ` : ''}
+
+                            ${this.integrityStatus === 'fail' ? html`
+                                <div style="margin-top:10px; padding:10px; background:#fee2e2; color:#991b1b; border-radius:6px; font-size:0.85rem; border:1px solid #fecaca;">
+                                    <span .innerHTML=${i18n.t('statusMismatch')}></span>
+                                </div>
+                            ` : ''}
                         </div>
-
-                        ${this.integrityStatus === 'success' ? html`
-                            <div style="margin-top:10px; padding:10px; background:#dcfce7; color:#166534; border-radius:6px; font-size:0.85rem; border:1px solid #bbf7d0;">
-                                <span .innerHTML=${i18n.t('statusVerified')}></span>
-                            </div>
-                        ` : ''}
-
-                        ${this.integrityStatus === 'fail' ? html`
-                            <div style="margin-top:10px; padding:10px; background:#fee2e2; color:#991b1b; border-radius:6px; font-size:0.85rem; border:1px solid #fecaca;">
-                                <span .innerHTML=${i18n.t('statusMismatch')}></span>
-                            </div>
-                        ` : ''}
-                    </div>
+                    ` : ''}
 
                     <button @click=${() => this.closeVerify()}
                             style="margin-top: 20px; width: 100%; padding: 12px; background: transparent; color: #4b5563; border: 1px solid #e5e7eb; border-radius: 8px; font-weight: 500; cursor: pointer;">

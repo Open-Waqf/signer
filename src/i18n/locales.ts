@@ -116,6 +116,8 @@ export const resources = {
         footerOff: "OFF: Page footer removed.",
         auditOn: "ON: A verification page will be added to the end.",
         auditOff: "OFF: Audit trail removed.",
+        linkDetected: "Verification Link Detected",
+        linkDetectedMsg: "Please select or drop the PDF document to verify against ID:",
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -221,6 +223,8 @@ export const resources = {
         footerOff: "معطل: تم إزالة تذييل الصفحة.",
         auditOn: "مفعل: سيتم إضافة صفحة التحقق في نهاية المستند.",
         auditOff: "معطل: تم إزالة سجل التدقيق.",
+        linkDetected: "تم اكتشاف رابط تحقق",
+        linkDetectedMsg: "يرجى تحديد أو سحب ملف PDF للتحقق من المعرف:",
     },
     fr: {
         appTitle: "Open Signer",
@@ -326,6 +330,8 @@ export const resources = {
         footerOff: "DÉSACTIVÉ : Pied de page supprimé.",
         auditOn: "ACTIVÉ : Une page de vérification sera ajoutée à la fin.",
         auditOff: "DÉSACTIVÉ : Journal d'audit supprimé.",
+        linkDetected: "Lien de vérification détecté",
+        linkDetectedMsg: "Veuillez sélectionner ou déposer le document PDF pour vérifier l'ID :",
     }
 } as const;
 
