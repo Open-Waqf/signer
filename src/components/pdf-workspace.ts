@@ -91,6 +91,13 @@ export class PdfWorkspace extends LitElement {
         this.showProofModal = false;
     }
 
+    copyHash() {
+        if (this.lastSavedHash) {
+            navigator.clipboard.writeText(this.lastSavedHash);
+            this.toast((i18n.t('linkCopied') as string) || 'Copied to clipboard!');
+        }
+    }
+
     static styles = css`
         :host {
             height: 100vh;
@@ -779,13 +786,11 @@ export class PdfWorkspace extends LitElement {
 
             this.isDirty = false;
 
-            const hasIdentity = this.annotations.some(a => a.type === 'identity');
+            this.lastSavedId = finalDocId;
+            this.lastSavedHash = finalHash;
+            this.showProofModal = true;
 
-            if (hasIdentity) {
-                this.lastSavedId = finalDocId;
-                this.lastSavedHash = finalHash;
-                this.showProofModal = true;
-            } else if (showToast) {
+            if (showToast) {
                 this.toast(((i18n.t('savedMsg') as string) || 'Saved') as string);
             }
         } catch (e: any) {
@@ -1083,36 +1088,46 @@ export class PdfWorkspace extends LitElement {
             ${this.showProofModal ? html`
                 <div class="modal-overlay">
                     <div class="modal" style="text-align:center;">
-                        <h2 style="color:#16a34a; margin-top:0;">
-                            ${i18n.t('proveIdentityTitle') || 'Document Saved!'}</h2>
-                        <p style="color:#4b5563; font-size:0.95rem;">
-                            ${i18n.t('proveIdentityMsg') || 'Send a verification receipt to the receiver:'}
+                        <div style="width:50px; height:50px; background:#dcfce7; color:#16a34a; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 15px;">
+                            ✓
+                        </div>
+                        <h2 style="color:#166534; margin-top:0; font-size: 1.5rem;">
+                            ${i18n.t('savedMsg') || 'Document Saved!'}
+                        </h2>
+                        <p style="color:#4b5563; font-size:0.95rem; margin-bottom: 20px;">
+                            ${i18n.t('proveIdentityMsg') || 'Save this receipt to prove the document is authentic later.'}
                         </p>
 
-                        <div style="background:#f3f4f6; padding:12px; margin:15px 0; border-radius:8px; text-align:left;">
-                            <div style="font-size:0.8rem; color:#6b7280; margin-bottom:4px;">
-                                ${i18n.t('internalRefLabel')}
+                        <div style="background:#f9fafb; padding:15px; margin:15px 0; border-radius:8px; border: 1px solid #e5e7eb; text-align:left;">
+                            <div style="font-size:0.8rem; color:#6b7280; margin-bottom:4px; font-weight: 600;">
+                                ${i18n.t('internalRefLabel') || 'Internal Ref ID:'}
                             </div>
-                            <div style="font-family:monospace; font-size:1rem; color:#1f2937; margin-bottom:12px;">
+                            <div style="font-family:monospace; font-size:1.1rem; color:#1f2937; margin-bottom:15px;">
                                 ${this.lastSavedId}
                             </div>
 
-                            <div style="font-size:0.8rem; color:#6b7280; margin-bottom:4px;">
-                                ${i18n.t('integrityHashLabel')}
+                            <div style="font-size:0.8rem; color:#6b7280; margin-bottom:4px; font-weight: 600;">
+                                ${i18n.t('integrityHashLabel') || '🔐 Strict Integrity Hash:'}
                             </div>
-                            <div style="font-family:monospace; font-size:0.75rem; color:#1f2937; word-break:break-all; background:#e5e7eb; padding:4px; border-radius:4px;">
+                            <div style="font-family:monospace; font-size:0.75rem; color:#1f2937; word-break:break-all; background:#e5e7eb; padding:8px; border-radius:6px;">
                                 ${this.lastSavedHash}
                             </div>
                         </div>
 
-                        <button @click=${this.sendProofEmail} class="primary"
-                                style="width:100%; margin-bottom:12px; justify-content:center; padding:12px;">
-                            ${i18n.t('sendProofEmail') || '📧 Send Proof Email'}
-                        </button>
+                        <div style="display:flex; gap:10px; margin-bottom:12px;">
+                            <button @click=${this.copyHash} class="primary"
+                                    style="flex:1; justify-content:center; padding:12px; background:#4f46e5;">
+                                📋 Copy Hash
+                            </button>
+                            <button @click=${this.sendProofEmail} class="primary"
+                                    style="flex:1; justify-content:center; padding:12px;">
+                                ${i18n.t('sendProofEmail') || 'Email'}
+                            </button>
+                        </div>
 
                         <button @click=${() => this.showProofModal = false}
-                                style="width:100%; justify-content:center; padding:12px; background:transparent; color:#6b7280; border:1px solid #e5e7eb;">
-                            ${i18n.t('justDownload') || 'Close'}
+                                style="width:100%; justify-content:center; padding:12px; background:transparent; color:#4b5563; border:1px solid #d1d5db; font-weight: 500;">
+                            ${i18n.t('close') || 'Close'}
                         </button>
                     </div>
                 </div>
