@@ -118,6 +118,7 @@ export const resources = {
         auditOff: "OFF: Audit trail removed.",
         linkDetected: "Verification Link Detected",
         linkDetectedMsg: "Please select or drop the PDF document to verify against ID:",
+        applyToAll: "Apply to all pages",
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -225,6 +226,7 @@ export const resources = {
         auditOff: "معطل: تم إزالة سجل التدقيق.",
         linkDetected: "تم اكتشاف رابط تحقق",
         linkDetectedMsg: "يرجى تحديد أو سحب ملف PDF للتحقق من المعرف:",
+        applyToAll: "تطبيق على جميع الصفحات",
     },
     fr: {
         appTitle: "Open Signer",
@@ -332,6 +334,7 @@ export const resources = {
         auditOff: "DÉSACTIVÉ : Journal d'audit supprimé.",
         linkDetected: "Lien de vérification détecté",
         linkDetectedMsg: "Veuillez sélectionner ou déposer le document PDF pour vérifier l'ID :",
+        applyToAll: "Appliquer à toutes les pages",
     }
 } as const;
 

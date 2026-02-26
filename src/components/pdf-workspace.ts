@@ -285,7 +285,7 @@ export class PdfWorkspace extends LitElement {
 
         .draggable img {
             width: 100%;
-            height: 100%;
+            height: auto;
             display: block;
             pointer-events: none;
         }
@@ -549,6 +549,41 @@ export class PdfWorkspace extends LitElement {
         void this.renderPage();
     }
 
+    applyToAllPages(id: string) {
+        this.snapshot();
+        const sourceAnn = this.annotations.find(a => a.id === id);
+        if (!sourceAnn) return;
+
+        const newAnnotations: Annotation[] = [];
+
+        for (let p = 0; p < this.totalPages; p++) {
+            if (p === sourceAnn.page) continue;
+
+            // Check if an identical annotation already exists here to prevent stacking
+            const exists = this.annotations.some(a =>
+                a.page === p &&
+                a.type === sourceAnn.type &&
+                Math.abs(a.xPct - sourceAnn.xPct) < 0.01 &&
+                Math.abs(a.yPct - sourceAnn.yPct) < 0.01 &&
+                a.data === sourceAnn.data
+            );
+
+            if (!exists) {
+                newAnnotations.push({
+                    ...sourceAnn,
+                    id: Math.random().toString(36).slice(2, 11),
+                    page: p
+                });
+            }
+        }
+
+        if (newAnnotations.length > 0) {
+            this.annotations = [...this.annotations, ...newAnnotations];
+            this.isDirty = true;
+            this.toast((i18n.t('savedMsg') as string || `Applied to ${newAnnotations.length} page(s)`));
+        }
+    }
+
     addAnnotation(type: AnnotationType, data: string, aspectRatio = 1) {
         this.snapshot();
         const pageRect = this.container.getBoundingClientRect();
@@ -671,7 +706,7 @@ export class PdfWorkspace extends LitElement {
         } else if (this.isResizing) {
             const mouseRelX = clientX - rect.left;
             const newWidthPx = Math.max(mouseRelX - ann.xPct * rect.width, rect.width * 0.05);
-            const nextWidthPct = newWidthPx / rect.width;
+            const nextWidthPct = Math.min(0.8, newWidthPx / rect.width);
             if (Math.abs(nextWidthPct - (ann.widthPct || 0)) > 0.0005) {
                 takeSnapshotIfNeeded();
                 this.interactionChanged = true;
@@ -1015,6 +1050,23 @@ export class PdfWorkspace extends LitElement {
                                                     e.stopPropagation();
                                                     this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
                                                 }}>A+
+                                                </button>
+                                                <div style="width:1px; background:#444; margin:0 2px;"></div>
+                                                <button @click=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.applyToAllPages(ann.id);
+                                                }} title="${i18n.t('applyToAll') || 'Apply to all pages'}">📄
+                                                </button>
+                                            </div>
+                                        ` : ''}
+
+                                        ${isSelected && !isText ? html`
+                                            <div class="style-popup" @mousedown=${(e: Event) => e.stopPropagation()}
+                                                 @touchstart=${(e: Event) => e.stopPropagation()}>
+                                                <button @click=${(e: Event) => {
+                                                    e.stopPropagation();
+                                                    this.applyToAllPages(ann.id);
+                                                }} title="${i18n.t('applyToAll') || 'Apply to all pages'}">📄
                                                 </button>
                                             </div>
                                         ` : ''}
