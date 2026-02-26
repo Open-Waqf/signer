@@ -9,6 +9,7 @@ import {Capacitor} from '@capacitor/core';
 import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
 import {pdfEngine} from './lib/pdf-engine';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -196,6 +197,31 @@ export class AppRoot extends LitElement {
         }
     }
 
+    async loadSamplePdf() {
+        this.isLoading = true;
+        try {
+            // 1. Generate a blank A4 PDF in-memory
+            const pdfDoc = await PDFDocument.create();
+            const page = pdfDoc.addPage([595.28, 841.89]);
+            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+            // 2. Draw some placeholder text
+            page.drawText('Sample Document', { x: 50, y: 750, size: 24, font, color: rgb(0, 0.33, 0.71) });
+            page.drawText('Use the tools above to add your signature, initials, or stamp.', { x: 50, y: 700, size: 12, font });
+            page.drawText('When you save, this document will be cryptographically hashed.', { x: 50, y: 680, size: 12, font });
+
+            // 3. Save to bytes and load into workspace
+            const pdfBytes = await pdfDoc.save();
+            this.mode = 'workspace';
+            await this.updateComplete;
+            await this.workspace.loadPdf(pdfBytes, 'sample_document.pdf');
+        } catch (e) {
+            this.showToast('Error generating sample PDF');
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
     async openFile() {
         try {
             const {data, name} = await fileService.openPdf();
@@ -330,6 +356,13 @@ export class AppRoot extends LitElement {
                         <p class="sub" style="margin: 12px 0 0 0; font-size: 0.85rem;">
                             ${this.verifyMode ? (i18n.t('dropHintVerify') || 'Drop a signed document here to check its digital ID') : i18n.t('dragDropHint')}
                         </p>
+
+                        ${!this.verifyMode ? html`
+                            <button @click=${this.loadSamplePdf}
+                                    style="margin-top: 15px; background: transparent; color: #2563eb; border: none; text-decoration: underline; cursor: pointer; font-size: 0.9rem; font-weight: 500; box-shadow: none;">
+                                ${i18n.t('trySample') || 'No file? Try with a sample PDF'}
+                            </button>
+                        ` : ''}
                     </div>
 
                     <div style="margin-top: 16px; font-size: 0.8rem; color: #10b981; font-weight: 500; background: #ecfdf5; padding: 6px 12px; border-radius: 20px;">
@@ -361,7 +394,38 @@ export class AppRoot extends LitElement {
                     </button>
                 </div>
 
-                <div style="height: 20px; flex-shrink: 0;"></div>
+                ${!this.verifyMode ? html`
+                    <div style="margin-top: 40px; text-align: left; width: 90%; max-width: 800px; margin-left: auto; margin-right: auto; flex-shrink: 0;">
+                        <h3 style="text-align: center; color: #374151; margin-bottom: 24px; font-weight: 600;">
+                            ${i18n.t('howItWorks') || 'How it Works'}
+                        </h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border: 1px solid #f3f4f6;">
+                                <div style="font-size: 32px; margin-bottom: 12px;">✍️</div>
+                                <h4 style="margin: 0 0 8px 0; color: #1f2937; font-size: 1.05rem;">
+                                    ${i18n.t('step1Title') || '1. Sign Offline'}</h4>
+                                <p style="margin: 0; font-size: 0.85rem; color: #6b7280; line-height: 1.4;">
+                                    ${i18n.t('step1Desc') || 'Select a PDF. It never leaves your device.'}</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border: 1px solid #f3f4f6;">
+                                <div style="font-size: 32px; margin-bottom: 12px;">🔐</div>
+                                <h4 style="margin: 0 0 8px 0; color: #1f2937; font-size: 1.05rem;">
+                                    ${i18n.t('step2Title') || '2. Save & Share'}</h4>
+                                <p style="margin: 0; font-size: 0.85rem; color: #6b7280; line-height: 1.4;">
+                                    ${i18n.t('step2Desc') || 'Export your signed document and get a secure Verification Receipt.'}</p>
+                            </div>
+                            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border: 1px solid #f3f4f6;">
+                                <div style="font-size: 32px; margin-bottom: 12px;">🛡️</div>
+                                <h4 style="margin: 0 0 8px 0; color: #1f2937; font-size: 1.05rem;">
+                                    ${i18n.t('step3Title') || '3. Verify Integrity'}</h4>
+                                <p style="margin: 0; font-size: 0.85rem; color: #6b7280; line-height: 1.4;">
+                                    ${i18n.t('step3Desc') || 'Anyone can drop the file here to prove it wasn\'t tampered with.'}</p>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+
+                <div style="height: 40px; flex-shrink: 0;"></div>
             </div>
 
             <pdf-workspace
