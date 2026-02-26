@@ -28,17 +28,18 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Check Translations (i18n)
+        run: npm run check-i18n
+
       # 🛑 SAFETY CHECK START 🛑
-      # We install browsers and run tests BEFORE building.
-      # If this fails, the workflow stops here. The broken code is NEVER deployed.
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
-      - name: Run Safety Tests
+      - name: Run Safety Tests (E2E)
         run: npx playwright test
       # 🛑 SAFETY CHECK END 🛑
 
-      - name: Build (Clean Up)
+      - name: Build Production
         # This only runs if tests passed!
         run: npm run build
 

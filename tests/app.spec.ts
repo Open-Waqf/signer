@@ -15,25 +15,23 @@ test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
         await expect(page.getByText(/Secure/i)).toBeVisible();
     });
 
-    test('2. Entry Point: Deep Link', async ({page}) => {
+    test('2. Entry Point: Deep Link (Pending File State)', async ({page}) => {
         const testId = 'TEST-LINK-123';
         await page.goto(`/?id=${testId}`);
         const dialog = page.locator('dialog#verify-dialog');
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByText(/Record.*Found/i)).toBeVisible();
+
+        // 🟢 FIX: We no longer falsely show "Record Found". We securely show "Link Detected"
+        await expect(dialog.getByText(/Link Detected/i)).toBeVisible();
     });
 
     test('Scenario 3: Verify Interface Logic', async ({page}) => {
         await page.goto('/');
-
-        // Click the verify button
         await page.getByRole('button', {name: /Verify/i}).click();
-
-        // Check UI switch
         await expect(page.getByText(/Select PDF/i)).toBeVisible();
     });
 
-    // --- GROUP 2: THE WORKFLOW (FIXED) ---
+    // --- GROUP 2: THE WORKFLOW ---
 
     test('4. Workflow A: Alice Signs & Saves (Happy Path)', async ({page}) => {
         const pdfBuffer = await generateTestPDF();
@@ -55,13 +53,11 @@ test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
         await expect(workspace).toBeVisible();
 
         // 3. Open Signature Modal
-        // Note: We use .first() because "Sign" appears in the drop card and the toolbar
         const signBtn = page.getByRole('button', {name: /sign/i}).first();
         await expect(signBtn).toBeVisible();
         await signBtn.click();
 
         // 4. Draw Signature
-        // We look for the ID we added earlier: #signature-pad
         const canvas = page.locator('canvas#signature-pad');
         await expect(canvas).toBeVisible();
 
@@ -73,12 +69,11 @@ test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
             await page.mouse.up();
         }
 
-        // 🟢 FIX IS HERE: Click "Done" (matches your locales.ts)
         await page.getByRole('button', {name: 'Done'}).click();
 
         // 5. Save & Download
         const downloadPromise = page.waitForEvent('download');
-        await page.getByRole('button', {name: /save|download/i}).click();
+        await page.getByRole('button', {name: /save/i}).click();
         const download = await downloadPromise;
 
         const stream = await download.createReadStream();
@@ -87,6 +82,13 @@ test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
         aliceSignedBuffer = Buffer.concat(chunks);
 
         expect(aliceSignedBuffer.length).toBeGreaterThan(0);
+
+        await expect(page.getByRole('heading', { name: /Document Saved!/i })).toBeVisible();
+        await expect(page.getByText(/Internal Ref ID/i)).toBeVisible();
+        await expect(page.getByText(/Integrity Hash/i)).toBeVisible();
+
+        // Close the receipt modal
+        await page.getByRole('button', {name: /Close/i}).click();
     });
 
     test('5. Workflow B: Handover (Bob Signs Alice\'s File)', async ({page}) => {
@@ -103,19 +105,13 @@ test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
             buffer: aliceSignedBuffer!,
         });
 
-        // 2. Assert Modal Appears
-        // Check for the heading
+        // 2. Assert Handover Modal Appears and Dismiss it
         await expect(page.getByRole('heading', {name: /Previous signature/i})).toBeVisible();
-
-        // 🟢 FIX START: Dismiss the "Handover" Modal
-        // We must click "Skip / Close" to reveal the toolbar
         await page.getByRole('button', {name: /Skip|Close/i}).click();
-        // 🟢 FIX END
 
-        // 3. Bob Signs (Now the toolbar is clickable!)
+        // 3. Bob Signs
         await page.getByRole('button', {name: /sign/i}).first().click();
 
-        // Draw Signature
         const canvas = page.locator('canvas#signature-pad');
         await expect(canvas).toBeVisible();
         const box = await canvas.boundingBox();
@@ -126,14 +122,16 @@ test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
             await page.mouse.up();
         }
 
-        // Click "Done"
         await page.getByRole('button', {name: 'Done'}).click();
 
         // 4. Bob Saves
         const downloadPromise = page.waitForEvent('download');
-        await page.getByRole('button', {name: /save|download/i}).click();
+        await page.getByRole('button', {name: /save/i}).click();
         const download = await downloadPromise;
         expect(await download.path()).toBeTruthy();
+
+        await expect(page.getByRole('heading', { name: /Document Saved!/i })).toBeVisible();
+        await page.getByRole('button', {name: /Close/i}).click();
     });
 
     test('6. Verification: Green Success State', async ({page}) => {
@@ -141,7 +139,6 @@ test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
         await page.goto('/');
         await page.getByRole('button', {name: /Verify/i}).click();
 
-        // 🟢 FIX: Verify Mode uses the same file chooser logic
         const fileChooserPromise = page.waitForEvent('filechooser');
         await page.getByRole('button', {name: /Select PDF|Select File/i}).click();
         const fileChooser = await fileChooserPromise;
@@ -151,15 +148,13 @@ test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
             buffer: aliceSignedBuffer!,
         });
 
-        await expect(page.getByText(/Record Found|Verified/i)).toBeVisible();
+        await expect(page.getByText(/Record Found/i)).toBeVisible();
     });
 
     // --- GROUP 3: PLATFORM CHECKS ---
     test('7. Responsive: Mobile Viewport Check', async ({page}) => {
         await page.setViewportSize({width: 390, height: 844});
         await page.goto('/');
-        // Ensure "Sign Mode" button is visible (it's inside the drop card)
         await expect(page.getByText(/Sign/i).first()).toBeVisible();
     });
-
 });
