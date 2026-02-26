@@ -179,7 +179,7 @@ export class PdfEngine {
 
         const events = [`Document Loaded`];
         if (validationLog) {
-            events.push(`🛡️ SECURITY: ${validationLog}`);
+            events.push(`SECURITY: ${validationLog}`);
         }
         // 2. Log Annotations with Details
         annotations.forEach((a, i) => {
@@ -189,7 +189,7 @@ export class PdfEngine {
             if (a.type === 'identity') {
                 const rawData = a.data || '';
                 const email = rawData.split(':').pop()?.trim() || rawData;
-                desc = `🆔 IDENTITY CLAIM: ${email}`;
+                desc = `IDENTITY CLAIM: ${email}`;
             }
 
             events.push(desc);
@@ -293,8 +293,8 @@ export class PdfEngine {
             const pdfDoc = await PDFDocument.load(fileData, {updateMetadata: false});
             const keywords = pdfDoc.getKeywords();
             if (!keywords) return null;
-            const match = keywords.split(' ').find(k => k.startsWith('ref:'));
-            return match ? match.replace('ref:', '') : null;
+            const match = keywords.match(/ref:([A-Za-z0-9]+)/i);
+            return match ? match[1] : null;
         } catch (e) {
             console.error("Read Error", e);
             return null;
