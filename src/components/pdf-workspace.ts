@@ -590,7 +590,7 @@ export class PdfWorkspace extends LitElement {
             this.isVerified = true;
             setTimeout(() => {
                 this.showHandoverModal = false;
-                this.toast("✅ Integrity Verified!");
+                this.toast(i18n.t('integrityVerified'));
             }, 1500);
         } else {
             this.handoverResult = 'fail';
@@ -649,7 +649,8 @@ export class PdfWorkspace extends LitElement {
         if (newAnnotations.length > 0) {
             this.annotations = [...this.annotations, ...newAnnotations];
             this.isDirty = true;
-            this.toast((i18n.t('savedMsg') as string || `Applied to ${newAnnotations.length} page(s)`));
+            const msg = i18n.t('appliedToPages').replace('{count}', newAnnotations.length.toString());
+            this.toast(msg);
         }
     }
 
@@ -912,8 +913,7 @@ export class PdfWorkspace extends LitElement {
                 this.lastSaved = await fileService.savePdf(filename, finalBytes);
                 if (Capacitor.isNativePlatform() && showToast) {
                     setTimeout(() => {
-                        const msg = (i18n.t('exportingFile') as string) || "📂 Exporting file...";
-                        this.toast(msg);
+                        this.toast(i18n.t('exportingFile'));
                         fileService.sharePdf(this.lastSaved!, this.lastSavedBytes!);
                     }, 200); // Short delay to ensure UI is ready
                 }
@@ -931,9 +931,9 @@ export class PdfWorkspace extends LitElement {
         } catch (e: any) {
             console.error(e);
             if (e.message === 'OOM') {
-                this.toast("⚠️ Device out of memory. Try a smaller file.");
+                this.toast(i18n.t('outOfMemory'));
             } else {
-                this.toast("❌ Error Saving: " + (e.message || "Unknown error"));
+                this.toast(`${i18n.t('errorSaving')}: ${e.message || "Unknown"}`);
             }
         } finally {
             this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
@@ -1284,7 +1284,7 @@ export class PdfWorkspace extends LitElement {
                         <div style="display:flex; gap:10px; margin-bottom:12px;">
                             <button @click=${this.copyHash} class="primary"
                                     style="flex:1; justify-content:center; padding:12px; background:#4f46e5;">
-                                📋 Copy Hash
+                                ${i18n.t('copyHash')}
                             </button>
                             <button @click=${this.sendProofEmail} class="primary"
                                     style="flex:1; justify-content:center; padding:12px;">

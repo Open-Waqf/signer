@@ -326,7 +326,7 @@ export class AppRoot extends LitElement {
                     <button
                             @click=${() => this.updateSW && this.updateSW(true)}
                             style="margin-left:10px; padding:4px 8px; font-size:0.8rem; background:white; color:black; border:none; border-radius:4px;">
-                        Reload
+                        ${i18n.t('reload')}
                     </button>
                 </div>
             ` : ''}

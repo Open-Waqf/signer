@@ -132,6 +132,13 @@ export const resources = {
         diagnostics: "System Diagnostics",
         online: "Online",
         offline: "Offline Mode",
+        integrityVerified: "Integrity Verified!",
+        appliedToPages: "Applied to {count} page(s)",
+        outOfMemory: "Device out of memory. Try a smaller file.",
+        errorSaving: "Error Saving",
+        copyHash: "📋 Copy Hash",
+        email: "Email",
+        reload: "Reload"
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -253,6 +260,13 @@ export const resources = {
         diagnostics: "تشخيصات النظام",
         online: "متصل",
         offline: "وضع عدم الاتصال",
+        integrityVerified: "تم التحقق من السلامة!",
+        appliedToPages: "تم التطبيق على {count} من الصفحات",
+        outOfMemory: "ذاكرة الجهاز ممتلئة. حاول استخدام ملف أصغر.",
+        errorSaving: "خطأ في الحفظ",
+        copyHash: "📋 نسخ البصمة",
+        email: "بريد إلكتروني",
+        reload: "تحديث"
     },
     fr: {
         appTitle: "Open Signer",
@@ -369,11 +383,18 @@ export const resources = {
         step2Desc: "Exportez votre document signé et obtenez un reçu de vérification.",
         step3Title: "3. Vérifiez l'intégrité",
         step3Desc: "Déposez le fichier ici pour prouver qu'il n'a pas été falsifié.",
-        ecurityModel: "Modèle de Sécurité / Amanah",
-        securityModelText: "Open Waqf Signer utilise une architecture locale 'Zero-Trust'. Vos documents ne quittent jamais votre appareil. Lors de l'enregistrement, l'application calcule un hachage cryptographique SHA-256 de qualité militaire à partir des octets du fichier, entièrement dans votre navigateur. Ce hachage fait office d'empreinte numérique infalsifiable pour prouver l'intégrité du document ultérieurement.",
-        diagnostics: "Diagnostics du Système",
+        securityModel: "Modèle de Sécurité",
+        securityModelText: "Open Signer utilise une architecture locale Zero-Trust. Vos documents ne quittent jamais votre appareil. Lors de l'enregistrement, l'application calcule un hachage cryptographique SHA-256 de qualité militaire des octets du fichier entièrement dans votre navigateur. Ce hachage agit comme une empreinte numérique infalsifiable pour prouver l'intégrité du document plus tard.",
+        diagnostics: "Diagnostics Système",
         online: "En ligne",
-        offline: "Mode Hors-ligne"
+        offline: "Mode hors ligne",
+        integrityVerified: "Intégrité vérifiée !",
+        appliedToPages: "Appliqué à {count} page(s)",
+        outOfMemory: "Mémoire insuffisante. Essayez un fichier plus petit.",
+        errorSaving: "Erreur d'enregistrement",
+        copyHash: "📋 Copier le hachage",
+        email: "E-mail",
+        reload: "Recharger"
     }
 } as const;
 
