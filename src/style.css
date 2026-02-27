@@ -38,19 +38,28 @@
     box-sizing: border-box;
 }
 
-body {
+html, body {
+    width: 100%;
+    height: 100%;
     margin: 0;
     padding: 0;
-    width: 100vw;
-    height: 100vh;
+}
+
+body {
     overflow: hidden;
     background: var(--bg-app);
     color: var(--text-main);
+    display: flex;
+    flex-direction: column;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-.hidden {
-    display: none !important;
+/* Allow the root component to fill the body */
+app-root {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 /* Layout Utilities used by App Root */
@@ -67,9 +76,13 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    height: 100vh;
+    height: 100%; /* ✨ FIX: Changed from 100vh to 100% so it respects body padding */
     padding: 0;
     overflow-y: auto;
+}
+
+.hidden {
+    display: none !important;
 }
 
 .drop-card {

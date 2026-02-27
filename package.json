@@ -26,6 +26,7 @@
     "@capacitor/core": "^8.0.2",
     "@capacitor/filesystem": "^8.1.0",
     "@capacitor/share": "^8.0.0",
+    "@capacitor/status-bar": "8.0.1",
     "lit": "3.3.2",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "5.4.624",

@@ -11,6 +11,7 @@ import {AppConfig} from './config';
 import {pdfEngine} from './lib/pdf-engine';
 import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import {ICONS} from './lib/icons';
+import {StatusBar, Style} from '@capacitor/status-bar';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -29,6 +30,7 @@ export class AppRoot extends LitElement {
     @state() showDiagnostics = false;
     private logoTapCount = 0;
     private logoTapTimeout: any = null;
+    @state() showExitConfirm = false;
 
     private updateSW: ((reload: boolean) => void) | undefined;
 
@@ -70,6 +72,10 @@ export class AppRoot extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
+        if (Capacitor.isNativePlatform()) {
+            StatusBar.setStyle({style: Style.Light}).catch(console.error);
+            StatusBar.setBackgroundColor({color: '#ffffff'}).catch(console.error);
+        }
         window.addEventListener('lang-changed', () => this.requestUpdate());
         this.setupPWA();
 
@@ -99,7 +105,7 @@ export class AppRoot extends LitElement {
                     this.updateAvailable = true;
                 },
                 onOfflineReady() {
-                    console.log("App ready for offline use.");
+                    console.log(i18n.t('appReadyOffline'));
                 },
             });
         }
@@ -191,14 +197,14 @@ export class AppRoot extends LitElement {
             const pdfDoc = await PDFDocument.create();
             const page = pdfDoc.addPage([595.28, 841.89]);
             const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-            page.drawText('Sample Document', {x: 50, y: 750, size: 24, font, color: rgb(0, 0.33, 0.71)});
-            page.drawText('Use the tools above to add your signature, initials, or stamp.', {
+            page.drawText(i18n.t('sampleDocTitle'), {x: 50, y: 750, size: 24, font, color: rgb(0, 0.33, 0.71)});
+            page.drawText(i18n.t('sampleDocText1'), {
                 x: 50,
                 y: 700,
                 size: 12,
                 font
             });
-            page.drawText('When you save, this document will be cryptographically hashed.', {
+            page.drawText(i18n.t('sampleDocText2'), {
                 x: 50,
                 y: 680,
                 size: 12,
@@ -210,7 +216,7 @@ export class AppRoot extends LitElement {
             await this.updateComplete;
             await this.workspace.loadPdf(pdfBytes, 'sample_document.pdf');
         } catch (e) {
-            this.showToast('Error generating sample PDF');
+            this.showToast(i18n.t('errorSamplePdf'));
         } finally {
             this.isLoading = false;
         }
@@ -260,11 +266,8 @@ export class AppRoot extends LitElement {
     }
 
     handleExitWorkspace() {
-        if (this.workspace.isDirty) {
-            if (confirm(i18n.t('exitConfirm'))) {
-                this.workspace.reset();
-                this.mode = 'home';
-            }
+        if (this.workspace && this.workspace.isDirty) {
+            this.showExitConfirm = true;
         } else {
             this.workspace.reset();
             this.mode = 'home';
@@ -400,10 +403,9 @@ export class AppRoot extends LitElement {
 
                     <div class="info-panel">
                         <a href="https://github.com/open-waqf/signer" target="_blank"
-                           style="color: var(--primary); display: block; margin-bottom: 4px;">View Source Code on GitHub
-                            ↗</a>
-                        <a href="https://github.com/open-waqf/signer/blob/main/LICENSE" target="_blank"
-                           style="color: var(--primary);">MIT License ↗</a>
+                           style="color: var(--primary); display: block; margin-bottom: 4px;">
+                            ${i18n.t('viewSourceCode')} ↗
+                        </a>
                     </div>
 
                     <button class="btn btn-danger" style="width: 100%; margin-top: 15px;" @click=${this.clearAppCache}>
@@ -422,11 +424,14 @@ export class AppRoot extends LitElement {
                         <h2 style="margin-top:0; display:flex; align-items:center; gap:8px;">${ICONS.cog}
                             ${i18n.t('diagnostics')}</h2>
                         <div class="diagnostics-panel">
-                            <div>App Version: ${packageJson.version}</div>
-                            <div>Platform: ${Capacitor.isNativePlatform() ? 'Native' : 'Web'}</div>
-                            <div>User Agent: ${navigator.userAgent}</div>
-                            <div>Window Size: ${window.innerWidth}x${window.innerHeight}</div>
-                            <div>Connection: ${navigator.onLine ? 'Online' : 'Offline'}</div>
+                            <div>${i18n.t('appVersion')}: ${packageJson.version}</div>
+                            <div>${i18n.t('platform')}:
+                                ${Capacitor.isNativePlatform() ? i18n.t('platformNative') : i18n.t('platformWeb')}
+                            </div>
+                            <div>${i18n.t('userAgent')}: ${navigator.userAgent}</div>
+                            <div>${i18n.t('windowSize')}: ${window.innerWidth}x${window.innerHeight}</div>
+                            <div>${i18n.t('connection')}: ${navigator.onLine ? i18n.t('online') : i18n.t('offline')}
+                            </div>
                         </div>
                         <div style="display: flex; justify-content: center; margin-top: 15px;">
                             <button class="btn" style="width:100%;" @click=${() => this.showDiagnostics = false}>
@@ -474,7 +479,7 @@ export class AppRoot extends LitElement {
                                        @input="${(e: any) => {
                                            this.verifyHashInput = e.target.value;
                                            this.integrityStatus = 'idle';
-                                       }}" placeholder="Paste Hash Here...">
+                                       }}" placeholder="${i18n.t('pasteHashPlaceholder')}">
                                 <button class="btn btn-primary" @click="${this.checkHash}">${i18n.t('verifyBtn')}
                                 </button>
                             </div>
@@ -491,6 +496,32 @@ export class AppRoot extends LitElement {
                     <button class="btn" style="width: 100%;" @click=${this.closeVerify}>${i18n.t('close')}</button>
                 </div>
             </dialog>
+
+            ${this.showExitConfirm ? html`
+                <div class="modal-overlay" @click=${() => this.showExitConfirm = false}>
+                    <div class="modal-card center" @click=${(e: Event) => e.stopPropagation()}>
+                        <div style="color:#ef4444; margin-bottom:15px; display:flex; justify-content:center;">
+                            <div style="padding:15px; background:#fee2e2; border-radius:50%;">${ICONS.alert}</div>
+                        </div>
+                        <h2 style="margin-top:0; color: var(--text-main);">
+                            ${i18n.t('exitConfirmTitle') || 'Unsaved Changes'}</h2>
+                        <p style="color:var(--text-sub); font-size:0.95rem; margin-bottom:20px;">
+                            ${i18n.t('exitConfirmText') || 'You have unsaved changes. Are you sure you want to go back? Your edits will be lost.'}
+                        </p>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn" style="flex:1;" @click=${() => this.showExitConfirm = false}>
+                                ${i18n.t('cancel') || 'Cancel'}
+                            </button>
+                            <button class="btn btn-danger" style="flex:1;" @click=${() => {
+                                this.showExitConfirm = false;
+                                this.workspace.reset();
+                                this.mode = 'home';
+                            }}>${i18n.t('exitBtn') || 'Exit'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
         `;
     }
 }

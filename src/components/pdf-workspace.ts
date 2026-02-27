@@ -75,7 +75,7 @@ export class PdfWorkspace extends LitElement {
             show: true,
             title: i18n.t('identityPrompt') || 'Enter your email:',
             value: savedEmail,
-            placeholder: 'email@example.com',
+            placeholder: i18n.t('emailPlaceholder') || 'email@example.com',
             isIdentity: true
         };
     }
@@ -115,7 +115,8 @@ export class PdfWorkspace extends LitElement {
 
     static styles = [sharedStyles, css`
         :host {
-            height: 100vh;
+            height: 100%;
+            flex: 1;
             display: flex;
             flex-direction: column;
             background: #e5e7eb;
@@ -164,8 +165,15 @@ export class PdfWorkspace extends LitElement {
             display: flex;
             gap: 8px;
             align-items: center;
-            flex-wrap: wrap; /* ✨ Allows wrapping on small screens */
-            justify-content: flex-start;
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none
+            padding-bottom: 6px;
+        }
+
+        .toolbar-row::-webkit-scrollbar {
+            display: none;
         }
 
         .toolbar-row.secondary {
@@ -498,7 +506,7 @@ export class PdfWorkspace extends LitElement {
             this.includeAudit = false;
         }
         this.currentPage = 1;
-        this.scale = 1.0;
+        this.scale = window.innerWidth < 768 ? 0.55 : 1.0;
         this.annotations = [];
         this.selectedId = null;
         this.isDirty = false;
@@ -607,7 +615,7 @@ export class PdfWorkspace extends LitElement {
             show: true,
             title: i18n.t('editText') || 'Edit text:',
             value: currentText || '',
-            placeholder: 'Type here...',
+            placeholder: i18n.t('typeHerePlaceholder') || 'Type here...',
             isIdentity: false,
             targetId: id
         };
@@ -871,10 +879,19 @@ export class PdfWorkspace extends LitElement {
         return html`
             <header>
                 <div class="brand">
-                    <button class="btn" style="border:none; padding:4px;" @click=${this.requestExit}>←</button>
+                    <button class="btn"
+                            style="border:none; padding:8px; display:flex; align-items:center; justify-content:center; width:44px; height:44px;"
+                            @click=${this.requestExit}>
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="19" y1="12" x2="5" y2="12"/>
+                            <polyline points="12 19 5 12 12 5"/>
+                        </svg>
+                    </button>
+
                     <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}" @error=${this.handleImageError}/>
                     <span class="mobile-hide">${i18n.t('appTitle')}</span>
-                    ${this.isVerified ? html`<span class="badge">VERIFIED</span>` : ''}
+                    ${this.isVerified ? html`<span class="badge">${i18n.t('verifiedBadge')}</span>` : ''}
                 </div>
                 <select class="lang-select" @change=${this.handleLangChange}>
                     <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
@@ -948,8 +965,8 @@ export class PdfWorkspace extends LitElement {
 
             <div class="toolbar toolbar-secondary">
                 <div class="tool-group">
-                    <button class="btn" title="Zoom Out" @click=${() => this.zoom(-0.2)}>－</button>
-                    <button class="btn" title="Zoom In" @click=${() => this.zoom(0.2)}>＋</button>
+                    <button class="btn" title="${i18n.t('zoomOut')}" @click=${() => this.zoom(-0.2)}>－</button>
+                    <button class="btn" title="${i18n.t('zoomIn')}" @click=${() => this.zoom(0.2)}>＋</button>
                 </div>
                 <div class="tool-group">
                     <button class="btn" @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>‹
@@ -1055,7 +1072,7 @@ export class PdfWorkspace extends LitElement {
                                .value="${this.handoverHashInput}" @input="${(e: any) => {
                             this.handoverHashInput = e.target.value;
                             this.handoverResult = 'idle';
-                        }}" placeholder="Paste Hash Here...">
+                        }}" placeholder="${i18n.t('pasteHashPlaceholder')}">
                         ${this.handoverResult === 'success' ? html`
                             <div class="alert-box alert-success" .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
                         ${this.handoverResult === 'fail' ? html`
@@ -1089,14 +1106,15 @@ export class PdfWorkspace extends LitElement {
                                 ${this.lastSavedId}
                             </div>
                             <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600; display:flex; align-items:center; gap:4px;">
-                                ${ICONS.lock} Hash:
+                                ${ICONS.lock} ${i18n.t('hashLabel')}
                             </div>
                             <div style="font-family:monospace; font-size:0.75rem; color:var(--text-main); word-break:break-all; background:#e5e7eb; padding:8px; border-radius:6px; margin-top:4px;">
                                 ${this.lastSavedHash}
                             </div>
                         </div>
                         <div style="display:flex; gap:10px; margin-bottom:12px;">
-                            <button class="btn btn-primary" style="flex:1;" @click=${this.copyHash}>${ICONS.copy} Copy
+                            <button class="btn btn-primary" style="flex:1;" @click=${this.copyHash}>${ICONS.copy}
+                                ${ICONS.copy} ${i18n.t('copyShort')}
                             </button>
                             <button class="btn" style="flex:1;" @click=${this.sendProofEmail}>${i18n.t('email')}
                             </button>
@@ -1113,15 +1131,19 @@ export class PdfWorkspace extends LitElement {
                     <div class="modal-card" @click=${(e: Event) => e.stopPropagation()}>
                         <h3 style="margin-top:0;">${this.customPrompt.title}</h3>
                         <input type="text" class="input-field" style="margin-bottom: 20px; font-size: 1rem;"
-                               .value=${this.customPrompt.value} 
+                               .value=${this.customPrompt.value}
                                placeholder=${this.customPrompt.placeholder}
                                @input=${(e: any) => this.customPrompt.value = e.target.value}
                                @keydown=${(e: KeyboardEvent) => {
-                if (e.key === 'Enter') this.saveCustomPrompt();
-            }}>
+                                   if (e.key === 'Enter') this.saveCustomPrompt();
+                               }}>
                         <div style="display:flex; gap:10px; justify-content: flex-end;">
-                            <button class="btn" @click=${() => this.customPrompt.show = false}>${i18n.t('cancel') || 'Cancel'}</button>
-                            <button class="btn btn-primary" @click=${this.saveCustomPrompt}>${i18n.t('done') || 'Save'}</button>
+                            <button class="btn" @click=${() => this.customPrompt.show = false}>
+                                ${i18n.t('cancel') || 'Cancel'}
+                            </button>
+                            <button class="btn btn-primary" @click=${this.saveCustomPrompt}>
+                                ${i18n.t('done') || 'Save'}
+                            </button>
                         </div>
                     </div>
                 </div>
