@@ -1113,10 +1113,11 @@ export class PdfWorkspace extends LitElement {
                             </div>
                         </div>
                         <div style="display:flex; gap:10px; margin-bottom:12px;">
-                            <button class="btn btn-primary" style="flex:1;" @click=${this.copyHash}>${ICONS.copy}
+                            <button class="btn btn-primary" style="flex:1;" @click=${this.copyHash}>
                                 ${ICONS.copy} ${i18n.t('copyShort')}
                             </button>
-                            <button class="btn" style="flex:1;" @click=${this.sendProofEmail}>${i18n.t('email')}
+                            <button class="btn" style="flex:1;" @click=${this.sendProofEmail}>${ICONS.email}
+                                ${i18n.t('email')}
                             </button>
                         </div>
                         <button class="btn" style="width:100%;" @click=${() => this.showProofModal = false}>
