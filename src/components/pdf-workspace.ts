@@ -6,71 +6,8 @@ import {fileService} from '../lib/file-service';
 import {i18n} from '../lib/i18n-service';
 import {Annotation, AnnotationType} from '../types';
 import './signature-modal';
-
-const ICONS = {
-    sign: html`
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 20h9"/>
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-        </svg>`,
-    text: html`
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="4 7 4 4 20 4 20 7"/>
-            <line x1="9" y1="20" x2="15" y2="20"/>
-            <line x1="12" y1="4" x2="12" y2="20"/>
-        </svg>`,
-    identity: html`
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="5" width="18" height="14" rx="2"/>
-            <circle cx="8" cy="12" r="3"/>
-            <line x1="14" y1="10" x2="19" y2="10"/>
-            <line x1="14" y1="14" x2="19" y2="14"/>
-        </svg>`,
-    stamp: html`
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 14.5V17a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"/>
-            <path d="M8 10a4 4 0 0 1 8 0v4.5H8z"/>
-            <path d="M12 2v4"/>
-        </svg>`,
-    date: html`
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-        </svg>`,
-    footer: html`
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>`,
-    audit: html`
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-        </svg>`,
-    save: html`
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/>
-            <polyline points="7 3 7 8 15 8"/>
-        </svg>`,
-    share: html`
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-            <polyline points="16 6 12 2 8 6"/>
-            <line x1="12" y1="2" x2="12" y2="15"/>
-        </svg>`
-};
+import {ICONS} from '../lib/icons';
+import {sharedStyles} from '../styles/shared-styles'; // ✨ Imported Unified CSS
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
@@ -79,14 +16,12 @@ export class PdfWorkspace extends LitElement {
     @state() totalPages = 0;
     @state() scale = 1.0;
 
-    // Proof Modal State
     @state() showProofModal = false;
     @state() lastSavedId: string | null = null;
     @state() lastSavedHash: string | null = null;
-    @state() includeFooter = false; // Controls the "Page ID" footer
+    @state() includeFooter = false;
 
     @state() validationMsg: string | null = null;
-
     @state() annotations: Annotation[] = [];
     @state() includeAudit = false;
 
@@ -95,17 +30,14 @@ export class PdfWorkspace extends LitElement {
     @state() handoverResult: 'idle' | 'success' | 'fail' = 'idle';
     @state() detectedRefId = '';
 
-    // Interaction State
     @state() selectedId: string | null = null;
     @state() isDragging = false;
     @state() isResizing = false;
     @state() dragOffset = {x: 0, y: 0};
 
-    // History
     @state() history: Annotation[][] = [];
     @state() future: Annotation[][] = [];
 
-    // Save/share cache
     @state() lastSaved: { filename: string; uri?: string } | null = null;
     private lastSavedBytes: Uint8Array | null = null;
     @state() outputFilename = '';
@@ -115,7 +47,6 @@ export class PdfWorkspace extends LitElement {
     private interactionChanged = false;
 
     private loadedBytes: Uint8Array | null = null;
-
     @state() isVerified = false;
 
     @query('#pdf-canvas') canvas!: HTMLCanvasElement;
@@ -129,17 +60,11 @@ export class PdfWorkspace extends LitElement {
         return this.annotations.length > 0 || this.includeAudit;
     }
 
-    // 1. ✨ UPDATED IDENTITY TOOL: Auto-Save & Pre-Fill
     addIdentity() {
-        // Load saved email
         const savedEmail = localStorage.getItem('user_email') || '';
-
         const email = prompt(i18n.t('identityPrompt') || 'Enter your email:', savedEmail);
-
         if (email) {
-            // Save for next time
             localStorage.setItem('user_email', email);
-
             const text = `${i18n.t('signedBy') || 'Signed by'}: ${email}`;
             this.addAnnotation('identity', text, 0);
         }
@@ -147,17 +72,9 @@ export class PdfWorkspace extends LitElement {
 
     sendProofEmail() {
         if (!this.lastSavedId) return;
-
-        // Use translation with replacements
         const subject = (i18n.t('emailSubject') || 'Signature Receipt: {id}').replace('{id}', this.lastSavedId);
-
-        // Replace BOTH {id} and {hash}
-        let body = (i18n.t('emailBody') || '');
-        body = body.replace('{id}', this.lastSavedId);
-        body = body.replace('{hash}', this.lastSavedHash || 'N/A'); // Adds the hash
-
-        const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        window.open(mailto, '_blank');
+        let body = (i18n.t('emailBody') || '').replace('{id}', this.lastSavedId).replace('{hash}', this.lastSavedHash || 'N/A');
+        window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
         this.showProofModal = false;
     }
 
@@ -168,7 +85,8 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
-    static styles = css`
+    // ✨ Unified Styles
+    static styles = [sharedStyles, css`
         :host {
             height: 100vh;
             display: flex;
@@ -184,7 +102,7 @@ export class PdfWorkspace extends LitElement {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid var(--border);
             z-index: 20;
             flex-shrink: 0;
         }
@@ -195,25 +113,6 @@ export class PdfWorkspace extends LitElement {
             display: flex;
             align-items: center;
             gap: 12px;
-        }
-
-        button.toggle {
-            background: white;
-            color: #6b7280; /* Gray text */
-            border: 1px solid #e5e7eb;
-            transition: all 0.2s ease;
-        }
-
-        button.toggle.active {
-            background: #eff6ff; /* Light Blue Background */
-            color: #2563eb; /* Blue Text */
-            border: 1px solid #2563eb; /* Blue Border */
-            font-weight: 600;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
-        }
-
-        button.toggle:hover {
-            background: #f9fafb;
         }
 
         .brand img {
@@ -234,7 +133,7 @@ export class PdfWorkspace extends LitElement {
             display: flex;
             gap: 8px;
             align-items: center;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid var(--border);
             flex-shrink: 0;
             height: 54px;
             overflow-x: auto;
@@ -288,40 +187,15 @@ export class PdfWorkspace extends LitElement {
             flex-shrink: 0;
         }
 
-        button {
-            padding: 8px 14px;
-            border-radius: 6px;
-            border: 1px solid #e5e7eb;
-            background: white;
-            cursor: pointer;
-            flex-shrink: 0;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 1;
-        }
-
-        button:disabled {
-            opacity: 0.45;
-            cursor: not-allowed;
-        }
-
-        button.primary {
-            background: #2563eb;
-            color: white;
-            border: none;
-        }
-
         @media (max-width: 600px) {
             .btn-label {
                 display: none;
             }
 
-            button {
+            .btn {
                 padding: 0;
                 width: 44px;
                 height: 44px;
-                font-size: 1.2rem;
             }
 
             .toolbar {
@@ -333,11 +207,22 @@ export class PdfWorkspace extends LitElement {
                 gap: 15px;
             }
         }
-
         @media (min-width: 601px) {
             .btn-label {
                 margin-left: 6px;
             }
+        }
+
+        button.toggle {
+            transition: all 0.2s ease;
+        }
+
+        button.toggle.active {
+            background: #eff6ff;
+            color: #2563eb;
+            border: 1px solid #2563eb;
+            font-weight: 600;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
         }
 
         .draggable {
@@ -386,6 +271,7 @@ export class PdfWorkspace extends LitElement {
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             font-size: 16px;
+            padding: 0;
         }
 
         .draggable.selected .delete-btn {
@@ -465,29 +351,24 @@ export class PdfWorkspace extends LitElement {
             border-radius: 6px;
         }
 
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            backdrop-filter: blur(2px);
+        .input-field {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
         }
 
-        .modal {
-            background: white;
-            padding: 24px;
+        .badge {
+            background: #10b981;
+            color: white;
+            padding: 2px 6px;
             border-radius: 12px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            width: 90%;
-            max-width: 500px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
         }
-    `;
+    `];
 
     private onLangChanged = () => this.requestUpdate();
 
@@ -555,7 +436,6 @@ export class PdfWorkspace extends LitElement {
         if (existingID) {
             this.includeAudit = true;
             this.toast(i18n.t('previousSigDetected'));
-
             this.detectedRefId = existingID;
             this.handoverHashInput = '';
             this.handoverResult = 'idle';
@@ -624,33 +504,20 @@ export class PdfWorkspace extends LitElement {
         if (!sourceAnn) return;
 
         const newAnnotations: Annotation[] = [];
-
         for (let p = 0; p < this.totalPages; p++) {
             if (p === sourceAnn.page) continue;
-
-            // Check if an identical annotation already exists here to prevent stacking
             const exists = this.annotations.some(a =>
-                a.page === p &&
-                a.type === sourceAnn.type &&
-                Math.abs(a.xPct - sourceAnn.xPct) < 0.01 &&
-                Math.abs(a.yPct - sourceAnn.yPct) < 0.01 &&
-                a.data === sourceAnn.data
+                a.page === p && a.type === sourceAnn.type &&
+                Math.abs(a.xPct - sourceAnn.xPct) < 0.01 && Math.abs(a.yPct - sourceAnn.yPct) < 0.01 && a.data === sourceAnn.data
             );
-
             if (!exists) {
-                newAnnotations.push({
-                    ...sourceAnn,
-                    id: Math.random().toString(36).slice(2, 11),
-                    page: p
-                });
+                newAnnotations.push({...sourceAnn, id: Math.random().toString(36).slice(2, 11), page: p});
             }
         }
-
         if (newAnnotations.length > 0) {
             this.annotations = [...this.annotations, ...newAnnotations];
             this.isDirty = true;
-            const msg = i18n.t('appliedToPages').replace('{count}', newAnnotations.length.toString());
-            this.toast(msg);
+            this.toast(i18n.t('appliedToPages').replace('{count}', newAnnotations.length.toString()));
         }
     }
 
@@ -668,13 +535,7 @@ export class PdfWorkspace extends LitElement {
 
         const newAnn: Annotation = {
             id: Math.random().toString(36).slice(2, 11),
-            type,
-            page: this.currentPage - 1,
-            xPct,
-            yPct,
-            widthPct,
-            data,
-            aspectRatio,
+            type, page: this.currentPage - 1, xPct, yPct, widthPct, data, aspectRatio,
         };
 
         this.annotations = [...this.annotations, newAnn];
@@ -688,10 +549,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     handleTextEdit(id: string, currentText: string | undefined) {
-        const promptMsg = (i18n.t('editText') as string) || 'Edit Text:';
-        const safeCurrentText = currentText || '';
-        const newText = prompt(promptMsg, safeCurrentText);
-
+        const newText = prompt(i18n.t('editText') || 'Edit:', currentText || '');
         if (newText !== null && newText.trim() !== '') {
             this.snapshot();
             this.annotations = this.annotations.map((a) => (a.id === id ? {...a, data: newText} : a));
@@ -735,7 +593,7 @@ export class PdfWorkspace extends LitElement {
         const rect = this.container.getBoundingClientRect();
         this.dragOffset = {
             x: clientX - rect.left - ann.xPct * rect.width,
-            y: clientY - rect.top - ann.yPct * rect.height,
+            y: clientY - rect.top - ann.yPct * rect.height
         };
     }
 
@@ -756,6 +614,7 @@ export class PdfWorkspace extends LitElement {
         const rect = this.container.getBoundingClientRect();
         const ann = this.annotations.find((a) => a.id === this.selectedId);
         if (!ann) return;
+
         const takeSnapshotIfNeeded = () => {
             if (!this.interactionSnapshotTaken) {
                 this.snapshot();
@@ -766,32 +625,25 @@ export class PdfWorkspace extends LitElement {
         if (this.isDragging) {
             const newX = clientX - rect.left - this.dragOffset.x;
             const newY = clientY - rect.top - this.dragOffset.y;
-
             let nextXPct = Math.max(0, Math.min(0.95, newX / rect.width));
             let nextYPct = Math.max(0, Math.min(0.95, newY / rect.height));
 
             let visualWidthPct = ann.widthPct || 0.1;
             let visualHeightPct = visualWidthPct * (ann.aspectRatio || 1);
-
             const contentEl = this.shadowRoot?.querySelector('.draggable.selected img, .draggable.selected .text-content') as HTMLElement;
             if (contentEl) {
                 visualWidthPct = contentEl.offsetWidth / rect.width;
                 visualHeightPct = contentEl.offsetHeight / rect.height;
             }
-
             const centerX = nextXPct + (visualWidthPct / 2);
             const centerY = nextYPct + (visualHeightPct / 2);
-
             this.guideX = null;
             this.guideY = null;
 
-            // Snap to horizontal center
             if (Math.abs(centerX - 0.5) < 0.02) {
                 nextXPct = 0.5 - (visualWidthPct / 2);
                 this.guideX = 0.5;
             }
-
-            // Snap to vertical center
             if (Math.abs(centerY - 0.5) < 0.02) {
                 nextYPct = 0.5 - (visualHeightPct / 2);
                 this.guideY = 0.5;
@@ -846,8 +698,7 @@ export class PdfWorkspace extends LitElement {
 
     addDateStamp() {
         const now = new Date();
-        const dateStr = now.toISOString().replace('T', ' ').substring(0, 16);
-        this.addAnnotation('date', dateStr, 0.3);
+        this.addAnnotation('date', now.toISOString().replace('T', ' ').substring(0, 16), 0.3);
     }
 
     private toast(msg: string) {
@@ -865,8 +716,7 @@ export class PdfWorkspace extends LitElement {
         this.outputFilename = '';
         this.isDirty = false;
         if (this.canvas) {
-            const context = this.canvas.getContext('2d');
-            context?.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.canvas.getContext('2d')?.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.canvas.height = 0;
         }
     }
@@ -876,65 +726,35 @@ export class PdfWorkspace extends LitElement {
         const showToast = opts?.showToast ?? true;
 
         if (!this.hasEdits) {
-            this.toast((i18n.t('noChanges') as string) || 'No changes to save.');
+            this.toast(i18n.t('noChanges') || 'No changes');
             return;
         }
-
         this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
         await new Promise((r) => setTimeout(r, 50));
 
         try {
             const filename = `${this.outputFilename}.pdf`;
-            let finalBytes: Uint8Array;
-            let finalDocId: string;
-            let finalHash: string;
-
-            try {
-                const result = await pdfEngine.saveProfessional(
-                    this.annotations, this.pdfName, this.includeAudit,
-                    this.includeFooter,
-                    this.validationMsg);
-                finalBytes = result.pdfBytes;
-                finalDocId = result.docId;
-                finalHash = result.finalHash;
-            } catch (saveError: any) {
-                console.error("PDF Generation Failed:", saveError);
-                if (saveError.toString().includes('memory') || saveError.toString().includes('allocation')) {
-                    throw new Error('OOM');
-                }
-                throw saveError;
-            }
-
-            this.lastSavedBytes = finalBytes;
+            let result = await pdfEngine.saveProfessional(this.annotations, this.pdfName, this.includeAudit, this.includeFooter, this.validationMsg);
+            this.lastSavedBytes = result.pdfBytes;
 
             if (!Capacitor.isNativePlatform() && silentWeb) {
                 this.lastSaved = {filename};
             } else {
-                this.lastSaved = await fileService.savePdf(filename, finalBytes);
+                this.lastSaved = await fileService.savePdf(filename, result.pdfBytes);
                 if (Capacitor.isNativePlatform() && showToast) {
                     setTimeout(() => {
                         this.toast(i18n.t('exportingFile'));
                         fileService.sharePdf(this.lastSaved!, this.lastSavedBytes!);
-                    }, 200); // Short delay to ensure UI is ready
+                    }, 200);
                 }
             }
-
             this.isDirty = false;
-
-            this.lastSavedId = finalDocId;
-            this.lastSavedHash = finalHash;
+            this.lastSavedId = result.docId;
+            this.lastSavedHash = result.finalHash;
             this.showProofModal = true;
-
-            if (showToast) {
-                this.toast(((i18n.t('savedMsg') as string) || 'Saved') as string);
-            }
+            if (showToast) this.toast(i18n.t('savedMsg'));
         } catch (e: any) {
-            console.error(e);
-            if (e.message === 'OOM') {
-                this.toast(i18n.t('outOfMemory'));
-            } else {
-                this.toast(`${i18n.t('errorSaving')}: ${e.message || "Unknown"}`);
-            }
+            this.toast(e.message.includes('OOM') ? i18n.t('outOfMemory') : `${i18n.t('errorSaving')}: ${e.message}`);
         } finally {
             this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
         }
@@ -943,10 +763,8 @@ export class PdfWorkspace extends LitElement {
     handleStampUpload(e: Event) {
         const input = e.target as HTMLInputElement;
         if (input.files && input.files[0]) {
-            const file = input.files[0];
             const reader = new FileReader();
             reader.onload = (evt) => {
-                const result = evt.target?.result as string;
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
@@ -955,28 +773,27 @@ export class PdfWorkspace extends LitElement {
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
                         ctx.drawImage(img, 0, 0);
-                        const pngData = canvas.toDataURL('image/png');
-                        this.addAnnotation('stamp', pngData, img.height / img.width);
+                        this.addAnnotation('stamp', canvas.toDataURL('image/png'), img.height / img.width);
                         canvas.remove();
                     }
                 };
-                img.src = result;
+                img.src = evt.target?.result as string;
             };
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(input.files[0]);
         }
         input.value = '';
     }
 
     async shareLatest() {
         if (!this.hasEdits) {
-            this.toast((i18n.t('noChanges') as string) || 'No changes to share.');
+            this.toast(i18n.t('noChanges'));
             return;
         }
-        if (this.isDirty || !this.lastSavedBytes || !this.lastSaved) {
-            await this.saveDocument({silentWeb: !Capacitor.isNativePlatform(), showToast: false});
-        }
-        if (!this.lastSaved || !this.lastSavedBytes) return;
-        await fileService.sharePdf(this.lastSaved, this.lastSavedBytes);
+        if (this.isDirty || !this.lastSavedBytes || !this.lastSaved) await this.saveDocument({
+            silentWeb: !Capacitor.isNativePlatform(),
+            showToast: false
+        });
+        if (this.lastSaved && this.lastSavedBytes) await fileService.sharePdf(this.lastSaved, this.lastSavedBytes);
     }
 
     requestExit() {
@@ -988,8 +805,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     handleImageError(e: Event) {
-        const img = e.target as HTMLImageElement;
-        img.style.display = 'none';
+        (e.target as HTMLImageElement).style.display = 'none';
     }
 
     render() {
@@ -999,11 +815,10 @@ export class PdfWorkspace extends LitElement {
         return html`
             <header>
                 <div class="brand">
-                    <button @click=${this.requestExit} style="...">←</button>
+                    <button class="btn" style="border:none; padding:4px;" @click=${this.requestExit}>←</button>
                     <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}" @error=${this.handleImageError}/>
                     <span class="mobile-hide">${i18n.t('appTitle')}</span>
-                    ${this.isVerified ? html`<span
-                            style="background: #10b981; color: white; padding: 2px 6px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; margin-left: 8px;">VERIFIED</span>` : ''}
+                    ${this.isVerified ? html`<span class="badge">VERIFIED</span>` : ''}
                 </div>
                 <select class="lang-select" @change=${this.handleLangChange}>
                     <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
@@ -1013,73 +828,54 @@ export class PdfWorkspace extends LitElement {
             </header>
 
             <div class="toolbar">
-                <button class="primary" @click=${this.openSignModal} title="${i18n.t('addSig')}">
+                <button class="btn btn-primary" @click=${this.openSignModal} title="${i18n.t('addSig')}">
                     ${ICONS.sign}<span class="btn-label">${i18n.t('addSig')}</span>
                 </button>
-                <button @click=${this.openInitialsModal} title="${i18n.t('addInitials')}">
+                <button class="btn" @click=${this.openInitialsModal} title="${i18n.t('addInitials')}">
                     ${ICONS.text}<span class="btn-label">${i18n.t('addInitials')}</span>
                 </button>
-                <button @click=${this.addTextAnnotation} title="${i18n.t('addText')}">
+                <button class="btn" @click=${this.addTextAnnotation} title="${i18n.t('addText')}">
                     ${ICONS.text}<span class="btn-label">${i18n.t('addText')}</span>
                 </button>
-                <button @click=${this.addIdentity} title="${i18n.t('addIdentity')}">
+                <button class="btn" @click=${this.addIdentity} title="${i18n.t('addIdentity')}">
                     ${ICONS.identity}<span class="btn-label">${i18n.t('addIdentity') || 'Identity'}</span>
                 </button>
-                <button @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
+                <button class="btn" @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
                         title="${i18n.t('addStamp')}">
                     ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
                 </button>
-                <button @click=${this.addDateStamp} title="${i18n.t('addDate')}">
+                <button class="btn" @click=${this.addDateStamp} title="${i18n.t('addDate')}">
                     ${ICONS.date}<span class="btn-label">${i18n.t('addDate')}</span>
                 </button>
                 <div style="width: 1px; height: 20px; background: #ddd; margin: 0 4px; flex-shrink: 0;"></div>
-                <button @click=${this.undo} ?disabled=${this.history.length === 0} title="${i18n.t('undo')}"
-                        aria-label="${i18n.t('undo') || 'Undo'}">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 7v6h6"/>
-                        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
-                    </svg>
+                <button class="btn" @click=${this.undo} ?disabled=${this.history.length === 0}
+                        title="${i18n.t('undo')}">${ICONS.undo}
                 </button>
-                <button @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}"
-                        aria-label="${i18n.t('redo') || 'Redo'}">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 7v6h-6"/>
-                        <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/>
-                    </svg>
+                <button class="btn" @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}">
+                    ${ICONS.redo}
                 </button>
                 <div style="flex:1"></div>
-                <button class="toggle ${this.includeFooter ? 'active' : ''}"
-                        @click=${() => {
-                            this.includeFooter = !this.includeFooter;
-                            this.isDirty = true;
-                            const msg = this.includeFooter
-                                    ? (i18n.t('footerOn') || "Footer Enabled")
-                                    : (i18n.t('footerOff') || "Footer Disabled");
-                            this.toast(msg as string);
-                        }}
-                        title="${i18n.t('addPageFooter')}">
+                <button class="btn toggle ${this.includeFooter ? 'active' : ''}" @click=${() => {
+                    this.includeFooter = !this.includeFooter;
+                    this.isDirty = true;
+                    this.toast(this.includeFooter ? i18n.t('footerOn') : i18n.t('footerOff'));
+                }} title="${i18n.t('addPageFooter')}">
                     ${ICONS.footer}<span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
                 </button>
-
-                <button class="toggle ${this.includeAudit ? 'active' : ''}"
-                        @click=${() => {
-                            this.includeAudit = !this.includeAudit;
-                            this.isDirty = true;
-                            const msg = this.includeAudit
-                                    ? (i18n.t('auditOn') || "Audit Trail Enabled")
-                                    : (i18n.t('auditOff') || "Audit Trail Disabled");
-                            this.toast(msg as string);
-                        }}
-                        title="${i18n.t('addAuditPage')}">
+                <button class="btn toggle ${this.includeAudit ? 'active' : ''}" @click=${() => {
+                    this.includeAudit = !this.includeAudit;
+                    this.isDirty = true;
+                    this.toast(this.includeAudit ? i18n.t('auditOn') : i18n.t('auditOff'));
+                }} title="${i18n.t('addAuditPage')}">
                     ${ICONS.audit}<span class="btn-label">${i18n.t('auditTrail')}</span>
                 </button>
-                <button class="primary" @click=${() => this.saveDocument({silentWeb: false, showToast: true})}
-                        ?disabled=${saveDisabled}
-                        title=${saveDisabled ? ((i18n.t('noChanges') as string) || 'No changes to save') : (i18n.t('savePdf') as string)}>
+                <button class="btn btn-primary" @click=${() => this.saveDocument({
+                    silentWeb: false,
+                    showToast: true
+                })} ?disabled=${saveDisabled}>
                     ${ICONS.save}<span class="btn-label">${i18n.t('savePdf')}</span>
                 </button>
-                <button @click=${this.shareLatest} ?disabled=${shareDisabled}
-                        title=${shareDisabled ? ((i18n.t('noChanges') as string) || 'No changes to share') : (i18n.t('sharePdf') as string)}>
+                <button class="btn" @click=${this.shareLatest} ?disabled=${shareDisabled}>
                     ${ICONS.share}<span class="btn-label">${i18n.t('sharePdf')}</span>
                 </button>
             </div>
@@ -1089,22 +885,15 @@ export class PdfWorkspace extends LitElement {
 
             <div class="toolbar toolbar-secondary">
                 <div class="tool-group">
-                    <button title=${i18n.t('zoomOut')} aria-label=${i18n.t('zoomOut')}
-                            @click=${() => this.zoom(-0.2)}>
-                        －
-                    </button>
-                    <button title=${i18n.t('zoomIn')} aria-label=${i18n.t('zoomIn')}
-                            @click=${() => this.zoom(0.2)}>
-                        ＋
-                    </button>
+                    <button class="btn" title="Zoom Out" @click=${() => this.zoom(-0.2)}>－</button>
+                    <button class="btn" title="Zoom In" @click=${() => this.zoom(0.2)}>＋</button>
                 </div>
                 <div class="tool-group">
-                    <button title=${i18n.t('prev')} aria-label=${i18n.t('prev')}
-                            @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>‹
+                    <button class="btn" @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>‹
                     </button>
                     <span class="page-indicator">${this.currentPage} / ${this.totalPages}</span>
-                    <button title=${i18n.t('next')} aria-label=${i18n.t('next')}
-                            @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>›
+                    <button class="btn" @click=${() => this.changePage(1)}
+                            ?disabled=${this.currentPage === this.totalPages}>›
                     </button>
                 </div>
             </div>
@@ -1116,135 +905,103 @@ export class PdfWorkspace extends LitElement {
                     ${this.guideY !== null ? html`
                         <div style="position:absolute; top:${this.guideY * 100}%; left:0; right:0; height:1px; background:#ef4444; z-index:50;"></div>` : ''}
                     <canvas id="pdf-canvas"></canvas>
-                    ${this.annotations
-                            .filter((ann) => ann.page === this.currentPage - 1)
-                            .map((ann) => {
-                                const isSelected = this.selectedId === ann.id;
-                                const isText = ann.type === 'date' || ann.type === 'identity';
-                                const boxStyle = `left:${ann.xPct * 100}%; top:${ann.yPct * 100}%; width:${isText ? 'auto' : (ann.widthPct ? ann.widthPct * 100 + '%' : 'auto')};`;
-                                const textStyle = `font-size:${ann.fontSize || 12}px; font-weight:${ann.fontWeight || 'normal'};`;
-
-                                return html`
-                                    <div class="draggable ${isSelected ? 'selected' : ''}" style="${boxStyle}"
-                                         @mousedown=${(e: any) => this.startDrag(e, ann.id)}
-                                         @touchstart=${(e: any) => this.startDrag(e, ann.id)}
-                                    >
-                                        <button class="delete-btn"
-                                                @mousedown=${(e: Event) => {
-                                                    e.stopPropagation();
-                                                    this.deleteAnnotation(ann.id);
-                                                }}
-                                                @touchstart=${(e: Event) => {
-                                                    e.stopPropagation();
-                                                    this.deleteAnnotation(ann.id);
-                                                }}
-                                        >×
+                    ${this.annotations.filter(ann => ann.page === this.currentPage - 1).map(ann => {
+                        const isSelected = this.selectedId === ann.id;
+                        const isText = ann.type === 'date' || ann.type === 'identity';
+                        return html`
+                            <div class="draggable ${isSelected ? 'selected' : ''}"
+                                 style="left:${ann.xPct * 100}%; top:${ann.yPct * 100}%; width:${isText ? 'auto' : (ann.widthPct ? ann.widthPct * 100 + '%' : 'auto')};"
+                                 @mousedown=${(e: any) => this.startDrag(e, ann.id)}
+                                 @touchstart=${(e: any) => this.startDrag(e, ann.id)}>
+                                <button class="delete-btn" @mousedown=${(e: Event) => {
+                                    e.stopPropagation();
+                                    this.deleteAnnotation(ann.id);
+                                }} @touchstart=${(e: Event) => {
+                                    e.stopPropagation();
+                                    this.deleteAnnotation(ann.id);
+                                }}>×
+                                </button>
+                                ${isSelected && isText ? html`
+                                    <div class="style-popup" @mousedown=${(e: Event) => e.stopPropagation()}
+                                         @touchstart=${(e: Event) => e.stopPropagation()}>
+                                        <button @click=${(e: Event) => {
+                                            e.stopPropagation();
+                                            this.handleTextEdit(ann.id, ann.data);
+                                        }}>✎
                                         </button>
-
-                                        ${isSelected && isText ? html`
-                                            <div class="style-popup" @mousedown=${(e: Event) => e.stopPropagation()}
-                                                 @touchstart=${(e: Event) => e.stopPropagation()}>
-                                                <button @click=${(e: Event) => {
+                                        <div style="width:1px; background:#444; margin:0 2px;"></div>
+                                        <button class="${ann.fontWeight === 'bold' ? 'active' : ''}"
+                                                @click=${(e: Event) => {
                                                     e.stopPropagation();
-                                                    this.handleTextEdit(ann.id, ann.data);
-                                                }}>✎
-                                                </button>
-                                                <div style="width:1px; background:#444; margin:0 2px;"></div>
-                                                <button class="${ann.fontWeight === 'bold' ? 'active' : ''}"
-                                                        @click=${(e: Event) => {
-                                                            e.stopPropagation();
-                                                            this.updateStyle(ann.id, {fontWeight: ann.fontWeight === 'bold' ? 'normal' : 'bold'});
-                                                        }}>B
-                                                </button>
-                                                <button @click=${(e: Event) => {
-                                                    e.stopPropagation();
-                                                    this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
-                                                }}>A-
-                                                </button>
-                                                <button @click=${(e: Event) => {
-                                                    e.stopPropagation();
-                                                    this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
-                                                }}>A+
-                                                </button>
-                                                <div style="width:1px; background:#444; margin:0 2px;"></div>
-                                                <button @click=${(e: Event) => {
-                                                    e.stopPropagation();
-                                                    this.applyToAllPages(ann.id);
-                                                }} title="${i18n.t('applyToAll') || 'Apply to all pages'}">📄
-                                                </button>
-                                            </div>
-                                        ` : ''}
-
-                                        ${isSelected && !isText ? html`
-                                            <div class="style-popup" @mousedown=${(e: Event) => e.stopPropagation()}
-                                                 @touchstart=${(e: Event) => e.stopPropagation()}>
-                                                <button @click=${(e: Event) => {
-                                                    e.stopPropagation();
-                                                    this.applyToAllPages(ann.id);
-                                                }} title="${i18n.t('applyToAll') || 'Apply to all pages'}">📄
-                                                </button>
-                                            </div>
-                                        ` : ''}
-
-                                        ${!isText ? html`
-                                            <div class="resize-handle"
-                                                 @mousedown=${(e: any) => this.startResize(e, ann.id)}
-                                                 @touchstart=${(e: any) => this.startResize(e, ann.id)}></div>
-                                            <img src="${ann.data}" alt="User annotation"/>
-                                        ` : html`
-                                            <span class="text-content" style="${textStyle}" @dblclick=${(e: Event) => {
-                                                e.stopPropagation();
-                                                this.handleTextEdit(ann.id, ann.data);
-                                            }}>
-                                            ${ann.data}
-                                        </span>
-                                        `}
+                                                    this.updateStyle(ann.id, {fontWeight: ann.fontWeight === 'bold' ? 'normal' : 'bold'});
+                                                }}>B
+                                        </button>
+                                        <button @click=${(e: Event) => {
+                                            e.stopPropagation();
+                                            this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
+                                        }}>A-
+                                        </button>
+                                        <button @click=${(e: Event) => {
+                                            e.stopPropagation();
+                                            this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
+                                        }}>A+
+                                        </button>
+                                        <div style="width:1px; background:#444; margin:0 2px;"></div>
+                                        <button @click=${(e: Event) => {
+                                            e.stopPropagation();
+                                            this.applyToAllPages(ann.id);
+                                        }} title="${i18n.t('applyToAll')}">📄
+                                        </button>
                                     </div>
-                                `;
-                            })}
+                                ` : isSelected && !isText ? html`
+                                    <div class="style-popup" @mousedown=${(e: Event) => e.stopPropagation()}
+                                         @touchstart=${(e: Event) => e.stopPropagation()}>
+                                        <button @click=${(e: Event) => {
+                                            e.stopPropagation();
+                                            this.applyToAllPages(ann.id);
+                                        }} title="${i18n.t('applyToAll')}">📄
+                                        </button>
+                                    </div>
+                                ` : ''}
+                                ${!isText ? html`
+                                    <div class="resize-handle" @mousedown=${(e: any) => this.startResize(e, ann.id)}
+                                         @touchstart=${(e: any) => this.startResize(e, ann.id)}></div>
+                                    <img src="${ann.data}" alt="Annotation"/>
+                                ` : html`
+                                    <span class="text-content"
+                                          style="font-size:${ann.fontSize || 12}px; font-weight:${ann.fontWeight || 'normal'};"
+                                          @dblclick=${(e: Event) => {
+                                              e.stopPropagation();
+                                              this.handleTextEdit(ann.id, ann.data);
+                                          }}>${ann.data}</span>
+                                `}
+                            </div>
+                        `;
+                    })}
                 </div>
             </div>
 
             ${this.showHandoverModal ? html`
                 <div class="modal-overlay">
-                    <div class="modal">
+                    <div class="modal-card">
                         <h3 style="margin-top:0;">${i18n.t('previousSigDetected')}</h3>
-                        <p style="font-size:0.9rem; color:#555; margin-bottom:15px;">
-                            ${i18n.t('verifyPreviousSigPrompt')}
-                        </p>
-
-                        <div style="background:#f3f4f6; padding:10px; margin-bottom:15px; border-radius:6px; font-size:0.85rem;">
-                            <strong>Ref ID:</strong> ${this.detectedRefId}
-                        </div>
-
-                        <input type="text"
-                               .value="${this.handoverHashInput}"
-                               @input="${(e: any) => {
-                                   this.handoverHashInput = e.target.value;
-                                   this.handoverResult = 'idle';
-                               }}"
-                               placeholder="${i18n.t('pasteHashPlaceholder')}"
-                               style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; margin-bottom:15px;">
-
+                        <p style="font-size:0.9rem; color:var(--text-sub); margin-bottom:15px;">
+                            ${i18n.t('verifyPreviousSigPrompt')}</p>
+                        <div class="alert-box alert-warning"><strong>Ref ID:</strong> ${this.detectedRefId}</div>
+                        <input type="text" class="input-field" style="margin-bottom:15px;"
+                               .value="${this.handoverHashInput}" @input="${(e: any) => {
+                            this.handoverHashInput = e.target.value;
+                            this.handoverResult = 'idle';
+                        }}" placeholder="Paste Hash Here...">
                         ${this.handoverResult === 'success' ? html`
-                            <div style="color:#166534; background:#dcfce7; padding:10px; border-radius:6px; margin-bottom:15px; font-size:0.9rem; border:1px solid #bbf7d0;">
-                                <span .innerHTML=${i18n.t('statusVerified')}></span>
-                            </div>
-                        ` : ''}
-
+                            <div class="alert-box alert-success">${i18n.t('statusVerified')}</div>` : ''}
                         ${this.handoverResult === 'fail' ? html`
-                            <div style="color:#991b1b; background:#fee2e2; padding:10px; border-radius:6px; margin-bottom:15px; font-size:0.9rem; border:1px solid #fecaca;">
-                                <span .innerHTML=${i18n.t('statusMismatch')}></span>
-                            </div>
-                        ` : ''}
-
+                            <div class="alert-box alert-error">${i18n.t('statusMismatch')}</div>` : ''}
                         <div style="display:flex; gap:10px;">
-                            <button class="primary" @click=${this.checkHandover}
-                                    style="flex:1; justify-content:center;">
+                            <button class="btn btn-primary" style="flex:1;" @click=${this.checkHandover}>
                                 ${i18n.t('verifyBtn')}
                             </button>
-                            <button @click=${() => this.showHandoverModal = false}
-                                    style="flex:1; background:transparent; border:1px solid #ddd; color:#555; justify-content:center;">
+                            <button class="btn" style="flex:1;" @click=${() => this.showHandoverModal = false}>
                                 ${i18n.t('btnSkip')}
                             </button>
                         </div>
@@ -1254,47 +1011,34 @@ export class PdfWorkspace extends LitElement {
 
             ${this.showProofModal ? html`
                 <div class="modal-overlay">
-                    <div class="modal" style="text-align:center;">
-                        <div style="width:50px; height:50px; background:#dcfce7; color:#16a34a; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 15px;">
-                            ✓
+                    <div class="modal-card center">
+                        <div style="color:#10b981; margin-bottom:15px; display:flex; justify-content:center;">
+                            <div style="padding:15px; background:#ecfdf5; border-radius:50%;">${ICONS.check}</div>
                         </div>
-                        <h2 style="color:#166534; margin-top:0; font-size: 1.5rem;">
-                            ${i18n.t('savedMsg') || 'Document Saved!'}
-                        </h2>
-                        <p style="color:#4b5563; font-size:0.95rem; margin-bottom: 20px;">
-                            ${i18n.t('proveIdentityMsg') || 'Save this receipt to prove the document is authentic later.'}
-                        </p>
-
-                        <div style="background:#f9fafb; padding:15px; margin:15px 0; border-radius:8px; border: 1px solid #e5e7eb; text-align:left;">
-                            <div style="font-size:0.8rem; color:#6b7280; margin-bottom:4px; font-weight: 600;">
-                                ${i18n.t('internalRefLabel') || 'Internal Ref ID:'}
+                        <h2 style="color:#166534; margin-top:0;">${i18n.t('savedMsg')}</h2>
+                        <p style="color:var(--text-sub); font-size:0.95rem; margin-bottom:20px;">
+                            ${i18n.t('proveIdentityMsg')}</p>
+                        <div style="background:#f9fafb; padding:15px; margin:15px 0; border-radius:8px; border:1px solid var(--border); text-align:left;">
+                            <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600;">
+                                ${i18n.t('internalRefLabel')}
                             </div>
-                            <div style="font-family:monospace; font-size:1.1rem; color:#1f2937; margin-bottom:15px;">
+                            <div style="font-family:monospace; font-size:1.1rem; color:var(--text-main); margin-bottom:15px;">
                                 ${this.lastSavedId}
                             </div>
-
-                            <div style="font-size:0.8rem; color:#6b7280; margin-bottom:4px; font-weight: 600;">
-                                ${i18n.t('integrityHashLabel') || '🔐 Strict Integrity Hash:'}
+                            <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600;">${ICONS.lock} Hash:
                             </div>
-                            <div style="font-family:monospace; font-size:0.75rem; color:#1f2937; word-break:break-all; background:#e5e7eb; padding:8px; border-radius:6px;">
+                            <div style="font-family:monospace; font-size:0.75rem; color:var(--text-main); word-break:break-all; background:#e5e7eb; padding:8px; border-radius:6px;">
                                 ${this.lastSavedHash}
                             </div>
                         </div>
-
                         <div style="display:flex; gap:10px; margin-bottom:12px;">
-                            <button @click=${this.copyHash} class="primary"
-                                    style="flex:1; justify-content:center; padding:12px; background:#4f46e5;">
-                                ${i18n.t('copyHash')}
+                            <button class="btn btn-primary" style="flex:1;" @click=${this.copyHash}>${ICONS.copy} Copy
                             </button>
-                            <button @click=${this.sendProofEmail} class="primary"
-                                    style="flex:1; justify-content:center; padding:12px;">
-                                ${i18n.t('sendProofEmail') || 'Email'}
+                            <button class="btn" style="flex:1;" @click=${this.sendProofEmail}>${i18n.t('email')}
                             </button>
                         </div>
-
-                        <button @click=${() => this.showProofModal = false}
-                                style="width:100%; justify-content:center; padding:12px; background:transparent; color:#4b5563; border:1px solid #d1d5db; font-weight: 500;">
-                            ${i18n.t('close') || 'Close'}
+                        <button class="btn" style="width:100%;" @click=${() => this.showProofModal = false}>
+                            ${i18n.t('close')}
                         </button>
                     </div>
                 </div>

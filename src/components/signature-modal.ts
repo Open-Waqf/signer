@@ -1,6 +1,7 @@
 import {css, html, LitElement} from 'lit';
 import {customElement, property, query} from 'lit/decorators.js';
 import {i18n} from '../lib/i18n-service';
+import {sharedStyles} from '../styles/shared-styles'; // ✨ Import Shared CSS
 
 @customElement('signature-modal')
 export class SignatureModal extends LitElement {
@@ -15,32 +16,7 @@ export class SignatureModal extends LitElement {
     private originalData: string | null = null;
     private isDirty = false;
 
-    static styles = css`
-        :host {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            direction: ltr;
-            backdrop-filter: blur(2px);
-        }
-
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 500px;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-        }
-
+    static styles = [sharedStyles, css`
         canvas {
             border: 2px dashed #ccc;
             border-radius: 8px;
@@ -50,44 +26,19 @@ export class SignatureModal extends LitElement {
             height: 250px;
             display: block;
             cursor: crosshair;
+            margin-bottom: 20px;
         }
 
         .actions {
-            margin-top: 15px;
             display: flex;
             gap: 10px;
             justify-content: flex-end;
         }
-
-        button {
-            padding: 10px 20px;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-            font-family: inherit;
-        }
-
-        .btn-clear {
-            background: #fee2e2;
-            color: #b91c1c;
-        }
-
-        .btn-save {
-            background: #10b981;
-            color: white;
-        }
-
-        .btn-close {
-            background: #f3f4f6;
-            color: #374151;
-        }
-    `;
+    `];
 
     async firstUpdated() {
         await new Promise(requestAnimationFrame);
         this.ctx = this.canvas.getContext('2d');
-
         this.resizeCanvas();
 
         this._resizeHandler = () => {
@@ -97,7 +48,6 @@ export class SignatureModal extends LitElement {
             }
         };
         window.addEventListener('resize', this._resizeHandler!);
-
         this.setupEvents();
         this.loadSaved();
     }
@@ -118,9 +68,7 @@ export class SignatureModal extends LitElement {
 
     drawFromData(dataUrl: string) {
         const img = new Image();
-        img.onload = () => {
-            this.ctx?.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
-        };
+        img.onload = () => this.ctx?.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
         img.src = dataUrl;
     }
 
@@ -143,11 +91,9 @@ export class SignatureModal extends LitElement {
 
     getMousePos(e: { clientX: number, clientY: number }) {
         const rect = this.canvas.getBoundingClientRect();
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
         return {
-            x: (e.clientX - rect.left) * scaleX,
-            y: (e.clientY - rect.top) * scaleY
+            x: (e.clientX - rect.left) * (this.canvas.width / rect.width),
+            y: (e.clientY - rect.top) * (this.canvas.height / rect.height)
         };
     }
 
@@ -173,7 +119,7 @@ export class SignatureModal extends LitElement {
         const pos = this.getMousePos(e);
         this.points.push(pos);
         this.ctx?.beginPath();
-        this.ctx?.arc(pos.x, pos.y, this.ctx.lineWidth / 2, 0, Math.PI * 2);
+        this.ctx?.arc(pos.x, pos.y, this.ctx!.lineWidth / 2, 0, Math.PI * 2);
         this.ctx?.fill();
     }
 
@@ -182,10 +128,7 @@ export class SignatureModal extends LitElement {
         const pos = this.getMousePos(e);
         this.points.push(pos);
         if (this.points.length > 2) {
-            const lastTwo = this.points.slice(-3);
-            const p1 = lastTwo[0];
-            const p2 = lastTwo[1];
-            const p3 = lastTwo[2];
+            const [p1, p2, p3] = this.points.slice(-3);
             const mid1 = {x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2};
             const mid2 = {x: (p2.x + p3.x) / 2, y: (p2.y + p3.y) / 2};
             this.ctx.beginPath();
@@ -220,20 +163,14 @@ export class SignatureModal extends LitElement {
 
         const exportCanvas = document.createElement('canvas');
         const MAX_WIDTH = 600;
-        let exportWidth = this.canvas.width;
-        let exportHeight = this.canvas.height;
-
+        let [exportWidth, exportHeight] = [this.canvas.width, this.canvas.height];
         if (exportWidth > MAX_WIDTH) {
             exportHeight = (MAX_WIDTH / exportWidth) * exportHeight;
             exportWidth = MAX_WIDTH;
         }
-
         exportCanvas.width = exportWidth;
         exportCanvas.height = exportHeight;
-        const outCtx = exportCanvas.getContext('2d');
-        if (outCtx) {
-            outCtx.drawImage(this.canvas, 0, 0, exportWidth, exportHeight);
-        }
+        exportCanvas.getContext('2d')?.drawImage(this.canvas, 0, 0, exportWidth, exportHeight);
 
         const dataUrl = exportCanvas.toDataURL('image/png');
         localStorage.setItem(`signer_${this.mode}`, dataUrl);
@@ -241,21 +178,18 @@ export class SignatureModal extends LitElement {
         this.remove();
     }
 
-    close() {
-        this.remove();
-    }
-
     render() {
-        const title = this.mode === 'initials' ? i18n.t('addInitials') : i18n.t('addSig');
-
         return html`
-            <div class="card">
-                <h3>${title}</h3>
-                <canvas id="signature-pad"></canvas>
-                <div class="actions">
-                    <button class="btn-close" @click=${this.close}>${i18n.t('cancel')}</button>
-                    <button class="btn-clear" @click=${this.clear}>${i18n.t('clear')}</button>
-                    <button class="btn-save" @click=${this.save}>${i18n.t('done')}</button>
+            <div class="modal-overlay">
+                <div class="modal-card center">
+                    <h3 style="margin-top:0;">
+                        ${this.mode === 'initials' ? i18n.t('addInitials') : i18n.t('addSig')}</h3>
+                    <canvas id="signature-pad"></canvas>
+                    <div class="actions">
+                        <button class="btn" @click=${() => this.remove()}>${i18n.t('cancel')}</button>
+                        <button class="btn btn-danger" @click=${this.clear}>${i18n.t('clear')}</button>
+                        <button class="btn btn-primary" @click=${this.save}>${i18n.t('done')}</button>
+                    </div>
                 </div>
             </div>
         `;

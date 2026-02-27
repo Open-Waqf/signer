@@ -10,6 +10,7 @@ import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
 import {pdfEngine} from './lib/pdf-engine';
 import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
+import {ICONS} from './lib/icons'; // ✨ Imported Icons
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -32,10 +33,10 @@ export class AppRoot extends LitElement {
     private updateSW: ((reload: boolean) => void) | undefined;
 
     @query('pdf-workspace') workspace: any;
-    @query('dialog') privacyDialog!: HTMLDialogElement;
+    @query('dialog#privacy-dialog') privacyDialog!: HTMLDialogElement;
 
     createRenderRoot() {
-        return this;
+        return this; // Light DOM for app-root
     }
 
     handleSecretTap = () => {
@@ -54,23 +55,15 @@ export class AppRoot extends LitElement {
 
     async firstUpdated(_changedProperties: PropertyValues) {
         super.firstUpdated(_changedProperties);
-
         const params = new URLSearchParams(window.location.search);
         const id = params.get('id');
 
         if (id) {
             this.verifyMode = true;
             this.expectedVerifyId = id;
-            this.verifyResult = {
-                status: 'pending_file',
-                id: id
-            };
-
+            this.verifyResult = {status: 'pending_file', id: id};
             await this.updateComplete;
-
-            if (this.verifyDialog) {
-                this.verifyDialog.showModal();
-            }
+            if (this.verifyDialog) this.verifyDialog.showModal();
         }
     }
 
@@ -130,13 +123,8 @@ export class AppRoot extends LitElement {
             this.isLoading = false;
 
             let status: 'success' | 'fail' | null = null;
-
             if (this.expectedVerifyId) {
-                if (fileId && fileId.toLowerCase() === this.expectedVerifyId.toLowerCase()) {
-                    status = 'success';
-                } else {
-                    status = 'fail';
-                }
+                status = (fileId && fileId.toLowerCase() === this.expectedVerifyId.toLowerCase()) ? 'success' : 'fail';
                 this.expectedVerifyId = null;
             } else {
                 status = fileId ? 'success' : 'fail';
@@ -146,10 +134,7 @@ export class AppRoot extends LitElement {
             this.verifyHashInput = '';
             this.integrityStatus = 'idle';
 
-            if (!this.verifyDialog.open) {
-                this.verifyDialog.showModal();
-            }
-
+            if (!this.verifyDialog.open) this.verifyDialog.showModal();
         } catch (e) {
             this.isLoading = false;
             this.showToast(i18n.t('errorReadingFile') || 'Error reading file');
@@ -159,14 +144,8 @@ export class AppRoot extends LitElement {
     checkHash() {
         const input = this.verifyHashInput.replace(/[\s\n-]/g, '').trim().toLowerCase();
         const actual = this.verifyFileHash.toLowerCase();
-
         if (!input) return;
-
-        if (input === actual) {
-            this.integrityStatus = 'success';
-        } else {
-            this.integrityStatus = 'fail';
-        }
+        this.integrityStatus = (input === actual) ? 'success' : 'fail';
     }
 
     closeVerify() {
@@ -185,13 +164,8 @@ export class AppRoot extends LitElement {
     async handleFile(data: Uint8Array, name: string) {
         const sizeInMB = data.byteLength / (1024 * 1024);
         const isMobile = Capacitor.isNativePlatform() || window.innerWidth < 768;
-        const limit = isMobile ? 25 : 50;
-
-        if (sizeInMB > limit) {
-            const msg = i18n.t('fileTooBigMsg').replace('{size}', sizeInMB.toFixed(1));
-            if (!confirm(msg)) {
-                return;
-            }
+        if (sizeInMB > (isMobile ? 25 : 50)) {
+            if (!confirm(i18n.t('fileTooBigMsg').replace('{size}', sizeInMB.toFixed(1)))) return;
         }
 
         this.isLoading = true;
@@ -201,11 +175,8 @@ export class AppRoot extends LitElement {
         try {
             this.mode = 'workspace';
             await this.updateComplete;
-            if (this.workspace) {
-                await this.workspace.loadPdf(data, name);
-            }
+            if (this.workspace) await this.workspace.loadPdf(data, name);
         } catch (e) {
-            console.error(e);
             this.showToast(i18n.t('errorLoading'));
             this.mode = 'home';
         } finally {
@@ -219,7 +190,6 @@ export class AppRoot extends LitElement {
             const pdfDoc = await PDFDocument.create();
             const page = pdfDoc.addPage([595.28, 841.89]);
             const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
             page.drawText('Sample Document', {x: 50, y: 750, size: 24, font, color: rgb(0, 0.33, 0.71)});
             page.drawText('Use the tools above to add your signature, initials, or stamp.', {
                 x: 50,
@@ -248,15 +218,12 @@ export class AppRoot extends LitElement {
     async openFile() {
         try {
             const {data, name} = await fileService.openPdf();
-
             if (this.verifyMode) {
-                const file = new File([data as any], name, {type: 'application/pdf'});
-                await this.handleVerify(file);
+                await this.handleVerify(new File([data as any], name, {type: 'application/pdf'}));
             } else {
                 await this.handleFile(data, name);
             }
         } catch (e) {
-            // User cancelled
         }
     }
 
@@ -264,22 +231,16 @@ export class AppRoot extends LitElement {
         e.preventDefault();
         if (e.dataTransfer?.files[0]) {
             const file = e.dataTransfer.files[0];
-
             if (this.verifyMode) {
                 this.handleVerify(file);
-            } else {
-                if (file.type === 'application/pdf') {
-                    file.arrayBuffer().then(buffer => {
-                        this.handleFile(new Uint8Array(buffer), file.name);
-                    });
-                }
+            } else if (file.type === 'application/pdf') {
+                file.arrayBuffer().then(b => this.handleFile(new Uint8Array(b), file.name));
             }
         }
     }
 
     handleLangChange(e: Event) {
-        const select = e.target as HTMLSelectElement;
-        i18n.setLanguage(select.value as any);
+        i18n.setLanguage((e.target as HTMLSelectElement).value as any);
     }
 
     showPrivacy() {
@@ -304,11 +265,6 @@ export class AppRoot extends LitElement {
         }
     }
 
-    handleImageError(e: Event) {
-        const img = e.target as HTMLImageElement;
-        img.style.display = 'none';
-    }
-
     render() {
         return html`
             ${this.isLoading ? html`
@@ -321,285 +277,218 @@ export class AppRoot extends LitElement {
             <div class="toast ${this.toastMsg ? 'show' : ''}">${this.toastMsg}</div>
 
             ${this.updateAvailable ? html`
-                <div class="toast show" style="bottom: 80px; background: #333; color: white;">
-                    <span>🚀 ${i18n.t('updateAvailable') || 'New version available'}</span>
-                    <button
-                            @click=${() => this.updateSW && this.updateSW(true)}
-                            style="margin-left:10px; padding:4px 8px; font-size:0.8rem; background:white; color:black; border:none; border-radius:4px;">
+                <div class="toast show">
+                    <span style="display:flex; align-items:center; gap:8px;">${ICONS.alert} ${i18n.t('updateAvailable')}</span>
+                    <button class="btn btn-primary" style="padding: 4px 8px; margin-top: 8px;"
+                            @click=${() => this.updateSW && this.updateSW(true)}>
                         ${i18n.t('reload')}
                     </button>
                 </div>
             ` : ''}
 
             <div class="drop-zone ${this.mode === 'workspace' ? 'hidden' : ''}"
-                 style="height: 100vh; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 0;"
-                 @dragover=${(e: DragEvent) => e.preventDefault()}
-                 @drop=${this.handleDrop}>
+                 @dragover=${(e: DragEvent) => e.preventDefault()} @drop=${this.handleDrop}>
 
-                <div style="width: 100%; display: flex; justify-content: flex-end; padding: 20px; box-sizing: border-box; flex-shrink: 0;">
-                    <select @change=${this.handleLangChange}
-                            style="padding: 8px; border-radius: 8px; border: 1px solid #ddd; background: white; font-size: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div class="layout-header">
+                    <select class="lang-select" @change=${this.handleLangChange}>
                         <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
                         <option value="ar" ?selected=${i18n.lang === 'ar'}>العربية</option>
                         <option value="fr" ?selected=${i18n.lang === 'fr'}>Français</option>
                     </select>
                 </div>
 
-                <div class="drop-card" style="margin: auto 20px; width: 90%; max-width: 400px; flex-shrink: 0;">
-
-                    <img src="./icons/icon-192.webp" alt="${i18n.t('appTitle')}"
-                         style="width: 80px; height: 80px; margin-bottom: 20px; border-radius: 16px; cursor: pointer;"
-                         @click=${this.handleSecretTap}
-                         @error=${this.handleImageError}/>
-
+                <div class="drop-card">
+                    <img src="./icons/icon-192.webp" alt="${i18n.t('appTitle')}" @click=${this.handleSecretTap}
+                         draggable="false"/>
                     <h1>${i18n.t('appTitle')}</h1>
                     <p class="sub">v${packageJson.version} • ${i18n.t('tagline')}</p>
 
-                    <div style="display:flex; background:#f3f4f6; padding:4px; border-radius:8px; margin-bottom:20px; width:100%;">
-                        <button
-                                @click=${() => this.verifyMode = false}
-                                style="flex:1; background: ${!this.verifyMode ? '#fff' : 'transparent'}; color: ${!this.verifyMode ? '#000' : '#666'}; box-shadow: ${!this.verifyMode ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'}; padding:8px; font-size:0.9rem;">
-                            ✍️ ${i18n.t('signMode') || 'Sign'}
+                    <div class="mode-toggle">
+                        <button class="${!this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = false}>
+                            <span style="display:flex; align-items:center; justify-content:center; gap:6px;">${ICONS.sign} ${i18n.t('signMode') || 'Sign'}</span>
                         </button>
-                        <button
-                                @click=${() => this.verifyMode = true}
-                                style="flex:1; background: ${this.verifyMode ? '#fff' : 'transparent'}; color: ${this.verifyMode ? '#000' : '#666'}; box-shadow: ${this.verifyMode ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'}; padding:8px; font-size:0.9rem;">
-                            🔍 ${i18n.t('verifyMode') || 'Verify'}
+                        <button class="${this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = true}>
+                            <span style="display:flex; align-items:center; justify-content:center; gap:6px;">${ICONS.search} ${i18n.t('verifyMode') || 'Verify'}</span>
                         </button>
                     </div>
 
-                    <div class="drop-area-visual">
-                        <button @click=${this.openFile}>
-                            ${this.verifyMode ? (i18n.t('selectFileVerify') || 'Select PDF to Verify') : i18n.t('selectFile')}
+                    <div class="drop-area-visual" @click=${this.openFile}>
+                        <button class="btn btn-primary">
+                            ${this.verifyMode ? i18n.t('selectFileVerify') : i18n.t('selectFile')}
                         </button>
-                        <p class="sub" style="margin: 12px 0 0 0; font-size: 0.85rem;">
-                            ${this.verifyMode ? (i18n.t('dropHintVerify') || 'Drop a signed document here to check its digital ID') : i18n.t('dragDropHint')}
+                        <p class="sub" style="margin-top: 12px; font-size: 0.85rem;">
+                            ${this.verifyMode ? i18n.t('dropHintVerify') : i18n.t('dragDropHint')}
                         </p>
-
-                        ${!this.verifyMode ? html`
-                            <button @click=${this.loadSamplePdf}
-                                    style="margin-top: 15px; background: transparent; color: #2563eb; border: none; text-decoration: underline; cursor: pointer; font-size: 0.9rem; font-weight: 500; box-shadow: none;">
-                                ${i18n.t('trySample') || 'No file? Try with a sample PDF'}
-                            </button>
-                        ` : ''}
                     </div>
 
-                    <div style="margin-top: 16px; font-size: 0.8rem; color: #10b981; font-weight: 500; background: #ecfdf5; padding: 6px 12px; border-radius: 20px;">
-                        🛡️ ${i18n.t('privacyBadge')}
+                    ${!this.verifyMode ? html`
+                        <button class="text-link" style="margin-top: 15px;" @click=${this.loadSamplePdf}>
+                            ${i18n.t('trySample') || 'No file? Try with a sample PDF'}
+                        </button>
+                    ` : ''}
+
+                    <div style="margin-top: 16px;">
+                        <span class="badge-success">${ICONS.shield} ${i18n.t('privacyBadge')}</span>
                     </div>
 
-                    <div style="margin-top: 24px; display: flex; gap: 15px; font-size: 0.85rem;">
-                        <a href="#" class="footer-link" @click=${(e: Event) => {
-                            e.preventDefault();
-                            this.showPrivacy();
-                        }}>
-                            ${i18n.t('privacyTitle')}
-                        </a>
-
-                        <span style="color: #ccc;">•</span>
-
-                        <a href="mailto:${AppConfig.supportEmail}" class="footer-link">
-                            ${i18n.t('contactUs')}
-                        </a>
+                    <div class="footer-links">
+                        <a class="footer-link" @click=${this.showPrivacy}>${i18n.t('privacyTitle')}</a>
+                        <span>•</span>
+                        <a href="mailto:${AppConfig.supportEmail}" class="footer-link">${i18n.t('contactUs')}</a>
                     </div>
 
-                    <button @click=${() => {
-                        const url = `${AppConfig.website}/?lang=${i18n.lang}`;
-                        navigator.clipboard.writeText(url);
+                    <button class="btn" style="margin-top: 20px; width: 100%;" @click=${() => {
+                        navigator.clipboard.writeText(`${AppConfig.website}/?lang=${i18n.lang}`);
                         this.showToast(i18n.t('linkCopied'));
-                    }}
-                            style="margin-top:20px; background:white; color:#333; border:1px solid #ddd; padding: 10px 20px; border-radius: 8px; font-size: 0.9rem; cursor: pointer;">
-                        🔗 ${i18n.t('shareApp')}
+                    }}>
+                        ${ICONS.link} ${i18n.t('shareApp')}
                     </button>
                 </div>
 
                 ${!this.verifyMode ? html`
-                    <div style="margin-top: 40px; text-align: left; width: 90%; max-width: 800px; margin-left: auto; margin-right: auto; flex-shrink: 0;">
-                        <h3 style="text-align: center; color: #374151; margin-bottom: 24px; font-weight: 600;">
-                            ${i18n.t('howItWorks') || 'How it Works'}
-                        </h3>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border: 1px solid #f3f4f6;">
-                                <div style="font-size: 32px; margin-bottom: 12px;">✍️</div>
-                                <h4 style="margin: 0 0 8px 0; color: #1f2937; font-size: 1.05rem;">
-                                    ${i18n.t('step1Title') || '1. Sign Offline'}</h4>
-                                <p style="margin: 0; font-size: 0.85rem; color: #6b7280; line-height: 1.4;">
-                                    ${i18n.t('step1Desc') || 'Select a PDF. It never leaves your device.'}</p>
+                    <div class="features-section">
+                        <h3 style="text-align: center; color: var(--text-main); margin-bottom: 24px;">
+                            ${i18n.t('howItWorks')}</h3>
+                        <div class="features-grid">
+                            <div class="feature-card">
+                                <div class="feature-icon">${ICONS.sign}</div>
+                                <h4>${i18n.t('step1Title')}</h4>
+                                <p>${i18n.t('step1Desc')}</p>
                             </div>
-                            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border: 1px solid #f3f4f6;">
-                                <div style="font-size: 32px; margin-bottom: 12px;">🔐</div>
-                                <h4 style="margin: 0 0 8px 0; color: #1f2937; font-size: 1.05rem;">
-                                    ${i18n.t('step2Title') || '2. Save & Share'}</h4>
-                                <p style="margin: 0; font-size: 0.85rem; color: #6b7280; line-height: 1.4;">
-                                    ${i18n.t('step2Desc') || 'Export your signed document and get a secure Verification Receipt.'}</p>
+                            <div class="feature-card">
+                                <div class="feature-icon">${ICONS.lock}</div>
+                                <h4>${i18n.t('step2Title')}</h4>
+                                <p>${i18n.t('step2Desc')}</p>
                             </div>
-                            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border: 1px solid #f3f4f6;">
-                                <div style="font-size: 32px; margin-bottom: 12px;">🛡️</div>
-                                <h4 style="margin: 0 0 8px 0; color: #1f2937; font-size: 1.05rem;">
-                                    ${i18n.t('step3Title') || '3. Verify Integrity'}</h4>
-                                <p style="margin: 0; font-size: 0.85rem; color: #6b7280; line-height: 1.4;">
-                                    ${i18n.t('step3Desc') || 'Anyone can drop the file here to prove it wasn\'t tampered with.'}</p>
+                            <div class="feature-card">
+                                <div class="feature-icon">${ICONS.shield}</div>
+                                <h4>${i18n.t('step3Title')}</h4>
+                                <p>${i18n.t('step3Desc')}</p>
                             </div>
                         </div>
                     </div>
                 ` : ''}
-
                 <div style="height: 40px; flex-shrink: 0;"></div>
             </div>
 
-            <pdf-workspace
-                    class="${this.mode === 'home' ? 'hidden' : ''}"
-                    @toast=${(e: CustomEvent) => this.showToast(e.detail)}
-                    @set-loading=${(e: CustomEvent) => {
-                        this.isLoading = e.detail;
-                        this.requestUpdate();
-                    }}
-                    @exit-workspace=${this.handleExitWorkspace}
-            ></pdf-workspace>
+            <pdf-workspace class="${this.mode === 'home' ? 'hidden' : ''}"
+                           @toast=${(e: CustomEvent) => this.showToast(e.detail)}
+                           @set-loading=${(e: CustomEvent) => {
+                               this.isLoading = e.detail;
+                               this.requestUpdate();
+                           }}
+                           @exit-workspace=${this.handleExitWorkspace}>
+            </pdf-workspace>
 
-            <dialog>
+            <dialog id="privacy-dialog">
                 <div class="dialog-content">
                     <h2>${i18n.t('privacyTitle')}</h2>
-                    <p>${i18n.t('privacyContent')}</p>
+                    <p style="font-size: 0.95rem; color: var(--text-sub);">${i18n.t('privacyContent')}</p>
 
-                    <div style="margin-top: 15px; padding: 12px; border-left: 4px solid #10b981; background: #ecfdf5; border-radius: 4px;">
-                        <h4 style="margin: 0 0 5px 0; color: #065f46;">🛡️
-                            ${i18n.t('securityModel') || 'Amanah / Security Model'}</h4>
-                        <p style="margin: 0; font-size: 0.85rem; color: #047857; line-height: 1.4;">
-                            ${i18n.t('securityModelText') || 'Open Waqf Signer uses a Zero-Trust local architecture. Your documents never leave your device. When you save, the app calculates a military-grade SHA-256 cryptographic hash of the file bytes entirely in your browser. This hash acts as an unforgeable digital fingerprint to prove the document\'s integrity later.'}
-                        </p>
+                    <div class="amanah-panel">
+                        <h4 style="margin: 0 0 5px 0; color: #065f46; display:flex; align-items:center; gap:6px;">
+                            ${ICONS.shield} ${i18n.t('securityModel')}
+                        </h4>
+                        <p style="margin: 0; font-size: 0.85rem; color: #047857;">${i18n.t('securityModelText')}</p>
                     </div>
 
-                    <div style="margin-top: 20px; font-size: 0.85rem; color: #6b7280; background: #f9fafb; padding: 12px; border-radius: 8px;">
+                    <div class="info-panel">
                         <a href="https://github.com/open-waqf/signer" target="_blank"
-                           style="color: #2563eb; text-decoration: none; display: block; margin-bottom: 4px;">View
-                            Source Code on GitHub ↗</a>
+                           style="color: var(--primary); display: block; margin-bottom: 4px;">View Source Code on GitHub
+                            ↗</a>
+                        <a href="https://github.com/open-waqf/signer/blob/main/LICENSE" target="_blank"
+                           style="color: var(--primary);">MIT License ↗</a>
                     </div>
 
-                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;"/>
-                    <button @click=${this.clearAppCache}
-                            style="background: #fee2e2; color: #b91c1c; border: none; width: 100%; margin-bottom: 10px;">
+                    <button class="btn btn-danger" style="width: 100%; margin-top: 15px;" @click=${this.clearAppCache}>
                         ${i18n.t('forgetData')}
                     </button>
                 </div>
                 <div class="dialog-footer">
-                    <button @click=${this.closePrivacy}>${i18n.t('close')}</button>
+                    <button class="btn" @click=${this.closePrivacy}>${i18n.t('close')}</button>
                 </div>
             </dialog>
 
             ${this.showDiagnostics ? html`
-                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 99999; backdrop-filter: blur(2px);"
+                <div style="position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:99999; backdrop-filter:blur(2px);"
                      @click=${() => {
                          this.showDiagnostics = false;
                          this.requestUpdate();
                      }}>
-
-                    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 90%; max-width: 500px;"
+                    <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 500px;"
                          @click=${(e: Event) => e.stopPropagation()}>
-
-                        <h2 style="margin-top:0; color: #1f2937;">⚙️
-                            ${i18n.t('diagnostics') || 'System Diagnostics'}</h2>
-
-                        <div style="background:#1f2937; color:#10b981; padding:15px; border-radius:8px; font-family:monospace; font-size:0.8rem; overflow-x:auto;">
+                        <h2 style="margin-top:0; display:flex; align-items:center; gap:8px;">${ICONS.cog}
+                            ${i18n.t('diagnostics')}</h2>
+                        <div class="diagnostics-panel">
                             <div>App Version: ${packageJson.version}</div>
-                            <div>Platform: ${Capacitor.isNativePlatform() ? 'Native (Capacitor)' : 'Web'}</div>
+                            <div>Platform: ${Capacitor.isNativePlatform() ? 'Native' : 'Web'}</div>
                             <div>User Agent: ${navigator.userAgent}</div>
                             <div>Window Size: ${window.innerWidth}x${window.innerHeight}</div>
                             <div>Connection: ${navigator.onLine ? 'Online' : 'Offline'}</div>
-                            <div>Storage Quota:
-                                ${'storage' in navigator && 'estimate' in navigator.storage ? 'Supported' : 'Unknown'}
-                            </div>
                         </div>
-
-                        <button @click=${() => {
+                        <button class="btn" style="width:100%;" @click=${() => {
                             this.showDiagnostics = false;
                             this.requestUpdate();
-                        }}
-                                style="width:100%; margin-top:15px; padding:12px; background: #374151; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                            ${i18n.t('close') || 'Close'}
+                        }}>${i18n.t('close')}
                         </button>
                     </div>
                 </div>
             ` : ''}
 
-            <dialog id="verify-dialog"
-                    @cancel=${this.closeVerify}
-                    style="border-radius:20px; padding:0; border:none; box-shadow:0 20px 25px rgba(0,0,0,0.1); width:90%; max-width:450px;">
-                <div style="padding: 24px;">
-                    <div style="text-align:center; padding-bottom: 20px;">
-                        ${this.verifyResult.status === 'pending_file' ? html`
-                            <div style="width:60px; height:60px; background:#e0f2fe; color:#0284c7; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 15px;">
-                                🔍
-                            </div>
-                            <h2 style="margin:0 0 5px 0; color:#0369a1;">
-                                ${i18n.t('linkDetected') || 'Link Detected'}</h2>
-                            <p style="color:#4b5563; font-size:0.9rem; margin:0 0 15px 0;">
-                                ${i18n.t('linkDetectedMsg') || 'Please select the document to verify against ID:'}
-                                <strong>${this.verifyResult.id}</strong>
-                            </p>
-                            <button @click=${this.startPendingVerification}
-                                    style="background:#2563eb; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; width: 100%; font-size: 1rem;">
-                                ${i18n.t('selectFileVerify')}
-                            </button>
-                        ` : this.verifyResult.status === 'success' ? html`
-                            <div style="width:60px; height:60px; background:#dcfce7; color:#16a34a; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 15px;">
-                                ℹ️
-                            </div>
-                            <h2 style="margin:0 0 5px 0; color:#166534;">
-                                ${i18n.t('recordFound') || 'Metadata Found'}</h2>
-                            <p style="color:#4b5563; font-size:0.9rem; margin:0 0 10px 0;">
-                                ${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong>
-                            </p>
-                            <div style="background: #fffbeb; color: #b45309; padding: 10px; border-radius: 6px; font-size: 0.8rem; text-align: left; border: 1px solid #fde68a;">
-                                ${i18n.t('recordFoundDisclaimer') || 'This ID indicates the document was processed by this app, but does not prove it is unaltered. You must check the integrity hash below.'}
-                            </div>
-                        ` : html`
-                            <div style="width:60px; height:60px; background:#fee2e2; color:#dc2626; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 15px;">
-                                !
-                            </div>
-                            <h2 style="margin:0 0 5px 0; color:#991b1b;">${i18n.t('noRecordFound')}</h2>
-                        `}
-                    </div>
+            <dialog id="verify-dialog" @cancel=${this.closeVerify}>
+                <div class="dialog-content" style="text-align: center;">
+                    ${this.verifyResult.status === 'pending_file' ? html`
+                        <div style="color:var(--primary); margin-bottom:15px; display:flex; justify-content:center;">
+                            <div style="padding:15px; background:#eff6ff; border-radius:50%;">${ICONS.search}</div>
+                        </div>
+                        <h2>${i18n.t('linkDetected')}</h2>
+                        <p class="sub">${i18n.t('linkDetectedMsg')} <strong>${this.verifyResult.id}</strong></p>
+                        <button class="btn btn-primary" style="width: 100%;" @click=${this.startPendingVerification}>
+                            ${i18n.t('selectFileVerify')}
+                        </button>
+                    ` : this.verifyResult.status === 'success' ? html`
+                        <div style="color:#10b981; margin-bottom:15px; display:flex; justify-content:center;">
+                            <div style="padding:15px; background:#ecfdf5; border-radius:50%;">${ICONS.info}</div>
+                        </div>
+                        <h2 style="color:#166534;">${i18n.t('recordFound')}</h2>
+                        <p class="sub">${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong></p>
+                        <div class="amanah-panel"
+                             style="text-align:left; color:#b45309; background:#fffbeb; border-color:#fde68a;">
+                            ${i18n.t('recordFoundDisclaimer')}
+                        </div>
+                    ` : html`
+                        <div style="color:#ef4444; margin-bottom:15px; display:flex; justify-content:center;">
+                            <div style="padding:15px; background:#fee2e2; border-radius:50%;">${ICONS.alert}</div>
+                        </div>
+                        <h2 style="color:#991b1b;">${i18n.t('noRecordFound')}</h2>
+                    `}
 
                     ${this.verifyResult.status !== 'pending_file' ? html`
-                        <hr style="border:0; border-top:1px dashed #e5e7eb; margin:0 0 20px 0;"/>
-
-                        <div style="background:#f9fafb; padding:15px; border-radius:12px; border:1px solid #f3f4f6;">
-                            <h3 style="font-size:0.9rem; margin:0 0 10px 0;">${i18n.t('integrityCheck')}</h3>
-
+                        <hr style="margin: 20px 0; border: 0; border-top: 1px dashed var(--border);"/>
+                        <div class="info-panel" style="text-align:left;">
+                            <h3 style="margin: 0 0 10px 0; font-size: 0.95rem;">${i18n.t('integrityCheck')}</h3>
                             <div style="display:flex; gap:8px;">
-                                <input type="text"
-                                       .value="${this.verifyHashInput}"
+                                <input type="text" class="input-field" .value="${this.verifyHashInput}"
                                        @input="${(e: any) => {
                                            this.verifyHashInput = e.target.value;
                                            this.integrityStatus = 'idle';
-                                       }}"
-                                       placeholder="${i18n.t('pasteHashPlaceholder')}"
-                                       style="flex:1; padding:8px; border:1px solid #d1d5db; border-radius:6px;">
-                                <button @click="${this.checkHash}"
-                                        style="background:#2563eb; color:white; border:none; padding:0 15px; border-radius:6px; cursor:pointer;">
-                                    ${i18n.t('verifyBtn')}
+                                       }}" placeholder="Paste Hash Here...">
+                                <button class="btn btn-primary" @click="${this.checkHash}">${i18n.t('verifyBtn')}
                                 </button>
                             </div>
-
                             ${this.integrityStatus === 'success' ? html`
-                                <div style="margin-top:10px; padding:10px; background:#dcfce7; color:#166534; border-radius:6px; font-size:0.85rem; border:1px solid #bbf7d0;">
-                                    <span .innerHTML=${i18n.t('statusVerified')}></span>
-                                </div>
-                            ` : ''}
-
+                                <div class="info-panel alert-success" style="margin-top:10px;">
+                                    ${i18n.t('statusVerified')}
+                                </div>` : ''}
                             ${this.integrityStatus === 'fail' ? html`
-                                <div style="margin-top:10px; padding:10px; background:#fee2e2; color:#991b1b; border-radius:6px; font-size:0.85rem; border:1px solid #fecaca;">
-                                    <span .innerHTML=${i18n.t('statusMismatch')}></span>
-                                </div>
-                            ` : ''}
+                                <div class="info-panel alert-error" style="margin-top:10px;">
+                                    ${i18n.t('statusMismatch')}
+                                </div>` : ''}
                         </div>
                     ` : ''}
-
-                    <button @click=${() => this.closeVerify()}
-                            style="margin-top: 20px; width: 100%; padding: 12px; background: transparent; color: #4b5563; border: 1px solid #e5e7eb; border-radius: 8px; font-weight: 500; cursor: pointer;">
-                        ${i18n.t('close')}
-                    </button>
+                </div>
+                <div class="dialog-footer">
+                    <button class="btn" style="width: 100%;" @click=${this.closeVerify}>${i18n.t('close')}</button>
                 </div>
             </dialog>
         `;
