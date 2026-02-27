@@ -68,16 +68,19 @@ export const sharedStyles = css`
         justify-content: center;
         z-index: 99999;
         backdrop-filter: blur(2px);
+        padding: 16px;
+        box-sizing: border-box;
     }
 
     .modal-card {
         background: white;
         padding: 24px;
-        border-radius: 12px;
+        border-radius: 16px;
         box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-        width: 90%;
-        max-width: 480px;
+        width: 100%;
+        max-width: 420px;
         text-align: left;
+        box-sizing: border-box;
     }
 
     .modal-card.center {

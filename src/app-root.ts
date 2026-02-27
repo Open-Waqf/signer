@@ -10,7 +10,7 @@ import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
 import {pdfEngine} from './lib/pdf-engine';
 import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
-import {ICONS} from './lib/icons'; // ✨ Imported Icons
+import {ICONS} from './lib/icons';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -36,10 +36,11 @@ export class AppRoot extends LitElement {
     @query('dialog#privacy-dialog') privacyDialog!: HTMLDialogElement;
 
     createRenderRoot() {
-        return this; // Light DOM for app-root
+        return this;
     }
 
-    handleSecretTap = () => {
+    handleSecretTap = (e: Event) => {
+        e.preventDefault();
         this.logoTapCount++;
         clearTimeout(this.logoTapTimeout);
         this.logoTapTimeout = setTimeout(() => {
@@ -259,7 +260,12 @@ export class AppRoot extends LitElement {
     }
 
     handleExitWorkspace() {
-        if (confirm(i18n.t('exitConfirm'))) {
+        if (this.workspace.isDirty) {
+            if (confirm(i18n.t('exitConfirm'))) {
+                this.workspace.reset();
+                this.mode = 'home';
+            }
+        } else {
             this.workspace.reset();
             this.mode = 'home';
         }
@@ -410,12 +416,8 @@ export class AppRoot extends LitElement {
             </dialog>
 
             ${this.showDiagnostics ? html`
-                <div style="position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:99999; backdrop-filter:blur(2px);"
-                     @click=${() => {
-                         this.showDiagnostics = false;
-                         this.requestUpdate();
-                     }}>
-                    <div style="background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 500px;"
+                <div class="modal-overlay" @click=${() => this.showDiagnostics = false}>
+                    <div class="modal-card" style="max-width: 420px; border-radius: 16px;"
                          @click=${(e: Event) => e.stopPropagation()}>
                         <h2 style="margin-top:0; display:flex; align-items:center; gap:8px;">${ICONS.cog}
                             ${i18n.t('diagnostics')}</h2>
@@ -426,11 +428,11 @@ export class AppRoot extends LitElement {
                             <div>Window Size: ${window.innerWidth}x${window.innerHeight}</div>
                             <div>Connection: ${navigator.onLine ? 'Online' : 'Offline'}</div>
                         </div>
-                        <button class="btn" style="width:100%;" @click=${() => {
-                            this.showDiagnostics = false;
-                            this.requestUpdate();
-                        }}>${i18n.t('close')}
-                        </button>
+                        <div style="display: flex; justify-content: center; margin-top: 15px;">
+                            <button class="btn" style="width:100%;" @click=${() => this.showDiagnostics = false}>
+                                ${i18n.t('close')}
+                            </button>
+                        </div>
                     </div>
                 </div>
             ` : ''}
@@ -477,13 +479,11 @@ export class AppRoot extends LitElement {
                                 </button>
                             </div>
                             ${this.integrityStatus === 'success' ? html`
-                                <div class="info-panel alert-success" style="margin-top:10px;">
-                                    ${i18n.t('statusVerified')}
-                                </div>` : ''}
+                                <div class="info-panel alert-success" style="margin-top:10px;"
+                                     .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
                             ${this.integrityStatus === 'fail' ? html`
-                                <div class="info-panel alert-error" style="margin-top:10px;">
-                                    ${i18n.t('statusMismatch')}
-                                </div>` : ''}
+                                <div class="info-panel alert-error" style="margin-top:10px;"
+                                     .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
                         </div>
                     ` : ''}
                 </div>

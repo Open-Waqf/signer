@@ -7,7 +7,7 @@ import {i18n} from '../lib/i18n-service';
 import {Annotation, AnnotationType} from '../types';
 import './signature-modal';
 import {ICONS} from '../lib/icons';
-import {sharedStyles} from '../styles/shared-styles'; // ✨ Imported Unified CSS
+import {sharedStyles} from '../styles/shared-styles';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
@@ -42,7 +42,7 @@ export class PdfWorkspace extends LitElement {
     private lastSavedBytes: Uint8Array | null = null;
     @state() outputFilename = '';
 
-    @state() isDirty = false;
+    @state() public isDirty = false;
     private interactionSnapshotTaken = false;
     private interactionChanged = false;
 
@@ -56,18 +56,46 @@ export class PdfWorkspace extends LitElement {
     @state() guideX: number | null = null;
     @state() guideY: number | null = null;
 
+    @state() customPrompt: {
+        show: boolean,
+        title: string,
+        value: string,
+        placeholder: string,
+        isIdentity: boolean,
+        targetId?: string
+    } = {show: false, title: '', value: '', placeholder: '', isIdentity: false};
+
     private get hasEdits(): boolean {
         return this.annotations.length > 0 || this.includeAudit;
     }
 
     addIdentity() {
         const savedEmail = localStorage.getItem('user_email') || '';
-        const email = prompt(i18n.t('identityPrompt') || 'Enter your email:', savedEmail);
-        if (email) {
-            localStorage.setItem('user_email', email);
-            const text = `${i18n.t('signedBy') || 'Signed by'}: ${email}`;
+        this.customPrompt = {
+            show: true,
+            title: i18n.t('identityPrompt') || 'Enter your email:',
+            value: savedEmail,
+            placeholder: 'email@example.com',
+            isIdentity: true
+        };
+    }
+
+
+    saveCustomPrompt() {
+        const val = this.customPrompt.value.trim();
+        if (this.customPrompt.isIdentity && val) {
+            localStorage.setItem('user_email', val);
+            const text = `${i18n.t('signedBy') || 'Signed by'}: ${val}`;
             this.addAnnotation('identity', text, 0);
+        } else if (!this.customPrompt.isIdentity && this.customPrompt.targetId && val) {
+            this.snapshot();
+            this.annotations = this.annotations.map((a) => (a.id === this.customPrompt.targetId ? {
+                ...a,
+                data: val
+            } : a));
+            this.isDirty = true;
         }
+        this.customPrompt.show = false;
     }
 
     sendProofEmail() {
@@ -85,7 +113,6 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
-    // ✨ Unified Styles
     static styles = [sharedStyles, css`
         :host {
             height: 100vh;
@@ -121,30 +148,81 @@ export class PdfWorkspace extends LitElement {
             border-radius: 6px;
         }
 
-        @media (max-width: 600px) {
-            .mobile-hide {
-                display: none;
-            }
+        /* The Responsive Toolbar */
+
+        .toolbar-wrapper {
+            background: #fff;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 8px 12px;
         }
 
-        .toolbar {
-            background: #fff;
-            padding: 8px 12px;
+        .toolbar-row {
             display: flex;
             gap: 8px;
             align-items: center;
-            border-bottom: 1px solid var(--border);
-            flex-shrink: 0;
-            height: 54px;
-            overflow-x: auto;
-            white-space: nowrap;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-            padding-right: 20px;
+            flex-wrap: wrap; /* ✨ Allows wrapping on small screens */
+            justify-content: flex-start;
         }
 
-        .toolbar::-webkit-scrollbar {
-            display: none;
+        .toolbar-row.secondary {
+            justify-content: space-between;
+        }
+
+        .toolbar-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-row .btn {
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
+
+        .toolbar-row .btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-hide {
+                display: none;
+            }
+
+            .btn-label {
+                display: none;
+            }
+
+            .toolbar-row .btn {
+                padding: 0;
+                width: 40px;
+                height: 40px;
+            }
+
+            .toolbar-row {
+                gap: 6px;
+                justify-content: center;
+            }
+
+            .toolbar-row.secondary {
+                justify-content: center;
+            }
+
+            .toolbar-actions {
+                justify-content: center;
+                width: 100%;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .btn-label {
+                margin-left: 6px;
+            }
         }
 
         .toolbar-secondary {
@@ -152,6 +230,8 @@ export class PdfWorkspace extends LitElement {
             background: #f9fafb;
             padding: 4px 12px;
             height: 44px;
+            display: flex;
+            align-items: center;
         }
 
         .tool-group {
@@ -185,32 +265,6 @@ export class PdfWorkspace extends LitElement {
             background: white;
             border-radius: 2px;
             flex-shrink: 0;
-        }
-
-        @media (max-width: 600px) {
-            .btn-label {
-                display: none;
-            }
-
-            .btn {
-                padding: 0;
-                width: 44px;
-                height: 44px;
-            }
-
-            .toolbar {
-                gap: 6px;
-            }
-
-            .toolbar-secondary {
-                justify-content: center;
-                gap: 15px;
-            }
-        }
-        @media (min-width: 601px) {
-            .btn-label {
-                margin-left: 6px;
-            }
         }
 
         button.toggle {
@@ -549,12 +603,14 @@ export class PdfWorkspace extends LitElement {
     }
 
     handleTextEdit(id: string, currentText: string | undefined) {
-        const newText = prompt(i18n.t('editText') || 'Edit:', currentText || '');
-        if (newText !== null && newText.trim() !== '') {
-            this.snapshot();
-            this.annotations = this.annotations.map((a) => (a.id === id ? {...a, data: newText} : a));
-            this.isDirty = true;
-        }
+        this.customPrompt = {
+            show: true,
+            title: i18n.t('editText') || 'Edit text:',
+            value: currentText || '',
+            placeholder: 'Type here...',
+            isIdentity: false,
+            targetId: id
+        };
     }
 
     deleteAnnotation(id: string) {
@@ -827,57 +883,64 @@ export class PdfWorkspace extends LitElement {
                 </select>
             </header>
 
-            <div class="toolbar">
-                <button class="btn btn-primary" @click=${this.openSignModal} title="${i18n.t('addSig')}">
-                    ${ICONS.sign}<span class="btn-label">${i18n.t('addSig')}</span>
-                </button>
-                <button class="btn" @click=${this.openInitialsModal} title="${i18n.t('addInitials')}">
-                    ${ICONS.text}<span class="btn-label">${i18n.t('addInitials')}</span>
-                </button>
-                <button class="btn" @click=${this.addTextAnnotation} title="${i18n.t('addText')}">
-                    ${ICONS.text}<span class="btn-label">${i18n.t('addText')}</span>
-                </button>
-                <button class="btn" @click=${this.addIdentity} title="${i18n.t('addIdentity')}">
-                    ${ICONS.identity}<span class="btn-label">${i18n.t('addIdentity') || 'Identity'}</span>
-                </button>
-                <button class="btn" @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
-                        title="${i18n.t('addStamp')}">
-                    ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
-                </button>
-                <button class="btn" @click=${this.addDateStamp} title="${i18n.t('addDate')}">
-                    ${ICONS.date}<span class="btn-label">${i18n.t('addDate')}</span>
-                </button>
-                <div style="width: 1px; height: 20px; background: #ddd; margin: 0 4px; flex-shrink: 0;"></div>
-                <button class="btn" @click=${this.undo} ?disabled=${this.history.length === 0}
-                        title="${i18n.t('undo')}">${ICONS.undo}
-                </button>
-                <button class="btn" @click=${this.redo} ?disabled=${this.future.length === 0} title="${i18n.t('redo')}">
-                    ${ICONS.redo}
-                </button>
-                <div style="flex:1"></div>
-                <button class="btn toggle ${this.includeFooter ? 'active' : ''}" @click=${() => {
-                    this.includeFooter = !this.includeFooter;
-                    this.isDirty = true;
-                    this.toast(this.includeFooter ? i18n.t('footerOn') : i18n.t('footerOff'));
-                }} title="${i18n.t('addPageFooter')}">
-                    ${ICONS.footer}<span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
-                </button>
-                <button class="btn toggle ${this.includeAudit ? 'active' : ''}" @click=${() => {
-                    this.includeAudit = !this.includeAudit;
-                    this.isDirty = true;
-                    this.toast(this.includeAudit ? i18n.t('auditOn') : i18n.t('auditOff'));
-                }} title="${i18n.t('addAuditPage')}">
-                    ${ICONS.audit}<span class="btn-label">${i18n.t('auditTrail')}</span>
-                </button>
-                <button class="btn btn-primary" @click=${() => this.saveDocument({
-                    silentWeb: false,
-                    showToast: true
-                })} ?disabled=${saveDisabled}>
-                    ${ICONS.save}<span class="btn-label">${i18n.t('savePdf')}</span>
-                </button>
-                <button class="btn" @click=${this.shareLatest} ?disabled=${shareDisabled}>
-                    ${ICONS.share}<span class="btn-label">${i18n.t('sharePdf')}</span>
-                </button>
+            <div class="toolbar-wrapper">
+                <div class="toolbar-row">
+                    <button class="btn btn-primary" @click=${this.openSignModal} title="${i18n.t('addSig')}">
+                        ${ICONS.sign}<span class="btn-label">${i18n.t('addSig')}</span>
+                    </button>
+                    <button class="btn" @click=${this.openInitialsModal} title="${i18n.t('addInitials')}">
+                        ${ICONS.text}<span class="btn-label">${i18n.t('addInitials')}</span>
+                    </button>
+                    <button class="btn" @click=${this.addTextAnnotation} title="${i18n.t('addText')}">
+                        ${ICONS.text}<span class="btn-label">${i18n.t('addText')}</span>
+                    </button>
+                    <button class="btn" @click=${this.addIdentity} title="${i18n.t('addIdentity')}">
+                        ${ICONS.identity}<span class="btn-label">${i18n.t('addIdentity') || 'Identity'}</span>
+                    </button>
+                    <button class="btn" @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
+                            title="${i18n.t('addStamp')}">
+                        ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
+                    </button>
+                    <button class="btn" @click=${this.addDateStamp} title="${i18n.t('addDate')}">
+                        ${ICONS.date}<span class="btn-label">${i18n.t('addDate')}</span>
+                    </button>
+                </div>
+
+                <div class="toolbar-row secondary">
+                    <div class="toolbar-actions">
+                        <button class="btn" @click=${this.undo} ?disabled=${this.history.length === 0}
+                                title="${i18n.t('undo')}">${ICONS.undo}
+                        </button>
+                        <button class="btn" @click=${this.redo} ?disabled=${this.future.length === 0}
+                                title="${i18n.t('redo')}">${ICONS.redo}
+                        </button>
+                    </div>
+
+                    <div class="toolbar-actions">
+                        <button class="btn toggle ${this.includeFooter ? 'active' : ''}" @click=${() => {
+                            this.includeFooter = !this.includeFooter;
+                            this.isDirty = true;
+                            this.toast(this.includeFooter ? i18n.t('footerOn') : i18n.t('footerOff'));
+                        }} title="${i18n.t('addPageFooter')}">
+                            ${ICONS.footer}<span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
+                        </button>
+                        <button class="btn toggle ${this.includeAudit ? 'active' : ''}" @click=${() => {
+                            this.includeAudit = !this.includeAudit;
+                            this.isDirty = true;
+                            this.toast(this.includeAudit ? i18n.t('auditOn') : i18n.t('auditOff'));
+                        }} title="${i18n.t('addAuditPage')}">
+                            ${ICONS.audit}<span class="btn-label">${i18n.t('auditTrail')}</span>
+                        </button>
+                        <button class="btn" @click=${this.shareLatest} ?disabled=${shareDisabled}>
+                            ${ICONS.share}<span class="btn-label">${i18n.t('sharePdf')}</span>
+                        </button>
+                        <button class="btn btn-primary"
+                                @click=${() => this.saveDocument({silentWeb: false, showToast: true})}
+                                ?disabled=${saveDisabled}>
+                            ${ICONS.save}<span class="btn-label">${i18n.t('savePdf')}</span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <input type="file" id="stamp-input" accept="image/*" style="display: none"
@@ -994,9 +1057,9 @@ export class PdfWorkspace extends LitElement {
                             this.handoverResult = 'idle';
                         }}" placeholder="Paste Hash Here...">
                         ${this.handoverResult === 'success' ? html`
-                            <div class="alert-box alert-success">${i18n.t('statusVerified')}</div>` : ''}
+                            <div class="alert-box alert-success" .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
                         ${this.handoverResult === 'fail' ? html`
-                            <div class="alert-box alert-error">${i18n.t('statusMismatch')}</div>` : ''}
+                            <div class="alert-box alert-error" .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
                         <div style="display:flex; gap:10px;">
                             <button class="btn btn-primary" style="flex:1;" @click=${this.checkHandover}>
                                 ${i18n.t('verifyBtn')}
@@ -1025,9 +1088,10 @@ export class PdfWorkspace extends LitElement {
                             <div style="font-family:monospace; font-size:1.1rem; color:var(--text-main); margin-bottom:15px;">
                                 ${this.lastSavedId}
                             </div>
-                            <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600;">${ICONS.lock} Hash:
+                            <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600; display:flex; align-items:center; gap:4px;">
+                                ${ICONS.lock} Hash:
                             </div>
-                            <div style="font-family:monospace; font-size:0.75rem; color:var(--text-main); word-break:break-all; background:#e5e7eb; padding:8px; border-radius:6px;">
+                            <div style="font-family:monospace; font-size:0.75rem; color:var(--text-main); word-break:break-all; background:#e5e7eb; padding:8px; border-radius:6px; margin-top:4px;">
                                 ${this.lastSavedHash}
                             </div>
                         </div>
@@ -1040,6 +1104,25 @@ export class PdfWorkspace extends LitElement {
                         <button class="btn" style="width:100%;" @click=${() => this.showProofModal = false}>
                             ${i18n.t('close')}
                         </button>
+                    </div>
+                </div>
+            ` : ''}
+
+            ${this.customPrompt.show ? html`
+                <div class="modal-overlay" @click=${() => this.customPrompt.show = false}>
+                    <div class="modal-card" @click=${(e: Event) => e.stopPropagation()}>
+                        <h3 style="margin-top:0;">${this.customPrompt.title}</h3>
+                        <input type="text" class="input-field" style="margin-bottom: 20px; font-size: 1rem;"
+                               .value=${this.customPrompt.value} 
+                               placeholder=${this.customPrompt.placeholder}
+                               @input=${(e: any) => this.customPrompt.value = e.target.value}
+                               @keydown=${(e: KeyboardEvent) => {
+                if (e.key === 'Enter') this.saveCustomPrompt();
+            }}>
+                        <div style="display:flex; gap:10px; justify-content: flex-end;">
+                            <button class="btn" @click=${() => this.customPrompt.show = false}>${i18n.t('cancel') || 'Cancel'}</button>
+                            <button class="btn btn-primary" @click=${this.saveCustomPrompt}>${i18n.t('done') || 'Save'}</button>
+                        </div>
                     </div>
                 </div>
             ` : ''}
