@@ -1,7 +1,7 @@
 # ✒️ Open Waqf Signer (الموقّع)
 
-> **Secure. Offline. Verifiable.**
-> A privacy-first PDF signer with cryptographic integrity checks.
+> **Secure. Offline. Verifiable.** > A privacy-first PDF signer with cryptographic integrity checks and a unified,
+> responsive design.
 
 <div align="center">
 <a href="https://sign.open-waqf.org">
@@ -12,8 +12,8 @@
 Open Waqf Signer allows users to sign, edit, and **verify** PDF documents directly in their browser. It is built on the
 principles of **Amanah** (Trust) and **Privacy**.
 
-Unlike other free tools, **no data is ever uploaded to a server**. All cryptographic processing happens locally on your
-device.
+Unlike other free tools, **no data is ever uploaded to a server**. All cryptographic processing happens locally in your
+device's RAM.
 
 ---
 
@@ -21,29 +21,32 @@ device.
 
 ### 🛡️ Security & Trust
 
-* **Zero-Knowledge:** Documents never leave your device (RAM-only processing).
+* **Zero-Knowledge Architecture:** Documents never leave your device.
 * **Dual-Layer Verification:**
-    1. **Metadata Check (Internal):** Instantly identifies files signed by the app.
-    2. **Strict Integrity Check (External):** Uses SHA-256 hashing to prove mathematically that a document has not been
-       tampered with since signing.
+    1. **Metadata Check (Internal):** Instantly identifies files processed by the app via hidden metadata markers.
+    2. **Strict Integrity Check (External):** Uses military-grade `crypto.subtle` SHA-256 hashing to prove
+       mathematically that a document has not been tampered with since signing.
 * **Audit Trail:** Automatically appends a verification page with a **QR code**, Event Log, and Digital Fingerprint.
 
 ### 🤝 Multi-Party Workflows
 
-* **The "Handover" Protocol:** Securely pass documents between multiple signers (e.g., You -> Manager -> Client).
-* **Pre-Sign Validation:** When you open a document signed by someone else, the app automatically detects it and asks
-  you to verify their signature *before* you add yours.
+* **The "Handover" Protocol:** Securely pass documents between multiple signers.
+* **Pre-Sign Validation:** When you open a document signed by someone else, the app automatically detects it and
+  requires you to verify the previous signer's hash *before* you add yours.
 
-### ✍️ Professional Tools
+### ✍️ Professional UX & Tools
 
-* **Natural Ink:** Smooth, pressure-sensitive signature drawing.
-* **Smart Annotation:** Add Names, Dates, Initials, Stamps, and Free Text.
+* **Responsive Unified Design:** A meticulously crafted UI using Web Components (Lit) that seamlessly adapts to desktop
+  displays and mobile screens (respecting iOS/Android safe areas and navigation bars).
+* **Smart Layout Control:** Drag, resize, and position elements with exact mathematical center-to-center snapping.
+* **Natural Ink & Custom Prompts:** Smooth signature drawing and native-feeling custom modal prompts for text/identity
+  inputs.
 * **History:** Full Undo/Redo support (`Ctrl+Z`, `Ctrl+Y`).
-* **Layout Control:** Drag, resize, and position elements with precision.
 
 ### 🌍 Universal Access
 
-* **Offline First (PWA):** Installs as a native app on Android, iOS, Windows, and Mac.
+* **Offline First (PWA):** Installs as a native app on Android, iOS, Windows, and Mac. Fully functional without an
+  internet connection.
 * **Multilingual:** Native support for **English**, **Arabic (RTL)**, and **French**.
 
 ---
@@ -54,8 +57,8 @@ We believe in **Data Sovereignty**.
 
 * **No Uploads:** Your PDF never touches our cloud.
 * **No Profiling:** We do not use cookies or trackers to build user profiles.
-* **Usage Counting:** We use privacy-preserving telemetry (e.g., Plausible/Umami) solely to count aggregate usage (
-  e.g., "100 documents signed today") to ensure the project remains sustainable. No personal data is ever collected.
+* **Usage Counting:** We use privacy-preserving telemetry solely to count aggregate usage (e.g., "100 documents signed
+  today") to ensure the project remains sustainable. No personal data is ever collected.
 
 ---
 
@@ -65,10 +68,11 @@ We don't just "hope" the code works; we prove it before every release.
 
 * **Automated Audit (The Robot):** We use **Playwright** to run end-to-end tests simulating real user behavior.
 * **Coverage:**
-    * ✅ **Cryptography:** Verifies that SHA-256 hashes are calculated correctly.
+    * ✅ **Cryptography:** Verifies that SHA-256 hashes are calculated and matched correctly.
     * ✅ **Workflows:** Simulates Alice signing, downloading, and Bob verifying the file.
-    * ✅ **Deep Linking:** Checks that QR codes (`?id=...`) correctly open the Verification Tool.
-    * ✅ **Internationalization:** Ensures RTL layouts (Arabic) render correctly.
+    * ✅ **Deep Linking:** Checks that external links (`?id=...`) correctly open the Verification Tool and prompt for
+      files.
+    * ✅ **Strict DOM Checks:** Ensures modal states, toolbars, and translation keys render flawlessly.
 * **CI/CD Guardrails:** Deployment is physically blocked by GitHub Actions if any test fails, ensuring no broken code
   ever reaches production.
 
@@ -80,45 +84,36 @@ We use an **"External Key"** model to ensure document integrity without storing 
 
 ### Scenario A: The "Handover" (Two Parties Signing)
 
-1. **Person A (Alice)** signs the document.
-    * *System generates Hash: `a1b2...`*
-    * Alice sends the PDF + Hash to **Person B (Bob)**.
+1. **Person A (Alice)** signs the document and saves it.
+    * *System generates a Strict Hash and provides a Receipt.*
+    * Alice sends the PDF + Hash to **Person B (Bob)** via a secure channel (e.g., WhatsApp/Signal).
 2. **Person B (Bob)** opens the PDF in Open Waqf Signer.
-    * 🚨 **Auto-Detection:** The app detects Alice's signature immediately.
-    * **Verify:** Bob enters Alice's hash to confirm the file wasn't tampered with during transit.
-3. **Bob Signs:** Once verified, Bob adds his signature and saves.
-    * *System generates a NEW Hash: `f9e8...`* that secures both signatures.
+    * 🚨 **Auto-Detection:** The app detects Alice's metadata marker immediately.
+    * **Verify:** Bob enters Alice's hash. The app confirms the file wasn't tampered with during transit.
+3. **Bob Signs:** Once verified, Bob adds his signature and saves, generating a NEW Hash that secures both signatures.
 
 ### Scenario B: Verification (The Receiver)
 
-Anyone receiving a signed document can verify it in two ways:
+Anyone receiving a signed document can verify it:
 
-#### Option 1: One-Click Scan (QR Code)
-
-Every signed PDF includes an **Audit Page** at the end.
-
-1. Scan the **QR Code** on the last page.
-2. Or click the **Verification Link** (if viewing digitally).
-3. **Result:** The app opens instantly and validates the document ID against the digital fingerprint.
-
-#### Option 2: Manual Check (Strict)
-
-1. Go to **Verify Mode** in the app.
-2. Drop the signed PDF.
-3. Paste the **Security Hash** provided by the sender.
-    * ✅ **"SECURE VERIFIED":** The document is 100% authentic.
-    * ❌ **"MISMATCH":** The document has been altered (even by 1 byte).
+1. Scan the **QR Code** on the last page or click the **Verification Link**.
+2. The app opens in **Verify Mode** ("Link Detected").
+3. Drop the signed PDF into the app.
+4. The app confirms **"Metadata Found"**.
+5. Paste the **Security Hash** provided by the sender.
+    * ✅ **"Integrity Verified":** The document is 100% authentic.
+    * ❌ **"Integrity Failure":** The document has been altered (even by 1 pixel).
 
 ---
 
 ## 🏗️ Architecture
 
 * **Core:** TypeScript, Vite, Lit (Web Components).
-* **Native Layer:** Capacitor (for Android/iOS).
+* **Native Layer:** Capacitor (for Android/iOS distribution).
+* **Styling:** CSS variables, dynamic viewport units (`100dvh`), and Shadow DOM isolation.
 * **Testing:** Playwright (End-to-End & Crypto Logic).
 * **PDF Engine:** `pdf-lib` (modification) & `pdfjs-dist` (rendering).
-* **Cryptography:** Native `crypto.subtle` API for SHA-256 hashing (no external libraries).
-* **Storage:** `IndexedDB` (for preferences only). Files are transient.
+* **Cryptography:** Native `crypto.subtle` API for SHA-256 hashing.
 
 ---
 
@@ -149,12 +144,11 @@ npm run dev
 
 ### 3. Run Tests (The Audit)
 
-Runs the Playwright robot to verify all core features (Sign, Verify, Handover).
+Runs the Playwright robot to verify all core features.
 
 ```bash
 # Installs browsers if running for the first time
 npx playwright install
-
 # Run the test suite
 npm test
 
@@ -184,8 +178,8 @@ Open Waqf Signer applies a **Cryptographically Linked Electronic Signature**.
 ### Performance Limits
 
 * **Recommended:** Files under **25MB**.
-* **Large Files:** Since processing occurs in your browser's RAM, files larger than 50MB may cause the tab to crash on
-  older mobile devices.
+* **Large Files:** Since processing occurs in your browser's RAM to protect your privacy, extremely large files may
+  cause memory exhaustion on older mobile devices.
 
 ---
 
