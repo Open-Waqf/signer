@@ -302,8 +302,7 @@ export class PdfEngine {
         try {
             const pdfDoc = await PDFDocument.load(fileData, {updateMetadata: false});
             const keywords = pdfDoc.getKeywords();
-            if (!keywords) return null;
-            const match = keywords.match(/ref:([A-Za-z0-9]+)/i);
+            const match = keywords?.match(/ref:([A-Za-z0-9]+)/i);
             return match ? match[1] : null;
         } catch (e) {
             console.error("Read Error", e);

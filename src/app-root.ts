@@ -8,6 +8,7 @@ import './components/pdf-workspace';
 import {Capacitor} from '@capacitor/core';
 import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
+import {LANGUAGES} from './i18n/locales';
 import {pdfEngine} from './lib/pdf-engine';
 import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import {ICONS} from './lib/icons';
@@ -141,7 +142,7 @@ export class AppRoot extends LitElement {
             this.verifyHashInput = '';
             this.integrityStatus = 'idle';
 
-            if (!this.verifyDialog.open) this.verifyDialog.showModal();
+            if (this.verifyDialog && !this.verifyDialog.open) this.verifyDialog.showModal();
         } catch (e) {
             this.isLoading = false;
             this.showToast(i18n.t('errorReadingFile') || 'Error reading file');
@@ -156,7 +157,7 @@ export class AppRoot extends LitElement {
     }
 
     closeVerify() {
-        this.verifyDialog.close();
+        if (this.verifyDialog) this.verifyDialog.close();
         this.verifyResult = {status: null};
         this.expectedVerifyId = null;
         this.integrityStatus = 'idle';
@@ -164,7 +165,7 @@ export class AppRoot extends LitElement {
     }
 
     async startPendingVerification() {
-        this.verifyDialog.close();
+        if (this.verifyDialog) this.verifyDialog.close();
         await this.openFile();
     }
 
@@ -231,6 +232,7 @@ export class AppRoot extends LitElement {
                 await this.handleFile(data, name);
             }
         } catch (e) {
+            console.error('Error opening file:', e);
         }
     }
 
@@ -251,11 +253,11 @@ export class AppRoot extends LitElement {
     }
 
     showPrivacy() {
-        this.privacyDialog.showModal();
+        if (this.privacyDialog) this.privacyDialog.showModal();
     }
 
     closePrivacy() {
-        this.privacyDialog.close();
+        if (this.privacyDialog) this.privacyDialog.close();
     }
 
     clearAppCache() {
@@ -300,9 +302,9 @@ export class AppRoot extends LitElement {
 
                 <div class="layout-header">
                     <select class="lang-select" @change=${this.handleLangChange}>
-                        <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
-                        <option value="ar" ?selected=${i18n.lang === 'ar'}>العربية</option>
-                        <option value="fr" ?selected=${i18n.lang === 'fr'}>Français</option>
+                        ${LANGUAGES.map(l => html`
+                            <option value="${l.code}" ?selected=${i18n.lang === l.code}>${l.label}</option>
+                        `)}
                     </select>
                 </div>
 
@@ -389,7 +391,7 @@ export class AppRoot extends LitElement {
                            @exit-workspace=${this.handleExitWorkspace}>
             </pdf-workspace>
 
-            <dialog id="privacy-dialog">
+            <dialog id="privacy-dialog" aria-modal="true" aria-label="${i18n.t('privacyTitle')}">
                 <div class="dialog-content">
                     <h2>${i18n.t('privacyTitle')}</h2>
                     <p style="font-size: 0.95rem; color: var(--text-sub);">${i18n.t('privacyContent')}</p>
@@ -442,7 +444,7 @@ export class AppRoot extends LitElement {
                 </div>
             ` : ''}
 
-            <dialog id="verify-dialog" @cancel=${this.closeVerify}>
+            <dialog id="verify-dialog" @cancel=${this.closeVerify} aria-modal="true" aria-label="${i18n.t('verifyMode')}">
                 <div class="dialog-content" style="text-align: center;">
                     ${this.verifyResult.status === 'pending_file' ? html`
                         <div style="color:var(--primary); margin-bottom:15px; display:flex; justify-content:center;">
@@ -499,7 +501,9 @@ export class AppRoot extends LitElement {
 
             ${this.showExitConfirm ? html`
                 <div class="modal-overlay" @click=${() => this.showExitConfirm = false}>
-                    <div class="modal-card center" @click=${(e: Event) => e.stopPropagation()}>
+                    <div class="modal-card center" role="dialog" aria-modal="true"
+                         aria-label="${i18n.t('exitConfirmTitle')}"
+                         @click=${(e: Event) => e.stopPropagation()}>
                         <div style="color:#ef4444; margin-bottom:15px; display:flex; justify-content:center;">
                             <div style="padding:15px; background:#fee2e2; border-radius:50%;">${ICONS.alert}</div>
                         </div>

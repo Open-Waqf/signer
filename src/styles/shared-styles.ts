@@ -54,6 +54,11 @@ export const sharedStyles = css`
         cursor: not-allowed;
     }
 
+    .btn:focus-visible {
+        outline: 3px solid var(--primary, #2563eb);
+        outline-offset: 2px;
+    }
+
     /* Shared Modal Styles */
 
     .modal-overlay {

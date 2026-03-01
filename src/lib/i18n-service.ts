@@ -1,4 +1,4 @@
-import {config, LanguageCode, resources, TranslationKey} from '../i18n/locales';
+import {config, LanguageCode, LANGUAGES, resources, TranslationKey} from '../i18n/locales';
 
 class I18nService {
     private currentLang: LanguageCode = 'en';
@@ -10,7 +10,7 @@ class I18nService {
     init() {
         // 1. Priority: URL Query Param (?lang=ar)
         const params = new URLSearchParams(window.location.search);
-        const urlLang = params.get('lang') as LanguageCode;
+        const urlLang = params.get('lang');
 
         // 2. Secondary: LocalStorage
         const saved = localStorage.getItem('signer_lang') as LanguageCode;
@@ -18,12 +18,15 @@ class I18nService {
         // 3. Fallback: System Language
         const system = navigator.language.split('-')[0] as LanguageCode;
 
+        const isSupported = (lang: string): lang is LanguageCode =>
+            LANGUAGES.some(l => l.code === lang);
+
         // Decide Language
-        if (urlLang && resources[urlLang]) {
+        if (urlLang && isSupported(urlLang)) {
             this.currentLang = urlLang;
-        } else if (saved && resources[saved]) {
+        } else if (saved && isSupported(saved)) {
             this.currentLang = saved;
-        } else if (resources[system]) {
+        } else if (isSupported(system)) {
             this.currentLang = system;
         } else {
             this.currentLang = config.defaultLang as LanguageCode;
@@ -41,7 +44,7 @@ class I18nService {
     }
 
     setLanguage(lang: LanguageCode) {
-        if (!resources[lang]) return;
+        if (!LANGUAGES.some(l => l.code === lang)) return;
         this.currentLang = lang;
 
         // 1. Save Preference
@@ -60,28 +63,18 @@ class I18nService {
     }
 
     cycleNext() {
-        const langs: LanguageCode[] = ['en', 'ar', 'fr'];
-        const index = langs.indexOf(this.currentLang);
-        const nextIndex = (index + 1) % langs.length;
-        this.setLanguage(langs[nextIndex]);
+        const index = LANGUAGES.findIndex(l => l.code === this.currentLang);
+        const next = LANGUAGES[(index + 1) % LANGUAGES.length];
+        this.setLanguage(next.code);
     }
 
-    getCurrentLabel() {
-        switch (this.currentLang) {
-            case 'en':
-                return 'English';
-            case 'ar':
-                return 'العربية';
-            case 'fr':
-                return 'Français';
-            default:
-                return 'English';
-        }
+    getCurrentLabel(): string {
+        return LANGUAGES.find(l => l.code === this.currentLang)?.label ?? 'English';
     }
 
     private applyLanguageSideEffects() {
-        // A. Direction (RTL/LTR)
-        const dir = resources[this.currentLang]?.direction || 'ltr';
+        // A. Direction (RTL/LTR) — derived from LANGUAGES config, single source of truth
+        const dir = LANGUAGES.find(l => l.code === this.currentLang)?.dir ?? 'ltr';
         document.documentElement.dir = dir;
         document.documentElement.lang = this.currentLang;
 

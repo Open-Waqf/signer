@@ -8,6 +8,7 @@ import {Annotation, AnnotationType} from '../types';
 import './signature-modal';
 import {ICONS} from '../lib/icons';
 import {sharedStyles} from '../styles/shared-styles';
+import {LANGUAGES} from '../i18n/locales';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
@@ -55,6 +56,9 @@ export class PdfWorkspace extends LitElement {
 
     @state() guideX: number | null = null;
     @state() guideY: number | null = null;
+
+    @state() showThumbnails = localStorage.getItem('signer_show_thumbs') === 'true';
+    @state() thumbnailURLs: string[] = [];
 
     @state() customPrompt: {
         show: boolean,
@@ -168,7 +172,7 @@ export class PdfWorkspace extends LitElement {
             overflow-x: auto;
             white-space: nowrap;
             -webkit-overflow-scrolling: touch;
-            scrollbar-width: none
+            scrollbar-width: none;
             padding-bottom: 6px;
         }
 
@@ -430,6 +434,75 @@ export class PdfWorkspace extends LitElement {
             font-weight: bold;
             margin-left: 8px;
         }
+
+        .workspace-area {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .thumb-panel {
+            width: 88px;
+            background: #1e2535;
+            border-right: 1px solid #374151;
+            overflow-y: auto;
+            flex-shrink: 0;
+            padding: 8px 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            scrollbar-width: thin;
+            scrollbar-color: #4b5563 transparent;
+        }
+
+        .thumb-item {
+            position: relative;
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            overflow: visible;
+            background: #fff;
+            flex-shrink: 0;
+            transition: border-color 0.15s;
+        }
+
+        .thumb-item:hover {
+            border-color: #6b7280;
+        }
+
+        .thumb-item.active {
+            border-color: #2563eb;
+        }
+
+        .thumb-item img {
+            width: 100%;
+            display: block;
+            border-radius: 2px;
+        }
+
+        .thumb-num {
+            font-size: 0.6rem;
+            color: #9ca3af;
+            text-align: center;
+            padding: 2px 0;
+        }
+
+        .thumb-badge {
+            position: absolute;
+            top: -3px;
+            right: -3px;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #2563eb;
+            border: 1.5px solid #1e2535;
+        }
+
+        @media (max-width: 768px) {
+            .thumb-panel {
+                width: 56px;
+            }
+        }
     `];
 
     private onLangChanged = () => this.requestUpdate();
@@ -455,13 +528,73 @@ export class PdfWorkspace extends LitElement {
     }
 
     handleKeyboard = (e: KeyboardEvent) => {
+        // Never intercept while user is typing in an input or a modal prompt is open
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || this.customPrompt.show) return;
+
         if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
             e.preventDefault();
             this.undo();
+            return;
         }
         if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
             e.preventDefault();
             this.redo();
+            return;
+        }
+
+        if (e.key === 'Escape') {
+            this.selectedId = null;
+            return;
+        }
+
+        // Tab: cycle through annotations on the current page
+        if (e.key === 'Tab') {
+            const pageAnns = this.annotations.filter(a => a.page === this.currentPage - 1);
+            if (pageAnns.length > 0) {
+                e.preventDefault();
+                const idx = pageAnns.findIndex(a => a.id === this.selectedId);
+                let next: number;
+                if (idx === -1) {
+                    next = e.shiftKey ? pageAnns.length - 1 : 0;
+                } else {
+                    next = e.shiftKey
+                        ? (idx - 1 + pageAnns.length) % pageAnns.length
+                        : (idx + 1) % pageAnns.length;
+                }
+                this.selectedId = pageAnns[next].id;
+            }
+            return;
+        }
+
+        if (!this.selectedId) return;
+
+        // Delete selected annotation
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault();
+            this.snapshot();
+            this.annotations = this.annotations.filter(a => a.id !== this.selectedId);
+            this.selectedId = null;
+            this.isDirty = true;
+            return;
+        }
+
+        // Arrow keys: nudge selected annotation (Shift = 4× step)
+        if (e.key.startsWith('Arrow')) {
+            const ann = this.annotations.find(a => a.id === this.selectedId);
+            if (!ann) return;
+            e.preventDefault();
+            if (!e.repeat) this.snapshot(); // Snapshot only on first keydown, not on hold
+            const step = e.shiftKey ? 0.02 : 0.005;
+            let {xPct, yPct} = ann;
+            if (e.key === 'ArrowLeft') xPct = Math.max(0, xPct - step);
+            else if (e.key === 'ArrowRight') xPct = Math.min(1 - ann.widthPct, xPct + step);
+            else if (e.key === 'ArrowUp') yPct = Math.max(0, yPct - step);
+            else if (e.key === 'ArrowDown') yPct = Math.min(1, yPct + step);
+            this.annotations = this.annotations.map(a =>
+                a.id === this.selectedId ? {...a, xPct, yPct} : a
+            );
+            this.isDirty = true;
         }
     };
 
@@ -488,6 +621,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     async loadPdf(file: Uint8Array, name: string) {
+        pdfEngine.destroy();
         this.pdfName = name;
         this.loadedBytes = file;
         this.validationMsg = null;
@@ -517,9 +651,11 @@ export class PdfWorkspace extends LitElement {
 
         const cleanName = name.replace(/_signed_\d{4}-\d{2}-\d{2}.*$/, '').replace(/\.pdf$/i, '');
         this.outputFilename = `${cleanName}_signed_${new Date().toISOString().slice(0, 10)}`;
+        this.thumbnailURLs = [];
 
         await this.updateComplete;
         void this.renderPage();
+        void this.generateThumbnails();
     }
 
     async checkHandover() {
@@ -544,6 +680,24 @@ export class PdfWorkspace extends LitElement {
         if (!this.canvas) return;
         const renderScale = Math.min(3.0, 1.5 * this.scale);
         await pdfEngine.renderPage(this.currentPage, this.canvas, renderScale);
+    }
+
+    async generateThumbnails() {
+        if (this.totalPages === 0) return;
+        this.thumbnailURLs = [];
+        const offscreen = document.createElement('canvas');
+        for (let p = 1; p <= this.totalPages; p++) {
+            await pdfEngine.renderPage(p, offscreen, 0.18);
+            this.thumbnailURLs = [...this.thumbnailURLs, offscreen.toDataURL('image/jpeg', 0.75)];
+            await new Promise(r => requestAnimationFrame(r));
+        }
+    }
+
+    updated(changed: Map<string, unknown>) {
+        if (changed.has('currentPage') && this.showThumbnails) {
+            this.shadowRoot?.querySelector('.thumb-item.active')
+                ?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+        }
     }
 
     changePage(offset: number) {
@@ -695,7 +849,7 @@ export class PdfWorkspace extends LitElement {
             let visualWidthPct = ann.widthPct || 0.1;
             let visualHeightPct = visualWidthPct * (ann.aspectRatio || 1);
             const contentEl = this.shadowRoot?.querySelector('.draggable.selected img, .draggable.selected .text-content') as HTMLElement;
-            if (contentEl) {
+            if (contentEl && contentEl.offsetWidth > 0 && contentEl.offsetHeight > 0) {
                 visualWidthPct = contentEl.offsetWidth / rect.width;
                 visualHeightPct = contentEl.offsetHeight / rect.height;
             }
@@ -754,15 +908,23 @@ export class PdfWorkspace extends LitElement {
         modal.mode = mode;
         modal.addEventListener('signed', (e: any) => {
             const img = new Image();
+            img.onload = () => {
+                if (img.width > 0 && img.height > 0) {
+                    this.addAnnotation(mode, e.detail, img.height / img.width);
+                }
+            };
+            img.onerror = () => console.error('Failed to load signature image');
             img.src = e.detail;
-            img.onload = () => this.addAnnotation(mode, e.detail, img.height / img.width);
         });
         document.body.appendChild(modal);
     }
 
     addDateStamp() {
         const now = new Date();
-        this.addAnnotation('date', now.toISOString().replace('T', ' ').substring(0, 16), 0.3);
+        const dateStr = new Intl.DateTimeFormat(i18n.lang, {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+        }).format(now);
+        this.addAnnotation('date', dateStr, 0.3);
     }
 
     private toast(msg: string) {
@@ -781,6 +943,7 @@ export class PdfWorkspace extends LitElement {
         this.isDirty = false;
         if (this.canvas) {
             this.canvas.getContext('2d')?.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.canvas.width = 0;
             this.canvas.height = 0;
         }
     }
@@ -828,8 +991,10 @@ export class PdfWorkspace extends LitElement {
         const input = e.target as HTMLInputElement;
         if (input.files && input.files[0]) {
             const reader = new FileReader();
+            reader.onerror = () => this.toast(i18n.t('errorReadingFile') || 'Failed to read file');
             reader.onload = (evt) => {
                 const img = new Image();
+                img.onerror = () => this.toast('Invalid image file');
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     canvas.width = img.width;
@@ -893,32 +1058,38 @@ export class PdfWorkspace extends LitElement {
                     <span class="mobile-hide">${i18n.t('appTitle')}</span>
                     ${this.isVerified ? html`<span class="badge">${i18n.t('verifiedBadge')}</span>` : ''}
                 </div>
-                <select class="lang-select" @change=${this.handleLangChange}>
-                    <option value="en" ?selected=${i18n.lang === 'en'}>English</option>
-                    <option value="ar" ?selected=${i18n.lang === 'ar'}>العربية</option>
-                    <option value="fr" ?selected=${i18n.lang === 'fr'}>Français</option>
+                <select class="lang-select" aria-label="Language" @change=${this.handleLangChange}>
+                    ${LANGUAGES.map(l => html`
+                        <option value="${l.code}" ?selected=${i18n.lang === l.code}>${l.label}</option>
+                    `)}
                 </select>
             </header>
 
-            <div class="toolbar-wrapper">
+            <div class="toolbar-wrapper" role="toolbar" aria-label="${i18n.t('ariaToolbar')}">
                 <div class="toolbar-row">
-                    <button class="btn btn-primary" @click=${this.openSignModal} title="${i18n.t('addSig')}">
+                    <button class="btn btn-primary" @click=${this.openSignModal}
+                            title="${i18n.t('addSig')}" aria-label="${i18n.t('addSig')}">
                         ${ICONS.sign}<span class="btn-label">${i18n.t('addSig')}</span>
                     </button>
-                    <button class="btn" @click=${this.openInitialsModal} title="${i18n.t('addInitials')}">
+                    <button class="btn" @click=${this.openInitialsModal}
+                            title="${i18n.t('addInitials')}" aria-label="${i18n.t('addInitials')}">
                         ${ICONS.text}<span class="btn-label">${i18n.t('addInitials')}</span>
                     </button>
-                    <button class="btn" @click=${this.addTextAnnotation} title="${i18n.t('addText')}">
+                    <button class="btn" @click=${this.addTextAnnotation}
+                            title="${i18n.t('addText')}" aria-label="${i18n.t('addText')}">
                         ${ICONS.text}<span class="btn-label">${i18n.t('addText')}</span>
                     </button>
-                    <button class="btn" @click=${this.addIdentity} title="${i18n.t('addIdentity')}">
+                    <button class="btn" @click=${this.addIdentity}
+                            title="${i18n.t('addIdentity')}" aria-label="${i18n.t('addIdentity')}">
                         ${ICONS.identity}<span class="btn-label">${i18n.t('addIdentity') || 'Identity'}</span>
                     </button>
-                    <button class="btn" @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
-                            title="${i18n.t('addStamp')}">
+                    <button class="btn"
+                            @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
+                            title="${i18n.t('addStamp')}" aria-label="${i18n.t('addStamp')}">
                         ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
                     </button>
-                    <button class="btn" @click=${this.addDateStamp} title="${i18n.t('addDate')}">
+                    <button class="btn" @click=${this.addDateStamp}
+                            title="${i18n.t('addDate')}" aria-label="${i18n.t('addDate')}">
                         ${ICONS.date}<span class="btn-label">${i18n.t('addDate')}</span>
                     </button>
                 </div>
@@ -926,34 +1097,42 @@ export class PdfWorkspace extends LitElement {
                 <div class="toolbar-row secondary">
                     <div class="toolbar-actions">
                         <button class="btn" @click=${this.undo} ?disabled=${this.history.length === 0}
-                                title="${i18n.t('undo')}">${ICONS.undo}
+                                title="${i18n.t('undo')}" aria-label="${i18n.t('undo')}">${ICONS.undo}
                         </button>
                         <button class="btn" @click=${this.redo} ?disabled=${this.future.length === 0}
-                                title="${i18n.t('redo')}">${ICONS.redo}
+                                title="${i18n.t('redo')}" aria-label="${i18n.t('redo')}">${ICONS.redo}
                         </button>
                     </div>
 
                     <div class="toolbar-actions">
-                        <button class="btn toggle ${this.includeFooter ? 'active' : ''}" @click=${() => {
-                            this.includeFooter = !this.includeFooter;
-                            this.isDirty = true;
-                            this.toast(this.includeFooter ? i18n.t('footerOn') : i18n.t('footerOff'));
-                        }} title="${i18n.t('addPageFooter')}">
+                        <button class="btn toggle ${this.includeFooter ? 'active' : ''}"
+                                aria-pressed="${this.includeFooter}"
+                                aria-label="${i18n.t('addPageFooter')}"
+                                @click=${() => {
+                                    this.includeFooter = !this.includeFooter;
+                                    this.isDirty = true;
+                                    this.toast(this.includeFooter ? i18n.t('footerOn') : i18n.t('footerOff'));
+                                }} title="${i18n.t('addPageFooter')}">
                             ${ICONS.footer}<span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
                         </button>
-                        <button class="btn toggle ${this.includeAudit ? 'active' : ''}" @click=${() => {
-                            this.includeAudit = !this.includeAudit;
-                            this.isDirty = true;
-                            this.toast(this.includeAudit ? i18n.t('auditOn') : i18n.t('auditOff'));
-                        }} title="${i18n.t('addAuditPage')}">
+                        <button class="btn toggle ${this.includeAudit ? 'active' : ''}"
+                                aria-pressed="${this.includeAudit}"
+                                aria-label="${i18n.t('addAuditPage')}"
+                                @click=${() => {
+                                    this.includeAudit = !this.includeAudit;
+                                    this.isDirty = true;
+                                    this.toast(this.includeAudit ? i18n.t('auditOn') : i18n.t('auditOff'));
+                                }} title="${i18n.t('addAuditPage')}">
                             ${ICONS.audit}<span class="btn-label">${i18n.t('auditTrail')}</span>
                         </button>
-                        <button class="btn" @click=${this.shareLatest} ?disabled=${shareDisabled}>
+                        <button class="btn" @click=${this.shareLatest} ?disabled=${shareDisabled}
+                                aria-label="${i18n.t('sharePdf')}">
                             ${ICONS.share}<span class="btn-label">${i18n.t('sharePdf')}</span>
                         </button>
                         <button class="btn btn-primary"
                                 @click=${() => this.saveDocument({silentWeb: false, showToast: true})}
-                                ?disabled=${saveDisabled}>
+                                ?disabled=${saveDisabled}
+                                aria-label="${i18n.t('savePdf')}">
                             ${ICONS.save}<span class="btn-label">${i18n.t('savePdf')}</span>
                         </button>
                     </div>
@@ -965,6 +1144,19 @@ export class PdfWorkspace extends LitElement {
 
             <div class="toolbar toolbar-secondary">
                 <div class="tool-group">
+                    <button class="btn toggle ${this.showThumbnails ? 'active' : ''}"
+                            title="${i18n.t('toggleThumbnails')}"
+                            aria-label="${i18n.t('toggleThumbnails')}"
+                            aria-pressed="${this.showThumbnails}"
+                            @click=${() => {
+                                this.showThumbnails = !this.showThumbnails;
+                                localStorage.setItem('signer_show_thumbs', String(this.showThumbnails));
+                                if (this.showThumbnails && this.thumbnailURLs.length === 0) {
+                                    void this.generateThumbnails();
+                                }
+                            }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    </button>
                     <button class="btn" title="${i18n.t('zoomOut')}" @click=${() => this.zoom(-0.2)}>－</button>
                     <button class="btn" title="${i18n.t('zoomIn')}" @click=${() => this.zoom(0.2)}>＋</button>
                 </div>
@@ -977,6 +1169,38 @@ export class PdfWorkspace extends LitElement {
                     </button>
                 </div>
             </div>
+
+            <div class="workspace-area">
+            ${this.showThumbnails && this.thumbnailURLs.length > 0 ? html`
+                <div class="thumb-panel" role="navigation" aria-label="${i18n.t('pageOverview')}">
+                    ${this.thumbnailURLs.map((url, i) => html`
+                        <div class="thumb-item ${this.currentPage === i + 1 ? 'active' : ''}"
+                             title="Page ${i + 1}"
+                             role="button"
+                             tabindex="0"
+                             aria-label="Page ${i + 1}"
+                             aria-current="${this.currentPage === i + 1 ? 'page' : 'false'}"
+                             @click=${() => {
+                                 this.currentPage = i + 1;
+                                 this.selectedId = null;
+                                 void this.renderPage();
+                             }}
+                             @keydown=${(e: KeyboardEvent) => {
+                                 if (e.key === 'Enter' || e.key === ' ') {
+                                     this.currentPage = i + 1;
+                                     this.selectedId = null;
+                                     void this.renderPage();
+                                 }
+                             }}>
+                            <img src="${url}" alt="Page ${i + 1}">
+                            <span class="thumb-num">${i + 1}</span>
+                            ${this.annotations.some(a => a.page === i) ? html`
+                                <div class="thumb-badge" title="Has annotations"></div>
+                            ` : ''}
+                        </div>
+                    `)}
+                </div>
+            ` : ''}
 
             <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
                 <div class="page-container">
@@ -1060,6 +1284,7 @@ export class PdfWorkspace extends LitElement {
                     })}
                 </div>
             </div>
+            </div><!-- workspace-area -->
 
             ${this.showHandoverModal ? html`
                 <div class="modal-overlay">

@@ -115,7 +115,7 @@ export class FileService {
         setTimeout(() => {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        }, 100);
+        }, 500);
         return {uri: url, filename};
     }
 

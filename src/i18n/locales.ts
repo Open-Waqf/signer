@@ -160,6 +160,23 @@ export const resources = {
         windowSize: "Window Size",
         connection: "Connection",
         viewSourceCode: "View Source Code on GitHub",
+        inkColor: "Ink Color",
+        inkDark: "Dark",
+        inkBlue: "Blue",
+        inkRed: "Red",
+        inkGreen: "Green",
+        toggleThumbnails: "Page Overview",
+        pageOverview: "Page Overview",
+        savedPresets: "Saved Signatures",
+        savePreset: "Save as Preset",
+        presetName: "Name this signature",
+        noPresets: "No saved signatures yet",
+        deletePreset: "Delete preset",
+        maxPresetsReached: "Maximum of 5 presets reached",
+        ariaToolbar: "Annotation toolbar",
+        ariaCanvas: "PDF document canvas",
+        ariaDeleteAnnotation: "Delete selected annotation",
+        ariaSelectAnnotation: "Select annotation",
     },
     ar: {
         appTitle: "الموقّع المفتوح",
@@ -309,6 +326,23 @@ export const resources = {
         windowSize: "حجم النافذة",
         connection: "الاتصال",
         viewSourceCode: "عرض الكود المصدري على GitHub",
+        inkColor: "لون الحبر",
+        inkDark: "داكن",
+        inkBlue: "أزرق",
+        inkRed: "أحمر",
+        inkGreen: "أخضر",
+        toggleThumbnails: "نظرة عامة على الصفحات",
+        pageOverview: "نظرة عامة على الصفحات",
+        savedPresets: "التوقيعات المحفوظة",
+        savePreset: "حفظ كنموذج",
+        presetName: "أعطِ اسماً لهذا التوقيع",
+        noPresets: "لا توجد توقيعات محفوظة بعد",
+        deletePreset: "حذف النموذج",
+        maxPresetsReached: "الحد الأقصى 5 نماذج",
+        ariaToolbar: "شريط أدوات التعليقات",
+        ariaCanvas: "لوحة مستند PDF",
+        ariaDeleteAnnotation: "حذف التعليق المحدد",
+        ariaSelectAnnotation: "تحديد تعليق",
     },
     fr: {
         appTitle: "Open Signer",
@@ -458,8 +492,38 @@ export const resources = {
         windowSize: "Taille de la fenêtre",
         connection: "Connexion",
         viewSourceCode: "Voir le code source sur GitHub",
+        inkColor: "Couleur d'encre",
+        inkDark: "Sombre",
+        inkBlue: "Bleu",
+        inkRed: "Rouge",
+        inkGreen: "Vert",
+        toggleThumbnails: "Aperçu des pages",
+        pageOverview: "Aperçu des pages",
+        savedPresets: "Signatures sauvegardées",
+        savePreset: "Enregistrer comme modèle",
+        presetName: "Nommer cette signature",
+        noPresets: "Aucune signature sauvegardée",
+        deletePreset: "Supprimer le modèle",
+        maxPresetsReached: "Maximum de 5 modèles atteint",
+        ariaToolbar: "Barre d'outils d'annotation",
+        ariaCanvas: "Canvas du document PDF",
+        ariaDeleteAnnotation: "Supprimer l'annotation sélectionnée",
+        ariaSelectAnnotation: "Sélectionner une annotation",
     }
 } as const;
 
 export type LanguageCode = keyof typeof resources;
 export type TranslationKey = keyof typeof resources['en'];
+
+// Language configuration — add new languages here only (no other file needs changing)
+export interface LanguageConfig {
+    code: LanguageCode;
+    label: string;        // Native display name shown in the picker
+    dir: 'ltr' | 'rtl';
+}
+
+export const LANGUAGES: LanguageConfig[] = [
+    {code: 'en', label: 'English', dir: 'ltr'},
+    {code: 'ar', label: 'العربية', dir: 'rtl'},
+    {code: 'fr', label: 'Français', dir: 'ltr'},
+];

@@ -1,20 +1,58 @@
 import {css, html, LitElement} from 'lit';
-import {customElement, property, query} from 'lit/decorators.js';
+import {customElement, property, query, state} from 'lit/decorators.js';
 import {i18n} from '../lib/i18n-service';
-import {sharedStyles} from '../styles/shared-styles'; // ✨ Import Shared CSS
+import {sharedStyles} from '../styles/shared-styles';
+import {TranslationKey} from '../i18n/locales';
+
+const INK_COLORS: Array<{ value: string; labelKey: TranslationKey }> = [
+    {value: '#1a1a2e', labelKey: 'inkDark'},
+    {value: '#1447e6', labelKey: 'inkBlue'},
+    {value: '#c0392b', labelKey: 'inkRed'},
+    {value: '#1e8449', labelKey: 'inkGreen'},
+];
+
+const MAX_PRESETS = 5;
+
+interface SignaturePreset {
+    id: string;
+    name: string;
+    dataURL: string;
+}
+
+function loadPresets(mode: string): SignaturePreset[] {
+    try {
+        return JSON.parse(localStorage.getItem(`signer_presets_${mode}`) ?? '[]');
+    } catch {
+        return [];
+    }
+}
+
+function persistPresets(mode: string, presets: SignaturePreset[]) {
+    localStorage.setItem(`signer_presets_${mode}`, JSON.stringify(presets));
+}
 
 @customElement('signature-modal')
 export class SignatureModal extends LitElement {
     @query('canvas') canvas!: HTMLCanvasElement;
     @property() mode: 'signature' | 'initials' = 'signature';
+    @state() private inkColor = localStorage.getItem('signer_ink_color') ?? '#1a1a2e';
+    @state() private presets: SignaturePreset[] = [];
+    @state() private showSaveNameRow = false;
+    @state() private saveNameValue = '';
 
     private isDrawing = false;
     private ctx: CanvasRenderingContext2D | null = null;
     private points: { x: number, y: number }[] = [];
     private _resizeHandler: (() => void) | null = null;
+    private _touchStartHandler: ((e: TouchEvent) => void) | null = null;
+    private _touchMoveHandler: ((e: TouchEvent) => void) | null = null;
+    private _touchEndHandler: (() => void) | null = null;
+    private _mouseDownHandler: ((e: MouseEvent) => void) | null = null;
+    private _mouseMoveHandler: ((e: MouseEvent) => void) | null = null;
+    private _mouseUpHandler: (() => void) | null = null;
 
-    private originalData: string | null = null;
-    private isDirty = false;
+    @state() private originalData: string | null = null;
+    @state() private isDirty = false;
 
     static styles = [sharedStyles, css`
         canvas {
@@ -34,6 +72,148 @@ export class SignatureModal extends LitElement {
             gap: 10px;
             justify-content: flex-end;
         }
+
+        .color-strip {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .color-swatch {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            cursor: pointer;
+            padding: 0;
+            flex-shrink: 0;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.2);
+        }
+
+        .color-swatch.selected {
+            border-color: #444;
+            box-shadow: 0 0 0 2px #fff, 0 0 0 4px #444;
+        }
+
+        .presets-section {
+            margin-bottom: 14px;
+        }
+
+        .presets-label {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-bottom: 8px;
+            text-align: start;
+        }
+
+        .presets-strip {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .preset-item {
+            position: relative;
+            cursor: pointer;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            background: #fff;
+            padding: 0;
+            width: 72px;
+            height: 40px;
+            overflow: hidden;
+            transition: border-color 0.15s;
+        }
+
+        .preset-item:hover {
+            border-color: var(--primary, #1447e6);
+        }
+
+        .preset-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .preset-delete {
+            position: absolute;
+            top: 1px;
+            right: 1px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: rgba(220, 38, 38, 0.85);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .preset-item:hover .preset-delete {
+            opacity: 1;
+        }
+
+        .preset-name {
+            font-size: 0.6rem;
+            color: #6b7280;
+            text-align: center;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255,255,255,0.8);
+            padding: 1px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .no-presets {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            text-align: start;
+            font-style: italic;
+        }
+
+        .save-preset-row {
+            display: flex;
+            justify-content: flex-start;
+            margin-bottom: 14px;
+        }
+
+        .save-name-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .save-name-row input {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .save-name-row input:focus {
+            border-color: var(--primary, #1447e6);
+            box-shadow: 0 0 0 2px rgba(20,71,230,0.15);
+        }
     `];
 
     async firstUpdated() {
@@ -52,14 +232,41 @@ export class SignatureModal extends LitElement {
         this.loadSaved();
     }
 
+    updated(changed: Map<string, unknown>) {
+        if (changed.has('showSaveNameRow') && this.showSaveNameRow) {
+            const input = this.shadowRoot?.querySelector<HTMLInputElement>('.save-name-row input');
+            input?.focus();
+            input?.select();
+        }
+    }
+
     disconnectedCallback() {
         super.disconnectedCallback();
         if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
+        if (this.canvas) {
+            if (this._touchStartHandler) this.canvas.removeEventListener('touchstart', this._touchStartHandler);
+            if (this._touchMoveHandler) this.canvas.removeEventListener('touchmove', this._touchMoveHandler);
+            if (this._touchEndHandler) this.canvas.removeEventListener('touchend', this._touchEndHandler);
+            if (this._mouseDownHandler) this.canvas.removeEventListener('mousedown', this._mouseDownHandler);
+            if (this._mouseMoveHandler) this.canvas.removeEventListener('mousemove', this._mouseMoveHandler);
+            if (this._mouseUpHandler) this.canvas.removeEventListener('mouseup', this._mouseUpHandler);
+        }
     }
 
     loadSaved() {
-        const storageKey = `signer_${this.mode}`;
-        const saved = localStorage.getItem(storageKey);
+        // Load presets and migrate legacy single-key if needed
+        let presets = loadPresets(this.mode);
+        const legacyKey = `signer_${this.mode}`;
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy && presets.length === 0) {
+            const defaultName = this.mode === 'signature' ? 'Signature 1' : 'Initials 1';
+            presets = [{id: Date.now().toString(), name: defaultName, dataURL: legacy}];
+            persistPresets(this.mode, presets);
+        }
+        this.presets = presets;
+
+        // Load last-used drawing into canvas
+        const saved = localStorage.getItem(legacyKey);
         if (saved) {
             this.originalData = saved;
             this.drawFromData(saved);
@@ -83,8 +290,8 @@ export class SignatureModal extends LitElement {
                 this.ctx.lineJoin = 'round';
                 this.ctx.lineCap = 'round';
                 this.ctx.lineWidth = 4 * ratio;
-                this.ctx.fillStyle = '#000';
-                this.ctx.strokeStyle = '#000';
+                this.ctx.fillStyle = this.inkColor;
+                this.ctx.strokeStyle = this.inkColor;
             }
         }
     }
@@ -98,24 +305,35 @@ export class SignatureModal extends LitElement {
     }
 
     setupEvents() {
-        this.canvas.addEventListener('touchstart', (e) => {
+        this._touchStartHandler = (e: TouchEvent) => {
             e.preventDefault();
             this.start(e.touches[0]);
-        }, {passive: false});
-        this.canvas.addEventListener('touchmove', (e) => {
+        };
+        this._touchMoveHandler = (e: TouchEvent) => {
             e.preventDefault();
             this.draw(e.touches[0]);
-        }, {passive: false});
-        this.canvas.addEventListener('touchend', () => this.stop());
-        this.canvas.addEventListener('mousedown', (e) => this.start(e));
-        this.canvas.addEventListener('mousemove', (e) => this.draw(e));
-        this.canvas.addEventListener('mouseup', () => this.stop());
+        };
+        this._touchEndHandler = () => this.stop();
+        this._mouseDownHandler = (e: MouseEvent) => this.start(e);
+        this._mouseMoveHandler = (e: MouseEvent) => this.draw(e);
+        this._mouseUpHandler = () => this.stop();
+
+        this.canvas.addEventListener('touchstart', this._touchStartHandler, {passive: false});
+        this.canvas.addEventListener('touchmove', this._touchMoveHandler, {passive: false});
+        this.canvas.addEventListener('touchend', this._touchEndHandler);
+        this.canvas.addEventListener('mousedown', this._mouseDownHandler);
+        this.canvas.addEventListener('mousemove', this._mouseMoveHandler);
+        this.canvas.addEventListener('mouseup', this._mouseUpHandler);
     }
 
     start(e: { clientX: number, clientY: number }) {
         this.isDrawing = true;
         this.isDirty = true;
         this.points = [];
+        if (this.ctx) {
+            this.ctx.fillStyle = this.inkColor;
+            this.ctx.strokeStyle = this.inkColor;
+        }
         const pos = this.getMousePos(e);
         this.points.push(pos);
         this.ctx?.beginPath();
@@ -145,9 +363,83 @@ export class SignatureModal extends LitElement {
 
     clear() {
         this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.isDirty = true;
+        this.isDirty = false;
         this.originalData = null;
+        this.showSaveNameRow = false;
         localStorage.removeItem(`signer_${this.mode}`);
+    }
+
+    private setInkColor(color: string) {
+        this.inkColor = color;
+        localStorage.setItem('signer_ink_color', color);
+        if (this.ctx) {
+            this.ctx.strokeStyle = color;
+            this.ctx.fillStyle = color;
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+        this.isDirty = false;
+        this.originalData = null;
+    }
+
+    private usePreset(preset: SignaturePreset) {
+        this.originalData = preset.dataURL;
+        this.isDirty = false;
+        if (this.ctx) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+        this.drawFromData(preset.dataURL);
+        // Update last-used cache
+        localStorage.setItem(`signer_${this.mode}`, preset.dataURL);
+    }
+
+    private deletePreset(id: string) {
+        const target = this.presets.find(p => p.id === id);
+        if (target && this.originalData === target.dataURL) {
+            this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.originalData = null;
+            this.isDirty = false;
+            this.showSaveNameRow = false;
+            localStorage.removeItem(`signer_${this.mode}`);
+        }
+        const updated = this.presets.filter(p => p.id !== id);
+        this.presets = updated;
+        persistPresets(this.mode, updated);
+    }
+
+    private saveAsPreset() {
+        if (this.presets.length >= MAX_PRESETS) return;
+        const defaultName = `${this.mode === 'signature' ? 'Signature' : 'Initials'} ${this.presets.length + 1}`;
+        this.saveNameValue = defaultName;
+        this.showSaveNameRow = true;
+    }
+
+    private confirmSavePreset() {
+        const name = this.saveNameValue.trim();
+        if (!name) return;
+
+        const dataUrl = this.exportCanvas();
+        if (!dataUrl) return;
+
+        const preset: SignaturePreset = {id: Date.now().toString(), name, dataURL: dataUrl};
+        const updated = [...this.presets, preset];
+        this.presets = updated;
+        persistPresets(this.mode, updated);
+        this.showSaveNameRow = false;
+        this.saveNameValue = '';
+    }
+
+    private exportCanvas(): string | null {
+        const exportCanvas = document.createElement('canvas');
+        const MAX_WIDTH = 600;
+        let [w, h] = [this.canvas.width, this.canvas.height];
+        if (w > MAX_WIDTH) {
+            h = (MAX_WIDTH / w) * h;
+            w = MAX_WIDTH;
+        }
+        exportCanvas.width = w;
+        exportCanvas.height = h;
+        exportCanvas.getContext('2d')?.drawImage(this.canvas, 0, 0, w, h);
+        return exportCanvas.toDataURL('image/png');
     }
 
     save() {
@@ -161,18 +453,8 @@ export class SignatureModal extends LitElement {
             return;
         }
 
-        const exportCanvas = document.createElement('canvas');
-        const MAX_WIDTH = 600;
-        let [exportWidth, exportHeight] = [this.canvas.width, this.canvas.height];
-        if (exportWidth > MAX_WIDTH) {
-            exportHeight = (MAX_WIDTH / exportWidth) * exportHeight;
-            exportWidth = MAX_WIDTH;
-        }
-        exportCanvas.width = exportWidth;
-        exportCanvas.height = exportHeight;
-        exportCanvas.getContext('2d')?.drawImage(this.canvas, 0, 0, exportWidth, exportHeight);
-
-        const dataUrl = exportCanvas.toDataURL('image/png');
+        const dataUrl = this.exportCanvas();
+        if (!dataUrl) return;
         localStorage.setItem(`signer_${this.mode}`, dataUrl);
         this.dispatchEvent(new CustomEvent('signed', {detail: dataUrl}));
         this.remove();
@@ -184,11 +466,79 @@ export class SignatureModal extends LitElement {
                 <div class="modal-card center">
                     <h3 style="margin-top:0;">
                         ${this.mode === 'initials' ? i18n.t('addInitials') : i18n.t('addSig')}</h3>
+
+                    <div class="presets-section">
+                        <div class="presets-label">${i18n.t('savedPresets')}</div>
+                        ${this.presets.length === 0 ? html`
+                            <div class="no-presets">${i18n.t('noPresets')}</div>
+                        ` : html`
+                            <div class="presets-strip">
+                                ${this.presets.map(p => html`
+                                    <div class="preset-item" title="${p.name}" @click=${() => this.usePreset(p)}>
+                                        <img src="${p.dataURL}" alt="${p.name}">
+                                        <span class="preset-name">${p.name}</span>
+                                        <button
+                                            class="preset-delete"
+                                            title="${i18n.t('deletePreset')}"
+                                            aria-label="${i18n.t('deletePreset')}"
+                                            @click=${(e: Event) => {
+                                                e.stopPropagation();
+                                                this.deletePreset(p.id);
+                                            }}>✕</button>
+                                    </div>
+                                `)}
+                            </div>
+                        `}
+                    </div>
+
+                    <div class="color-strip" aria-label="${i18n.t('inkColor')}">
+                        ${INK_COLORS.map(c => html`
+                            <button
+                                class="color-swatch ${this.inkColor === c.value ? 'selected' : ''}"
+                                style="background:${c.value}"
+                                title="${i18n.t(c.labelKey)}"
+                                aria-label="${i18n.t(c.labelKey)}"
+                                aria-pressed="${this.inkColor === c.value}"
+                                @click=${() => this.setInkColor(c.value)}
+                            ></button>
+                        `)}
+                    </div>
+
                     <canvas id="signature-pad"></canvas>
+
+                    ${(this.isDirty || this.originalData) && this.presets.length < MAX_PRESETS ? html`
+                        ${this.showSaveNameRow ? html`
+                            <div class="save-name-row">
+                                <input
+                                    type="text"
+                                    .value=${this.saveNameValue}
+                                    @input=${(e: Event) => { this.saveNameValue = (e.target as HTMLInputElement).value; }}
+                                    @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter') this.confirmSavePreset(); if (e.key === 'Escape') { this.showSaveNameRow = false; } }}
+                                    placeholder="${i18n.t('presetName')}"
+                                >
+                                <button class="btn btn-primary" style="font-size:0.8rem; padding:4px 10px;"
+                                        @click=${() => this.confirmSavePreset()}>
+                                    ${i18n.t('savePreset')}
+                                </button>
+                                <button class="btn" style="font-size:0.8rem; padding:4px 10px;"
+                                        @click=${() => { this.showSaveNameRow = false; }}>
+                                    ${i18n.t('cancel')}
+                                </button>
+                            </div>
+                        ` : html`
+                            <div class="save-preset-row">
+                                <button class="btn" style="font-size:0.8rem; padding:4px 10px;"
+                                        @click=${() => this.saveAsPreset()}>
+                                    + ${i18n.t('savePreset')}
+                                </button>
+                            </div>
+                        `}
+                    ` : ''}
+
                     <div class="actions">
                         <button class="btn" @click=${() => this.remove()}>${i18n.t('cancel')}</button>
-                        <button class="btn btn-danger" @click=${this.clear}>${i18n.t('clear')}</button>
-                        <button class="btn btn-primary" @click=${this.save}>${i18n.t('done')}</button>
+                        <button class="btn btn-danger" @click=${() => this.clear()}>${i18n.t('clear')}</button>
+                        <button class="btn btn-primary" @click=${() => this.save()}>${i18n.t('done')}</button>
                     </div>
                 </div>
             </div>
