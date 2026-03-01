@@ -38,16 +38,21 @@ device's RAM.
 
 * **Responsive Unified Design:** A meticulously crafted UI using Web Components (Lit) that seamlessly adapts to desktop
   displays and mobile screens (respecting iOS/Android safe areas and navigation bars).
-* **Smart Layout Control:** Drag, resize, and position elements with exact mathematical center-to-center snapping.
-* **Natural Ink & Custom Prompts:** Smooth signature drawing and native-feeling custom modal prompts for text/identity
-  inputs.
+* **Enhanced Accessibility:** Full ARIA label support, keyboard navigation (Tab/Shift+Tab), and focus traps for all
+  modal
+  dialogs to ensure a professional experience for all users.
+* **Large Touch Targets:** Optimised for mobile with large (44px+) interactive targets for all critical actions.
+* **Smart Layout Control:** Drag, resize, and position elements with exact mathematical center-to-center snapping and
+  viewport collision detection to prevent UI clipping.
+* **Natural Ink & Custom Prompts:** Smooth signature drawing with saved presets and native-feeling custom modal prompts
+  for text/identity inputs.
 * **History:** Full Undo/Redo support (`Ctrl+Z`, `Ctrl+Y`).
 
 ### 🌍 Universal Access
 
 * **Offline First (PWA):** Installs as a native app on Android, iOS, Windows, and Mac. Fully functional without an
   internet connection.
-* **Multilingual:** Native support for **English**, **Arabic (RTL)**, and **French**.
+* **Multilingual:** Native support for **English**, **Arabic (RTL)**, and **French** with dynamic UI mirroring.
 
 ---
 
@@ -56,6 +61,8 @@ device's RAM.
 We believe in **Data Sovereignty**.
 
 * **No Uploads:** Your PDF never touches our cloud.
+* **Cryptographic Identifiers:** We use native `crypto.randomUUID()` for secure, collision-resistant document and
+  annotation tracking—never insecure random numbers.
 * **No Profiling:** We do not use cookies or trackers to build user profiles.
 * **Usage Counting:** We use privacy-preserving telemetry solely to count aggregate usage (e.g., "100 documents signed
   today") to ensure the project remains sustainable. No personal data is ever collected.
@@ -67,14 +74,18 @@ We believe in **Data Sovereignty**.
 We don't just "hope" the code works; we prove it before every release.
 
 * **Automated Audit (The Robot):** We use **Playwright** to run end-to-end tests simulating real user behavior.
-* **Coverage:**
+* **Stable Selectors:** Tests rely on unique `data-testid` attributes rather than fragile translated text, ensuring
+  reliability across all languages.
+* **Comprehensive Coverage:**
     * ✅ **Cryptography:** Verifies that SHA-256 hashes are calculated and matched correctly.
-    * ✅ **Workflows:** Simulates Alice signing, downloading, and Bob verifying the file.
-    * ✅ **Deep Linking:** Checks that external links (`?id=...`) correctly open the Verification Tool and prompt for
-      files.
-    * ✅ **Strict DOM Checks:** Ensures modal states, toolbars, and translation keys render flawlessly.
-* **CI/CD Guardrails:** Deployment is physically blocked by GitHub Actions if any test fails, ensuring no broken code
-  ever reaches production.
+    * ✅ **Workflows:** Simulates Alice signing, Bob verifying, and complex multi-page interactions.
+    * ✅ **Navigation:** Full audit of landing page modes, privacy dialogs, and exit confirmation logic.
+    * ✅ **Robustness:** Tests for RTL mirroring, dirty-state detection, and keyboard shortcuts.
+* **Type Safety:** The entire codebase is strictly typed. We run `tsc --noEmit` to ensure zero regression in logic or
+  data structures.
+* **CI/CD Guardrails:** Deployment is physically blocked by GitHub Actions if any test fails or type-check fails,
+  ensuring
+  no broken code ever reaches production.
 
 ---
 
@@ -108,12 +119,12 @@ Anyone receiving a signed document can verify it:
 
 ## 🏗️ Architecture
 
-* **Core:** TypeScript, Vite, Lit (Web Components).
+* **Core:** TypeScript (Strict Mode), Vite, Lit (Web Components).
 * **Native Layer:** Capacitor (for Android/iOS distribution).
 * **Styling:** CSS variables, dynamic viewport units (`100dvh`), and Shadow DOM isolation.
-* **Testing:** Playwright (End-to-End & Crypto Logic).
+* **Testing:** Playwright (End-to-End & Workflow logic).
 * **PDF Engine:** `pdf-lib` (modification) & `pdfjs-dist` (rendering).
-* **Cryptography:** Native `crypto.subtle` API for SHA-256 hashing.
+* **Cryptography:** Native `crypto.subtle` API for SHA-256 and `crypto.randomUUID()` for identifiers.
 
 ---
 
@@ -130,7 +141,6 @@ Anyone receiving a signed document can verify it:
 npm install
 # Install Capacitor dependencies for Android
 npx cap sync
-
 ```
 
 ### 2. Development (Browser)
@@ -139,19 +149,18 @@ Runs the app in "Web Mode" with Hot Module Replacement (HMR).
 
 ```bash
 npm run dev
-
 ```
 
-### 3. Run Tests (The Audit)
+### 3. Verification & Type-checking
 
-Runs the Playwright robot to verify all core features.
+Always run these before contributing to ensure stability.
 
 ```bash
-# Installs browsers if running for the first time
-npx playwright install
+# Run TypeScript type-check
+npm run typecheck
+
 # Run the test suite
 npm test
-
 ```
 
 ### 4. Build for Production (PWA)
@@ -160,7 +169,6 @@ Compiles TypeScript to optimized, offline-ready JS in `dist/`.
 
 ```bash
 npm run build
-
 ```
 
 ---
