@@ -227,4 +227,44 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.keyboard.press('Control+z');
         await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1);
     });
+
+    test('9. Workflow: Batch Operations (Multi-select & Delete)', async ({page}) => {
+        await page.goto('/');
+        
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        
+        const pdfBuffer = await generateTestPDF(1);
+        await fileChooser.setFiles({
+            name: 'batch_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer)
+        });
+        
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        const ws = page.locator('pdf-workspace');
+
+        // Add 3 dates
+        for (let i=0; i<3; i++) {
+            await ws.getByTestId('btn-add-date').click();
+            await page.waitForTimeout(100);
+        }
+
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(3);
+
+        const annotations = ws.locator('[data-testid^="annotation-"]');
+        const ann1 = annotations.nth(0);
+        const ann2 = annotations.nth(1);
+
+        await ann1.evaluate((el) => el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+        await ann2.evaluate((el) => el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, shiftKey: true })));
+
+        await expect(ann1).toHaveClass(/selected/);
+        await expect(ann2).toHaveClass(/selected/);
+
+        await page.keyboard.press('Delete');
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+    });
 });

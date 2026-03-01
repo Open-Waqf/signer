@@ -966,6 +966,10 @@ export class PdfWorkspace extends LitElement {
     };
 
     stopInteraction = () => {
+        if (this.touchTimer) {
+            clearTimeout(this.touchTimer);
+            this.touchTimer = null;
+        }
         const changed = this.interactionChanged;
         this.isDragging = false;
         this.isResizing = false;

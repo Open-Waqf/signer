@@ -151,16 +151,16 @@ export class SignatureModal extends LitElement {
 
         .preset-delete {
             position: absolute;
-            top: 2px;
-            right: 2px;
-            width: 32px;
-            height: 32px;
+            top: -6px;
+            right: -6px;
+            width: 20px;
+            height: 20px;
             border-radius: 50%;
             background: rgba(220, 38, 38, 0.9);
             color: #fff;
             border: none;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -170,7 +170,7 @@ export class SignatureModal extends LitElement {
             transition: opacity 0.15s;
         }
 
-        .preset-item:hover .preset-delete {
+        .preset-item:hover .preset-delete, .preset-item:active .preset-delete, .preset-delete:focus {
             opacity: 1;
         }
 
