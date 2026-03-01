@@ -209,20 +209,6 @@ export class SignatureModal extends LitElement {
             margin-bottom: 14px;
         }
 
-        .save-name-row input {
-            flex: 1;
-            padding: 8px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            font-family: inherit;
-            outline: none;
-        }
-
-        .save-name-row input:focus {
-            border-color: var(--primary, #1447e6);
-            box-shadow: 0 0 0 3px rgba(20,71,230,0.15);
-        }
     `];
 
     async firstUpdated() {
@@ -554,24 +540,25 @@ export class SignatureModal extends LitElement {
                             <div class="save-name-row">
                                 <input
                                     type="text"
+                                    class="input-field"
                                     data-testid="input-preset-name"
                                     .value=${this.saveNameValue}
                                     @input=${(e: Event) => { this.saveNameValue = (e.target as HTMLInputElement).value; }}
                                     @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter') this.confirmSavePreset(); if (e.key === 'Escape') { this.showSaveNameRow = false; } }}
                                     placeholder="${i18n.t('presetName')}"
                                 >
-                                <button class="btn btn-primary" data-testid="btn-confirm-preset" style="font-size:0.8rem; padding:4px 10px;"
+                                <button class="btn btn-primary btn-sm" data-testid="btn-confirm-preset"
                                         @click=${() => this.confirmSavePreset()}>
                                     ${i18n.t('savePreset')}
                                 </button>
-                                <button class="btn" style="font-size:0.8rem; padding:4px 10px;"
+                                <button class="btn btn-sm"
                                         @click=${() => { this.showSaveNameRow = false; }}>
                                     ${i18n.t('cancel')}
                                 </button>
                             </div>
                         ` : html`
                             <div class="save-preset-row">
-                                <button class="btn" data-testid="btn-save-preset" style="font-size:0.8rem; padding:4px 10px;"
+                                <button class="btn btn-sm" data-testid="btn-save-preset"
                                         @click=${() => this.saveAsPreset()}>
                                     + ${i18n.t('savePreset')}
                                 </button>

@@ -1370,12 +1370,12 @@ export class PdfWorkspace extends LitElement {
                             <div class="alert-box alert-error" data-testid="handover-fail"
                                  .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
                         <div style="display:flex; gap:10px;">
-                            <button class="btn btn-primary" data-testid="btn-verify-handover" style="flex:1;"
+                            <button class="btn btn-primary btn-block" data-testid="btn-verify-handover"
                                     @click=${this.checkHandover}>
                                 ${i18n.t('verifyBtn')}
                             </button>
-                            <button class="btn" data-testid="btn-skip-handover" style="flex:1;"
-                                    @click=${() => this.showHandoverModal = false}>
+                            <button class="btn btn-block" data-testid="btn-skip-handover"
+                                    @click=${() => { this.showHandoverModal = false; this.handoverResult = 'idle'; }}>
                                 ${i18n.t('btnSkip')}
                             </button>
                         </div>
@@ -1411,16 +1411,16 @@ export class PdfWorkspace extends LitElement {
                             </div>
                         </div>
                         <div style="display:flex; gap:10px; margin-bottom:12px;">
-                            <button class="btn btn-primary" data-testid="btn-copy-hash" style="flex:1;"
+                            <button class="btn btn-primary btn-block" data-testid="btn-copy-hash"
                                     @click=${this.copyHash}>
                                 ${ICONS.copy} ${i18n.t('copyShort')}
                             </button>
-                            <button class="btn" data-testid="btn-email-proof" style="flex:1;"
+                            <button class="btn btn-block" data-testid="btn-email-proof"
                                     @click=${this.sendProofEmail}>${ICONS.email}
                                 ${i18n.t('email')}
                             </button>
                         </div>
-                        <button class="btn" data-testid="btn-close-proof" style="width:100%;"
+                        <button class="btn btn-block" data-testid="btn-close-proof"
                                 @click=${() => this.showProofModal = false}>
                             ${i18n.t('close')}
                         </button>

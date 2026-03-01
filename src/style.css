@@ -252,6 +252,17 @@ app-root {
     border: none;
 }
 
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border-radius: var(--radius-sm);
+}
+
+.btn-block {
+    width: 100%;
+    display: flex;
+}
+
 /* Typography & Badges */
 .badge-success {
     background: var(--success-bg);
