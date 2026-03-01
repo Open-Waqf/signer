@@ -11,4 +11,6 @@ export interface Annotation {
     aspectRatio?: number;  // height/width ratio (for images)
     fontSize?: number; // e.g. 12, 18, 24
     fontWeight?: 'normal' | 'bold';
+    fontFamily?: string;
+    color?: string; // hex color e.g. #000000
 }

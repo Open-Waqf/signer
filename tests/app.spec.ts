@@ -160,11 +160,18 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
 
         // Toggle Thumbnails
         await page.getByTestId('btn-toggle-thumbs').click();
+        const thumbPanel = page.locator('.thumb-panel');
+        await expect(thumbPanel).toBeVisible();
+
         const thumb2 = page.getByTestId('thumb-page-2');
         if (await thumb2.count() > 0) {
             await thumb2.click();
             await expect(pageIndicator).toHaveText(/2\s*(?:\/|of)\s*\d+/);
         }
+
+        // Toggle Thumbnails off
+        await page.getByTestId('btn-toggle-thumbs').click();
+        await expect(thumbPanel).not.toBeVisible();
 
         // Undo/Redo Test
         await page.getByTestId('btn-add-date').click();

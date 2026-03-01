@@ -27,7 +27,7 @@ export class PdfEngine {
     private pdfDoc: any = null;
     private pdfBytes: Uint8Array | null = null;
 
-    private async textToImage(text: string, fontSize: number = 12, isBold: boolean = false): Promise<Uint8Array> {
+    private async textToImage(text: string, fontSize: number = 12, isBold: boolean = false, fontFamily: string = 'Amiri', color: string = '#000000'): Promise<Uint8Array> {
         let canvas: HTMLCanvasElement | null = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Canvas context not available');
@@ -35,7 +35,7 @@ export class PdfEngine {
         const scale = 3;
         const fontSizePx = fontSize * scale;
         // Ensure "Amiri" is loaded in CSS for Arabic support
-        const font = `${isBold ? 'bold' : 'normal'} ${fontSizePx}px "Amiri", "Segoe UI", "Segoe UI Emoji", "Apple Color Emoji", "Helvetica", "Arial", sans-serif`;
+        const font = `${isBold ? 'bold' : 'normal'} ${fontSizePx}px "${fontFamily}", "Segoe UI", "Segoe UI Emoji", "Apple Color Emoji", "Helvetica", "Arial", sans-serif`;
         ctx.font = font;
         const metrics = ctx.measureText(text);
         const width = Math.ceil(metrics.width);
@@ -45,7 +45,7 @@ export class PdfEngine {
         canvas.height = height;
 
         ctx.font = font;
-        ctx.fillStyle = 'black';
+        ctx.fillStyle = color;
         ctx.textBaseline = 'middle';
         ctx.direction = 'inherit';
         ctx.fillText(text, 0, height / 2);
@@ -135,7 +135,7 @@ export class PdfEngine {
                 drawLabel(text, x, y, size);
             } else {
                 try {
-                    const imgBuffer = await this.textToImage(text, size, false);
+                    const imgBuffer = await this.textToImage(text, size, false, 'Helvetica', '#000000');
                     const img = await pdfDoc.embedPng(imgBuffer);
                     const w = img.width / 3;
                     const h = img.height / 3;
@@ -260,7 +260,7 @@ export class PdfEngine {
             const {width, height} = page.getSize();
 
             if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
-                const imgBuffer = await this.textToImage(ann.data, ann.fontSize || 12, ann.fontWeight === 'bold');
+                const imgBuffer = await this.textToImage(ann.data, ann.fontSize || 12, ann.fontWeight === 'bold', ann.fontFamily || 'Amiri', ann.color || '#000000');
                 const pngImage = await pdfDoc.embedPng(imgBuffer);
                 const scaleFactor = 0.75;
                 const w = (pngImage.width / 3) * scaleFactor;

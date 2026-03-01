@@ -55,8 +55,7 @@ export class PdfWorkspace extends LitElement {
     @query('.page-container') container!: HTMLDivElement;
     @query('.viewport') viewport!: HTMLDivElement;
 
-    @state() guideX: number | null = null;
-    @state() guideY: number | null = null;
+    @state() guideLines: { axis: 'x' | 'y', pos: number }[] = [];
 
     @state() showThumbnails = localStorage.getItem('signer_show_thumbs') === 'true';
     @state() thumbnailURLs: string[] = [];
@@ -208,10 +207,6 @@ export class PdfWorkspace extends LitElement {
 
         .toolbar-bottom {
             display: none; /* Desktop hidden */
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
             background: var(--bg-surface);
             border-top: 1px solid var(--border);
             padding: 8px 8px env(safe-area-inset-bottom);
@@ -675,10 +670,18 @@ export class PdfWorkspace extends LitElement {
 
     changePage(offset: number) {
         const newPage = this.currentPage + offset;
-        if (newPage >= 1 && newPage <= this.totalPages) {
-            this.currentPage = newPage;
+        this.gotoPage(newPage);
+    }
+
+    gotoPage(page: number) {
+        if (page >= 1 && page <= this.totalPages) {
+            this.currentPage = page;
             this.selectedId = null;
             void this.renderPage();
+            if (this.viewport) {
+                this.viewport.scrollTop = 0;
+                this.viewport.scrollLeft = 0;
+            }
         }
     }
 
@@ -843,16 +846,51 @@ export class PdfWorkspace extends LitElement {
             }
             const centerX = nextXPct + (visualWidthPct / 2);
             const centerY = nextYPct + (visualHeightPct / 2);
-            this.guideX = null;
-            this.guideY = null;
+            const SNAP_THRESHOLD = 0.015;
+            this.guideLines = [];
 
-            if (Math.abs(centerX - 0.5) < 0.02) {
+            // 1. Check center of page
+            if (Math.abs(centerX - 0.5) < SNAP_THRESHOLD) {
                 nextXPct = 0.5 - (visualWidthPct / 2);
-                this.guideX = 0.5;
+                this.guideLines.push({ axis: 'x', pos: 0.5 });
             }
-            if (Math.abs(centerY - 0.5) < 0.02) {
+            if (Math.abs(centerY - 0.5) < SNAP_THRESHOLD) {
                 nextYPct = 0.5 - (visualHeightPct / 2);
-                this.guideY = 0.5;
+                this.guideLines.push({ axis: 'y', pos: 0.5 });
+            }
+
+            // 2. Check alignment with other annotations
+            const otherAnns = this.annotations.filter(a => a.page === ann.page && a.id !== ann.id);
+            for (const other of otherAnns) {
+                const otherWidthPct = other.widthPct || 0.1;
+                const otherHeightPct = otherWidthPct * (other.aspectRatio || 1);
+                
+                const otherCenterX = other.xPct + otherWidthPct / 2;
+                const otherCenterY = other.yPct + otherHeightPct / 2;
+
+                // X-axis alignment (center, left edge, right edge)
+                if (Math.abs(centerX - otherCenterX) < SNAP_THRESHOLD) {
+                    nextXPct = otherCenterX - (visualWidthPct / 2);
+                    this.guideLines.push({ axis: 'x', pos: otherCenterX });
+                } else if (Math.abs(nextXPct - other.xPct) < SNAP_THRESHOLD) {
+                    nextXPct = other.xPct;
+                    this.guideLines.push({ axis: 'x', pos: other.xPct });
+                } else if (Math.abs((nextXPct + visualWidthPct) - (other.xPct + otherWidthPct)) < SNAP_THRESHOLD) {
+                    nextXPct = (other.xPct + otherWidthPct) - visualWidthPct;
+                    this.guideLines.push({ axis: 'x', pos: other.xPct + otherWidthPct });
+                }
+
+                // Y-axis alignment (center, top edge, bottom edge)
+                if (Math.abs(centerY - otherCenterY) < SNAP_THRESHOLD) {
+                    nextYPct = otherCenterY - (visualHeightPct / 2);
+                    this.guideLines.push({ axis: 'y', pos: otherCenterY });
+                } else if (Math.abs(nextYPct - other.yPct) < SNAP_THRESHOLD) {
+                    nextYPct = other.yPct;
+                    this.guideLines.push({ axis: 'y', pos: other.yPct });
+                } else if (Math.abs((nextYPct + visualHeightPct) - (other.yPct + otherHeightPct)) < SNAP_THRESHOLD) {
+                    nextYPct = (other.yPct + otherHeightPct) - visualHeightPct;
+                    this.guideLines.push({ axis: 'y', pos: other.yPct + otherHeightPct });
+                }
             }
 
             if (Math.abs(nextXPct - ann.xPct) > 0.0005 || Math.abs(nextYPct - ann.yPct) > 0.0005) {
@@ -884,8 +922,7 @@ export class PdfWorkspace extends LitElement {
         this.interactionSnapshotTaken = false;
         this.interactionChanged = false;
         if (changed) this.isDirty = true;
-        this.guideX = null;
-        this.guideY = null;
+        this.guideLines = [];
     };
 
     openSignModal() {
@@ -1146,6 +1183,9 @@ export class PdfWorkspace extends LitElement {
                 </div>
             </div>
 
+                </div>
+            </div>
+
             <div class="toolbar-bottom" role="toolbar" aria-label="${i18n.t('ariaToolbar')}">
                 <button data-testid="m-btn-add-sig" class="btn btn-tool" aria-label="${i18n.t('signMode')}"
                         @click=${this.openSignModal}>
@@ -1172,10 +1212,6 @@ export class PdfWorkspace extends LitElement {
                     ${ICONS.date} <span>${i18n.t('addDate')}</span>
                 </button>
             </div>
-
-            <input type="file" id="stamp-input" accept="image/*" style="display: none"
-                   aria-hidden="true"
-                   @change=${this.handleStampUpload}/>
 
             <div class="workspace-area">
                 ${this.showThumbnails && (this.thumbnailURLs.length > 0 || this.isGeneratingThumbs) ? html`
@@ -1227,6 +1263,9 @@ export class PdfWorkspace extends LitElement {
                                 @click=${() => {
                                     this.showThumbnails = !this.showThumbnails;
                                     localStorage.setItem('signer_show_thumbs', String(this.showThumbnails));
+                                    if (this.showThumbnails && this.thumbnailURLs.length === 0) {
+                                        void this.generateThumbnails();
+                                    }
                                 }}>
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                  stroke-width="2.5">
@@ -1239,10 +1278,11 @@ export class PdfWorkspace extends LitElement {
                     </div>
 
                     <div class="page-container" data-testid="page-container">
-                        ${this.guideX !== null ? html`
-                            <div style="position:absolute; left:${this.guideX * 100}%; top:0; bottom:0; width:1px; background:var(--danger); z-index:50;"></div>` : ''}
-                        ${this.guideY !== null ? html`
-                            <div style="position:absolute; top:${this.guideY * 100}%; left:0; right:0; height:1px; background:var(--danger); z-index:50;"></div>` : ''}
+                        ${this.guideLines.map(guide => guide.axis === 'x' ? html`
+                            <div style="position:absolute; left:${guide.pos * 100}%; top:0; bottom:0; width:1px; background:var(--primary); z-index:50;"></div>
+                        ` : html`
+                            <div style="position:absolute; top:${guide.pos * 100}%; left:0; right:0; height:1px; background:var(--primary); z-index:50;"></div>
+                        `)}
                         <canvas id="pdf-canvas"></canvas>
                         ${this.annotations.filter(ann => ann.page === this.currentPage - 1).map(ann => {
                             const isSelected = this.selectedId === ann.id;
@@ -1278,6 +1318,27 @@ export class PdfWorkspace extends LitElement {
                                                         this.handleTextEdit(ann.id, ann.data);
                                                     }}>✎
                                             </button>
+                                            <select data-testid="select-font"
+                                                    aria-label="${(i18n.t as any)('fontFamily') || 'Font'}"
+                                                    style="background:transparent; border:1px solid #374151; color:#fff; height:34px; border-radius:4px; cursor:pointer;"
+                                                    @click=${(e: Event) => e.stopPropagation()}
+                                                    @change=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.updateStyle(ann.id, {fontFamily: (e.target as HTMLSelectElement).value});
+                                                    }}>
+                                                <option value="Amiri" ?selected=${ann.fontFamily === 'Amiri' || !ann.fontFamily}>Amiri</option>
+                                                <option value="Roboto" ?selected=${ann.fontFamily === 'Roboto'}>Roboto</option>
+                                                <option value="Noto Sans" ?selected=${ann.fontFamily === 'Noto Sans'}>Noto Sans</option>
+                                            </select>
+                                            <input type="color" data-testid="input-color"
+                                                   aria-label="${(i18n.t as any)('textColor') || 'Text Color'}"
+                                                   value="${ann.color || '#000000'}"
+                                                   style="background:transparent; border:1px solid #374151; height:34px; width:34px; border-radius:4px; cursor:pointer; padding: 0;"
+                                                   @click=${(e: Event) => e.stopPropagation()}
+                                                   @input=${(e: Event) => {
+                                                       e.stopPropagation();
+                                                       this.updateStyle(ann.id, {color: (e.target as HTMLInputElement).value});
+                                                   }}>
                                             <button data-testid="btn-toggle-bold"
                                                     aria-label="${i18n.t('bold') || 'Bold'}"
                                                     style="background:${ann.fontWeight === 'bold' ? 'var(--primary)' : 'transparent'}; color:#fff; border:1px solid #374151; width:34px; height:34px; border-radius:4px; font-weight:bold; cursor:pointer;"
@@ -1333,7 +1394,7 @@ export class PdfWorkspace extends LitElement {
                                              style="width:100%; display:block; pointer-events:none;"/>
                                     ` : html`
                                         <span class="text-content"
-                                              style="font-size:${ann.fontSize || 12}px; font-weight:${ann.fontWeight || 'normal'};"
+                                              style="font-size:${ann.fontSize || 12}px; font-weight:${ann.fontWeight || 'normal'}; font-family:${ann.fontFamily || 'Amiri'}; color:${ann.color || 'black'};"
                                               @dblclick=${(e: Event) => {
                                                   e.stopPropagation();
                                                   this.handleTextEdit(ann.id, ann.data);
