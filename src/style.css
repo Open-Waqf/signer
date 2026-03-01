@@ -15,27 +15,50 @@
     font-display: swap;
 }
 
-/* 2. Global Variables */
+/* 2. Design System Tokens */
 :root {
     font-family: 'Amiri', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.5;
     font-weight: 400;
     color-scheme: light;
 
+    /* Core Colors */
     --primary: #2563eb;
     --primary-hover: #1d4ed8;
     --bg-app: #f9fafb;
     --bg-surface: #ffffff;
+    --bg-muted: #f3f4f6;
     --text-main: #111827;
     --text-sub: #6b7280;
     --border: #e5e7eb;
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+    /* Status Colors */
+    --success: #10b981;
+    --success-bg: #ecfdf5;
+    --danger: #ef4444;
+    --danger-bg: #fee2e2;
+    --warning: #f59e0b;
+    --warning-bg: #fff7ed;
+
+    /* Elevation & Shadows */
+    --shadow-flat: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-raised: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-floating: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+    /* Border Radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-base: 0.2s ease;
 }
 
 /* Global Reset */
 *, *::before, *::after {
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -43,11 +66,11 @@ html, body {
     height: 100%;
     margin: 0;
     padding: 0;
+    background: var(--bg-app);
 }
 
 body {
     overflow: hidden;
-    background: var(--bg-app);
     color: var(--text-main);
     display: flex;
     flex-direction: column;
@@ -60,6 +83,19 @@ app-root {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+.mode-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Layout Utilities used by App Root */
@@ -76,7 +112,7 @@ app-root {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    height: 100%; /* ✨ FIX: Changed from 100vh to 100% so it respects body padding */
+    height: 100%;
     padding: 0;
     overflow-y: auto;
 }
@@ -87,27 +123,34 @@ app-root {
 
 .drop-card {
     background: var(--bg-surface);
-    padding: 40px 20px;
-    border-radius: 16px;
-    box-shadow: var(--shadow-lg);
+    padding: 40px 24px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-floating);
     border: 1px solid var(--border);
     text-align: center;
     max-width: 400px;
-    width: 90%;
+    width: calc(100% - 40px);
     flex-shrink: 0;
     margin: auto 20px;
+    transition: var(--transition-base);
 }
 
 .drop-card img {
     width: 80px;
     height: 80px;
-    margin-bottom: 20px;
-    border-radius: 16px;
+    margin-bottom: 24px;
+    border-radius: var(--radius-lg);
     cursor: pointer;
+    box-shadow: var(--shadow-raised);
+    transition: var(--transition-fast);
+}
+
+.drop-card img:active {
+    transform: scale(0.95);
 }
 
 .drop-card h1 {
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 700;
     margin: 0 0 8px 0;
 }
@@ -120,44 +163,49 @@ app-root {
 
 .mode-toggle {
     display: flex;
-    background: #f3f4f6;
+    background: var(--bg-muted);
     padding: 4px;
-    border-radius: 8px;
-    margin-bottom: 20px;
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
     width: 100%;
 }
 
 .mode-toggle button {
     flex: 1;
-    padding: 8px;
+    padding: 10px;
     font-size: 0.9rem;
     background: transparent;
     border: none;
     color: var(--text-sub);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     font-weight: 600;
+    transition: var(--transition-fast);
 }
 
 .mode-toggle button.active {
-    background: #fff;
-    color: var(--text-main);
-    box-shadow: var(--shadow-sm);
+    background: var(--bg-surface);
+    color: var(--primary);
+    box-shadow: var(--shadow-flat);
 }
 
 .drop-area-visual {
     border: 2px dashed var(--border);
-    border-radius: 12px;
-    padding: 30px 20px;
+    border-radius: var(--radius-md);
+    padding: 40px 20px;
     width: 100%;
-    background: #f9fafb;
-    transition: 0.2s;
+    background: var(--bg-app);
+    transition: var(--transition-base);
     cursor: pointer;
 }
 
-.drop-zone[data-dragging] .drop-area-visual, .drop-area-visual:hover {
+.drop-area-visual:hover {
     border-color: var(--primary);
     background: #eff6ff;
+}
+
+.drop-area-visual:active {
+    transform: scale(0.99);
 }
 
 /* Base Buttons (Matches shared-styles.ts for Light DOM) */
@@ -166,21 +214,26 @@ app-root {
     align-items: center;
     justify-content: center;
     padding: 10px 20px;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     font-weight: 600;
     font-size: 0.95rem;
     cursor: pointer;
-    transition: 0.2s;
+    transition: var(--transition-fast);
     border: 1px solid var(--border);
-    background: white;
+    background: var(--bg-surface);
     color: var(--text-main);
     gap: 8px;
     font-family: inherit;
+    user-select: none;
 }
 
-.btn:hover {
-    background: #f9fafb;
-    transform: translateY(-1px);
+.btn:hover:not(:disabled) {
+    background: var(--bg-muted);
+    border-color: #d1d5db;
+}
+
+.btn:active:not(:disabled) {
+    transform: scale(0.97);
 }
 
 .btn-primary {
@@ -189,31 +242,32 @@ app-root {
     border: none;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
     background: var(--primary-hover);
 }
 
 .btn-danger {
-    background: #fee2e2;
-    color: #b91c1c;
+    background: var(--danger-bg);
+    color: var(--danger);
     border: none;
 }
 
 /* Typography & Badges */
 .badge-success {
-    background: #ecfdf5;
-    color: #10b981;
-    padding: 6px 12px;
+    background: var(--success-bg);
+    color: var(--success);
+    padding: 6px 14px;
     border-radius: 20px;
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: 600;
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.1);
 }
 
 .footer-links {
-    margin-top: 24px;
+    margin-top: 32px;
     display: flex;
     justify-content: center;
     gap: 15px;
@@ -224,10 +278,11 @@ app-root {
     color: var(--text-sub);
     text-decoration: none;
     cursor: pointer;
+    transition: var(--transition-fast);
 }
 
 .footer-link:hover {
-    color: var(--text-main);
+    color: var(--primary);
 }
 
 .text-link {
@@ -237,14 +292,19 @@ app-root {
     text-decoration: underline;
     cursor: pointer;
     font-size: 0.9rem;
-    font-weight: 500;
+    font-weight: 600;
     padding: 0;
+    transition: var(--transition-fast);
+}
+
+.text-link:hover {
+    color: var(--primary-hover);
 }
 
 /* Features Grid */
 .features-section {
-    margin-top: 40px;
-    width: 90%;
+    margin-top: 48px;
+    width: calc(100% - 40px);
     max-width: 800px;
     margin-left: auto;
     margin-right: auto;
@@ -253,54 +313,63 @@ app-root {
 
 .features-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 20px;
 }
 
 .feature-card {
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: var(--shadow-sm);
+    background: var(--bg-surface);
+    padding: 24px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-flat);
     text-align: center;
-    border: 1px solid #f3f4f6;
+    border: 1px solid var(--border);
+    transition: var(--transition-base);
+}
+
+.feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-raised);
 }
 
 .feature-icon {
     color: var(--primary);
-    margin-bottom: 12px;
+    margin-bottom: 16px;
     display: flex;
     justify-content: center;
+    font-size: 1.5rem;
 }
 
 .feature-card h4 {
-    margin: 0 0 8px 0;
+    margin: 0 0 10px 0;
     color: var(--text-main);
-    font-size: 1.05rem;
+    font-size: 1.1rem;
+    font-weight: 700;
 }
 
 .feature-card p {
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: var(--text-sub);
-    line-height: 1.4;
+    line-height: 1.5;
 }
 
 /* --- Dialogs & Modals (Unified Sizing) --- */
 dialog {
     padding: 0;
-    border-radius: 16px;
+    border-radius: var(--radius-lg);
     border: none;
     width: calc(100% - 32px) !important;
     max-width: 420px !important;
     margin: auto;
-    background: white;
-    box-shadow: var(--shadow-lg);
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-floating);
+    overflow: hidden;
 }
 
 dialog::backdrop {
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(2px);
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
 }
 
 .modal-overlay {
@@ -309,25 +378,41 @@ dialog::backdrop {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.4);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 99999;
-    backdrop-filter: blur(2px);
-    padding: 16px; /* Forces spacing from mobile edges */
+    backdrop-filter: blur(4px);
+    padding: 16px;
     box-sizing: border-box;
 }
 
 .modal-card {
-    background: white;
+    background: var(--bg-surface);
     padding: 24px;
-    border-radius: 16px;
-    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-floating);
     width: 100%;
-    max-width: 420px; /* Perfectly matches dialogs */
+    max-width: 420px;
     text-align: left;
     box-sizing: border-box;
+    animation: modalScale 0.2s ease-out;
+}
+
+@keyframes modalScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.modal-card.center {
+    text-align: center;
 }
 
 .dialog-content {
@@ -336,18 +421,17 @@ dialog::backdrop {
 
 .dialog-content h2 {
     margin-top: 0;
-    font-size: 1.25rem;
+    font-size: 1.4rem;
+    font-weight: 700;
 }
 
 .dialog-footer {
     padding: 16px 24px;
-    background: #f9fafb;
+    background: var(--bg-app);
     display: flex;
     justify-content: center;
     gap: 12px;
     border-top: 1px solid var(--border);
-    border-bottom-left-radius: 16px;
-    border-bottom-right-radius: 16px;
 }
 
 /* Loaders & Toasts */
@@ -357,23 +441,23 @@ dialog::backdrop {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(255, 255, 255, 0.8);
-    z-index: 9999;
+    background: rgba(255, 255, 255, 0.85);
+    z-index: 200000; /* Higher than modal-overlay (99999) */
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    backdrop-filter: blur(5px);
+    backdrop-filter: blur(8px);
 }
 
 .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid var(--border);
+    width: 44px;
+    height: 44px;
+    border: 4px solid var(--border);
     border-top-color: var(--primary);
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-bottom: 16px;
+    animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    margin-bottom: 20px;
 }
 
 @keyframes spin {
@@ -384,70 +468,92 @@ dialog::backdrop {
 
 .toast {
     visibility: hidden;
-    min-width: 250px;
-    background-color: #333;
+    min-width: 280px;
+    background-color: #1f2937;
     color: #fff;
     text-align: center;
-    border-radius: 8px;
-    padding: 16px;
+    border-radius: var(--radius-md);
+    padding: 16px 24px;
     position: fixed;
-    z-index: 10000;
+    z-index: 210000; /* Highest z-index to always be visible */
     left: 50%;
     bottom: 30px;
     transform: translateX(-50%);
-    font-size: 14px;
+    font-size: 0.95rem;
+    font-weight: 500;
     opacity: 0;
-    transition: 0.3s;
+    transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: var(--shadow-floating);
 }
 
 .toast.show {
     visibility: visible;
     opacity: 1;
-    bottom: 50px;
+    bottom: 60px;
 }
 
 /* Status Panels */
 .info-panel {
-    background: #f9fafb;
-    padding: 12px;
-    border-radius: 8px;
-    margin-top: 15px;
-    font-size: 0.85rem;
+    background: var(--bg-app);
+    padding: 16px;
+    border-radius: var(--radius-md);
+    margin-top: 16px;
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
 }
 
 .amanah-panel {
-    margin-top: 15px;
-    padding: 12px;
-    border-left: 4px solid #10b981;
-    background: #ecfdf5;
-    border-radius: 4px;
+    margin-top: 16px;
+    padding: 16px;
+    border-left: 4px solid var(--success);
+    background: var(--success-bg);
+    border-radius: var(--radius-sm);
+    color: #065f46;
 }
 
 .diagnostics-panel {
-    background: #1f2937;
-    color: #10b981;
-    padding: 15px;
-    border-radius: 8px;
-    font-family: monospace;
-    font-size: 0.8rem;
+    background: #111827;
+    color: #34d399;
+    padding: 20px;
+    border-radius: var(--radius-md);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
     overflow-x: auto;
-    margin-bottom: 15px;
+    margin-bottom: 20px;
 }
 
 /* Forms */
 .input-field {
     width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     box-sizing: border-box;
+    font-family: inherit;
+    font-size: 1rem;
+    transition: var(--transition-fast);
+    outline: none;
+    background: var(--bg-surface);
+}
+
+.input-field:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .lang-select {
-    padding: 8px;
-    border-radius: 8px;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--border);
-    background: white;
+    background: var(--bg-surface);
     font-size: 0.9rem;
-    box-shadow: var(--shadow-sm);
+    font-weight: 600;
+    box-shadow: var(--shadow-flat);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.lang-select:hover {
+    border-color: #d1d5db;
 }

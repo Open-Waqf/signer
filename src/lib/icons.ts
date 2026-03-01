@@ -65,12 +65,12 @@ export const ICONS = {
             <line x1="12" y1="2" x2="12" y2="15"/>
         </svg>`,
     undo: html`
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="mirror-rtl" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 7v6h6"/>
             <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
         </svg>`,
     redo: html`
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="mirror-rtl" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 7v6h-6"/>
             <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/>
         </svg>`,

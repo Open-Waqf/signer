@@ -9,6 +9,7 @@ import './signature-modal';
 import {ICONS} from '../lib/icons';
 import {sharedStyles} from '../styles/shared-styles';
 import {LANGUAGES} from '../i18n/locales';
+import {HapticService} from '../lib/haptic-service';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
@@ -59,6 +60,7 @@ export class PdfWorkspace extends LitElement {
 
     @state() showThumbnails = localStorage.getItem('signer_show_thumbs') === 'true';
     @state() thumbnailURLs: string[] = [];
+    @state() isGeneratingThumbs = false;
 
     @state() customPrompt: {
         show: boolean,
@@ -71,6 +73,32 @@ export class PdfWorkspace extends LitElement {
 
     private get hasEdits(): boolean {
         return this.annotations.length > 0 || this.includeAudit;
+    }
+
+    private setupFocusTrap(container: HTMLElement) {
+        container.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Tab') {
+                const focusables = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                const first = focusables[0] as HTMLElement;
+                const last = focusables[focusables.length - 1] as HTMLElement;
+
+                if (e.shiftKey) {
+                    if (this.shadowRoot!.activeElement === first) {
+                        last.focus();
+                        e.preventDefault();
+                    }
+                } else {
+                    if (this.shadowRoot!.activeElement === last) {
+                        first.focus();
+                        e.preventDefault();
+                    }
+                }
+            }
+        });
+    }
+
+    private generateId(): string {
+        return crypto.randomUUID().split('-')[0];
     }
 
     addIdentity() {
@@ -123,141 +151,135 @@ export class PdfWorkspace extends LitElement {
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: #e5e7eb;
+            background: var(--bg-app);
             overflow: hidden;
+            position: relative;
         }
 
         header {
-            background: #fff;
-            height: 50px;
-            padding: 0 12px;
+            background: var(--bg-surface);
+            height: 56px;
+            padding: 0 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid var(--border);
-            z-index: 20;
+            z-index: 100;
             flex-shrink: 0;
+            box-shadow: var(--shadow-flat);
         }
 
         .brand {
-            font-weight: 600;
-            color: #1f2937;
+            font-weight: 700;
+            color: var(--text-main);
             display: flex;
             align-items: center;
             gap: 12px;
         }
 
         .brand img {
-            height: 28px;
-            width: 28px;
-            border-radius: 6px;
+            height: 32px;
+            width: 32px;
+            border-radius: var(--radius-sm);
         }
 
-        /* The Responsive Toolbar */
+        /* --- Toolbar System --- */
 
-        .toolbar-wrapper {
-            background: #fff;
+        .toolbar-top {
+            background: var(--bg-surface);
             border-bottom: 1px solid var(--border);
-            flex-shrink: 0;
+            z-index: 90;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            padding: 8px 12px;
         }
 
         .toolbar-row {
             display: flex;
+            padding: 8px 12px;
             gap: 8px;
             align-items: center;
             overflow-x: auto;
-            white-space: nowrap;
-            -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
-            padding-bottom: 6px;
         }
 
         .toolbar-row::-webkit-scrollbar {
             display: none;
         }
 
-        .toolbar-row.secondary {
-            justify-content: space-between;
+        .toolbar-bottom {
+            display: none; /* Desktop hidden */
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--border);
+            padding: 8px 8px env(safe-area-inset-bottom);
+            z-index: 200;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+            justify-content: flex-start;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
         }
 
-        .toolbar-actions {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .toolbar-row .btn {
-            padding: 8px 12px;
-            font-size: 0.9rem;
-        }
-
-        .toolbar-row .btn svg {
-            width: 16px;
-            height: 16px;
+        .toolbar-bottom::-webkit-scrollbar {
+            display: none;
         }
 
         @media (max-width: 768px) {
-            .mobile-hide {
+            .toolbar-bottom {
+                display: flex;
+            }
+
+            .toolbar-top .primary-tools {
                 display: none;
             }
 
-            .btn-label {
+            .viewport {
+                padding-bottom: 100px; /* Space for bottom bar */
+            }
+
+            .brand span {
                 display: none;
             }
-
-            .toolbar-row .btn {
-                padding: 0;
-                width: 40px;
-                height: 40px;
-            }
-
-            .toolbar-row {
-                gap: 6px;
-                justify-content: center;
-            }
-
-            .toolbar-row.secondary {
-                justify-content: center;
-            }
-
-            .toolbar-actions {
-                justify-content: center;
-                width: 100%;
-            }
         }
 
-        @media (min-width: 769px) {
-            .btn-label {
-                margin-left: 6px;
-            }
-        }
-
-        .toolbar-secondary {
-            justify-content: space-between;
-            background: #f9fafb;
-            padding: 4px 12px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-        }
-
-        .tool-group {
-            display: flex;
-            align-items: center;
+        .btn-tool {
+            flex-direction: column;
             gap: 4px;
+            padding: 8px !important;
+            border: none !important;
+            background: transparent !important;
+            color: var(--text-sub) !important;
+            min-width: 64px;
+            transition: var(--transition-fast);
         }
 
-        .page-indicator {
-            font-variant-numeric: tabular-nums;
-            font-size: 0.9rem;
-            color: #555;
-            margin: 0 8px;
-            font-weight: 500;
+        .btn-tool svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .btn-tool span {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+
+        .btn-tool:active {
+            color: var(--primary) !important;
+            transform: scale(0.9);
+        }
+
+        /* Viewport & Canvas */
+
+        .workspace-area {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
         }
 
         .viewport {
@@ -265,250 +287,175 @@ export class PdfWorkspace extends LitElement {
             display: grid;
             place-items: start center;
             overflow: auto;
-            padding: 20px;
-            background-image: radial-gradient(#d1d5db 1px, transparent 1px);
-            background-size: 20px 20px;
+            padding: 24px;
+            background: var(--bg-app);
+            background-image: radial-gradient(var(--border) 1px, transparent 1px);
+            background-size: 24px 24px;
             touch-action: pan-x pan-y;
         }
 
         .page-container {
             position: relative;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            box-shadow: var(--shadow-floating);
             background: white;
             border-radius: 2px;
-            flex-shrink: 0;
-        }
-
-        button.toggle {
-            transition: all 0.2s ease;
-        }
-
-        button.toggle.active {
-            background: #eff6ff;
-            color: #2563eb;
-            border: 1px solid #2563eb;
-            font-weight: 600;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
-        }
-
-        .draggable {
-            position: absolute;
-            cursor: grab;
-            user-select: none;
-            border: 1px dashed transparent;
-        }
-
-        .draggable.selected {
-            border: 1px solid #2563eb;
-            background: rgba(37, 99, 235, 0.05);
-            z-index: 100;
-        }
-
-        .draggable img {
-            width: 100%;
-            height: auto;
-            display: block;
-            pointer-events: none;
-        }
-
-        .text-content {
-            display: block;
-            background: transparent;
-            white-space: nowrap;
-            font-family: 'WaqfCustom', sans-serif;
-            color: black;
-            line-height: 1;
-            pointer-events: none;
-        }
-
-        .delete-btn {
-            position: absolute;
-            top: -12px;
-            right: -12px;
-            width: 24px;
-            height: 24px;
-            background: white;
-            color: #ef4444;
-            border: 1px solid #e5e7eb;
-            border-radius: 50%;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            font-size: 16px;
-            padding: 0;
-        }
-
-        .draggable.selected .delete-btn {
-            display: flex;
-        }
-
-        .resize-handle {
-            position: absolute;
-            bottom: -6px;
-            right: -6px;
-            width: 12px;
-            height: 12px;
-            background: #2563eb;
-            border: 2px solid white;
-            border-radius: 50%;
-            cursor: nwse-resize;
-            display: none;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .draggable.selected .resize-handle {
-            display: block;
-        }
-
-        .style-popup {
-            position: absolute;
-            top: -50px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #222;
-            border-radius: 6px;
-            padding: 4px;
-            display: flex;
-            gap: 6px;
-            z-index: 200;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-            font-size: 14px;
-            line-height: normal;
-        }
-
-        .style-popup::after {
-            content: '';
-            position: absolute;
-            bottom: -5px;
-            left: 50%;
-            transform: translateX(-50%);
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 5px solid #222;
-        }
-
-        .style-popup button {
-            background: transparent;
-            border: 1px solid #444;
-            color: #fff;
-            font-size: 14px;
-            font-weight: bold;
-            padding: 0;
-            width: 32px;
-            height: 32px;
-        }
-
-        .style-popup button:hover {
-            background: #444;
-        }
-
-        .style-popup button.active {
-            background: white;
-            color: black;
-            border-color: white;
-        }
-
-        .lang-select {
-            background: #f9fafb;
-            border: 1px solid #ddd;
-            padding: 6px 10px;
-            border-radius: 6px;
-        }
-
-        .input-field {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            box-sizing: border-box;
-        }
-
-        .badge {
-            background: #10b981;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: bold;
-            margin-left: 8px;
-        }
-
-        .workspace-area {
-            flex: 1;
-            display: flex;
-            overflow: hidden;
+            margin-bottom: 40px;
+            transition: transform 0.2s ease;
         }
 
         .thumb-panel {
-            width: 88px;
-            background: #1e2535;
+            width: 80px;
+            background: #111827;
             border-right: 1px solid #374151;
             overflow-y: auto;
             flex-shrink: 0;
-            padding: 8px 6px;
+            padding: 12px 8px;
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            scrollbar-width: thin;
-            scrollbar-color: #4b5563 transparent;
+            gap: 12px;
+            z-index: 50;
+        }
+
+        @media (max-width: 768px) {
+            .thumb-panel {
+                width: 64px;
+                padding: 8px 4px;
+            }
         }
 
         .thumb-item {
             position: relative;
             cursor: pointer;
             border: 2px solid transparent;
-            border-radius: 4px;
-            overflow: visible;
+            border-radius: var(--radius-sm);
             background: #fff;
+            transition: all 0.2s;
+            overflow: hidden;
             flex-shrink: 0;
-            transition: border-color 0.15s;
-        }
-
-        .thumb-item:hover {
-            border-color: #6b7280;
+            min-height: 60px;
+            box-shadow: var(--shadow-flat);
         }
 
         .thumb-item.active {
-            border-color: #2563eb;
+            border-color: var(--primary);
+            transform: scale(1.05);
+            box-shadow: var(--shadow-raised);
         }
 
-        .thumb-item img {
-            width: 100%;
-            display: block;
-            border-radius: 2px;
-        }
+        /* Draggables */
 
-        .thumb-num {
-            font-size: 0.6rem;
-            color: #9ca3af;
-            text-align: center;
-            padding: 2px 0;
-        }
-
-        .thumb-badge {
+        .draggable {
             position: absolute;
-            top: -3px;
-            right: -3px;
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            background: #2563eb;
-            border: 1.5px solid #1e2535;
+            cursor: grab;
+            user-select: none;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            transition: border-color 0.2s;
         }
 
-        @media (max-width: 768px) {
-            .thumb-panel {
-                width: 56px;
-            }
+        .draggable.selected {
+            border-color: var(--primary);
+            background: rgba(37, 99, 235, 0.05);
+            z-index: 100;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: -14px;
+            right: -14px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: white;
+            color: var(--danger);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: var(--shadow-raised);
+            z-index: 110;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        /* Collision aware positioning */
+
+        .page-container[data-near-top] .delete-btn {
+            top: 2px;
+        }
+
+        .page-container[data-near-right] .delete-btn {
+            right: 2px;
+        }
+
+        .style-popup {
+            position: absolute;
+            top: -56px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #111827;
+            border-radius: 8px;
+            padding: 6px;
+            display: flex;
+            gap: 8px;
+            z-index: 200;
+            box-shadow: var(--shadow-floating);
+            transition: top 0.2s;
+        }
+
+        /* RTL for style popup */
+
+        :host([dir="rtl"]) .style-popup {
+            left: auto;
+            right: 50%;
+            transform: translateX(50%);
+        }
+
+        .page-container[data-near-top] .style-popup {
+            top: 100%;
+            margin-top: 10px;
+        }
+
+        .text-content {
+            display: block;
+            background: transparent;
+            white-space: nowrap;
+            font-family: 'Amiri', sans-serif;
+            color: black;
+            line-height: 1.2;
+            pointer-events: none;
+            padding: 2px 4px;
+        }
+
+        .toolbar-row {
+            position: relative;
+        }
+
+        /* Toolbar scroll indicator gradient */
+
+        .toolbar-row::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            background: linear-gradient(to right, transparent, var(--bg-surface));
+            pointer-events: none;
+            opacity: 0.8;
         }
     `];
 
-    private onLangChanged = () => this.requestUpdate();
+    private onLangChanged = () => {
+        this.dir = i18n.lang === 'ar' ? 'rtl' : 'ltr';
+        this.requestUpdate();
+    };
 
     connectedCallback() {
         super.connectedCallback();
+        this.dir = i18n.lang === 'ar' ? 'rtl' : 'ltr';
         window.addEventListener('lang-changed', this.onLangChanged);
         window.addEventListener('mousemove', this.handleGlobalMove);
         window.addEventListener('touchmove', this.handleGlobalMove as any, {passive: false});
@@ -606,6 +553,7 @@ export class PdfWorkspace extends LitElement {
 
     undo() {
         if (this.history.length === 0) return;
+        HapticService.impact();
         this.future = [JSON.parse(JSON.stringify(this.annotations)), ...this.future];
         this.annotations = this.history.pop()!;
         this.selectedId = null;
@@ -614,6 +562,7 @@ export class PdfWorkspace extends LitElement {
 
     redo() {
         if (this.future.length === 0) return;
+        HapticService.impact();
         this.history = [...this.history, JSON.parse(JSON.stringify(this.annotations))];
         this.annotations = this.future.shift()!;
         this.selectedId = null;
@@ -636,6 +585,14 @@ export class PdfWorkspace extends LitElement {
             this.handoverHashInput = '';
             this.handoverResult = 'idle';
             this.showHandoverModal = true;
+            // Focus trap after render
+            setTimeout(() => {
+                const modal = this.shadowRoot?.querySelector('[data-testid="handover-modal"]') as HTMLElement;
+                if (modal) {
+                    this.setupFocusTrap(modal);
+                    modal.querySelector('input')?.focus();
+                }
+            }, 50);
         } else {
             this.includeAudit = false;
         }
@@ -684,6 +641,7 @@ export class PdfWorkspace extends LitElement {
 
     async generateThumbnails() {
         if (this.totalPages === 0) return;
+        this.isGeneratingThumbs = true;
         this.thumbnailURLs = [];
         const offscreen = document.createElement('canvas');
         for (let p = 1; p <= this.totalPages; p++) {
@@ -691,12 +649,27 @@ export class PdfWorkspace extends LitElement {
             this.thumbnailURLs = [...this.thumbnailURLs, offscreen.toDataURL('image/jpeg', 0.75)];
             await new Promise(r => requestAnimationFrame(r));
         }
+        this.isGeneratingThumbs = false;
     }
 
     updated(changed: Map<string, unknown>) {
         if (changed.has('currentPage') && this.showThumbnails) {
             this.shadowRoot?.querySelector('.thumb-item.active')
                 ?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+        }
+        if (changed.has('showProofModal') && this.showProofModal) {
+            const modal = this.shadowRoot?.querySelector('[data-testid="proof-modal"]') as HTMLElement;
+            if (modal) {
+                this.setupFocusTrap(modal);
+                modal.querySelector('button')?.focus();
+            }
+        }
+        if (changed.has('customPrompt') && this.customPrompt.show) {
+            const modal = this.shadowRoot?.querySelector('[data-testid="custom-prompt"]') as HTMLElement;
+            if (modal) {
+                this.setupFocusTrap(modal);
+                modal.querySelector('input')?.focus();
+            }
         }
     }
 
@@ -727,7 +700,7 @@ export class PdfWorkspace extends LitElement {
                 Math.abs(a.xPct - sourceAnn.xPct) < 0.01 && Math.abs(a.yPct - sourceAnn.yPct) < 0.01 && a.data === sourceAnn.data
             );
             if (!exists) {
-                newAnnotations.push({...sourceAnn, id: Math.random().toString(36).slice(2, 11), page: p});
+                newAnnotations.push({...sourceAnn, id: this.generateId(), page: p});
             }
         }
         if (newAnnotations.length > 0) {
@@ -739,6 +712,7 @@ export class PdfWorkspace extends LitElement {
 
     addAnnotation(type: AnnotationType, data: string, aspectRatio = 1) {
         this.snapshot();
+        HapticService.impact();
         const pageRect = this.container.getBoundingClientRect();
         const viewportRect = this.viewport.getBoundingClientRect();
         const screenCenterX = viewportRect.left + viewportRect.width / 2;
@@ -750,7 +724,7 @@ export class PdfWorkspace extends LitElement {
         const widthPct = type === 'initials' ? 0.15 : 0.25;
 
         const newAnn: Annotation = {
-            id: Math.random().toString(36).slice(2, 11),
+            id: this.generateId(),
             type, page: this.currentPage - 1, xPct, yPct, widthPct, data, aspectRatio,
         };
 
@@ -777,6 +751,7 @@ export class PdfWorkspace extends LitElement {
 
     deleteAnnotation(id: string) {
         this.snapshot();
+        HapticService.impact();
         this.annotations = this.annotations.filter((a) => a.id !== id);
         if (this.selectedId === id) this.selectedId = null;
         this.isDirty = true;
@@ -784,6 +759,7 @@ export class PdfWorkspace extends LitElement {
 
     updateAnnotation(id: string, updates: Partial<Annotation>) {
         this.annotations = this.annotations.map((a) => (a.id === id ? {...a, ...updates} : a));
+        this.isDirty = true;
     }
 
     updateStyle(id: string, style: Partial<Annotation>) {
@@ -792,14 +768,25 @@ export class PdfWorkspace extends LitElement {
         this.isDirty = true;
     }
 
-    onContainerClick() {
+    onContainerClick(e: Event) {
+        const target = e.target as Element;
+        if (target.closest('.draggable') || target.closest('.style-popup')) return;
         this.selectedId = null;
     }
 
     startDrag(e: MouseEvent | TouchEvent, id: string) {
-        if (e.target instanceof HTMLElement && (e.target.classList.contains('delete-btn') || e.target.classList.contains('resize-handle') || e.target.closest('.style-popup'))) return;
-        e.preventDefault();
+        const target = e.target as Element;
+        const isControl = !!target.closest('.delete-btn') || !!target.closest('.resize-handle') || !!target.closest('.style-popup');
+
+        if (isControl) {
+            e.stopPropagation(); // Stop bubbling to prevent viewport from clearing selectedId
+            return;
+        }
+
+        if (e.cancelable) e.preventDefault();
         e.stopPropagation();
+
+        // Use passive:true compatible logic
         this.selectedId = id;
         this.isDragging = true;
         this.interactionSnapshotTaken = false;
@@ -816,7 +803,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     startResize(e: MouseEvent | TouchEvent, id: string) {
-        e.preventDefault();
+        if (e.cancelable) e.preventDefault();
         e.stopPropagation();
         this.isResizing = true;
         this.selectedId = id;
@@ -826,7 +813,8 @@ export class PdfWorkspace extends LitElement {
 
     handleGlobalMove = (e: MouseEvent | TouchEvent) => {
         if (!this.selectedId || (!this.isDragging && !this.isResizing)) return;
-        e.preventDefault();
+        if (e.cancelable) e.preventDefault();
+
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
         const rect = this.container.getBoundingClientRect();
@@ -872,6 +860,11 @@ export class PdfWorkspace extends LitElement {
                 this.interactionChanged = true;
                 this.updateAnnotation(this.selectedId, {xPct: nextXPct, yPct: nextYPct});
             }
+
+            // Collision detection for popup/delete
+            this.container.toggleAttribute('data-near-top', nextYPct < 0.1);
+            this.container.toggleAttribute('data-near-right', nextXPct > 0.85);
+
         } else if (this.isResizing) {
             const mouseRelX = clientX - rect.left;
             const newWidthPx = Math.max(mouseRelX - ann.xPct * rect.width, rect.width * 0.05);
@@ -979,6 +972,7 @@ export class PdfWorkspace extends LitElement {
             this.lastSavedId = result.docId;
             this.lastSavedHash = result.finalHash;
             this.showProofModal = true;
+            HapticService.success();
             if (showToast) this.toast(i18n.t('savedMsg'));
         } catch (e: any) {
             this.toast(e.message.includes('OOM') ? i18n.t('outOfMemory') : `${i18n.t('errorSaving')}: ${e.message}`);
@@ -1044,7 +1038,8 @@ export class PdfWorkspace extends LitElement {
         return html`
             <header>
                 <div class="brand">
-                    <button class="btn"
+                    <button id="btn-exit" data-testid="btn-exit" class="btn mirror-rtl"
+                            aria-label="${i18n.t('exitBtn')}"
                             style="border:none; padding:8px; display:flex; align-items:center; justify-content:center; width:44px; height:44px;"
                             @click=${this.requestExit}>
                         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
@@ -1055,258 +1050,332 @@ export class PdfWorkspace extends LitElement {
                     </button>
 
                     <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}" @error=${this.handleImageError}/>
-                    <span class="mobile-hide">${i18n.t('appTitle')}</span>
-                    ${this.isVerified ? html`<span class="badge">${i18n.t('verifiedBadge')}</span>` : ''}
+                    <span>${i18n.t('appTitle')}</span>
+                    ${this.isVerified ? html`<span class="badge"
+                                                   style="background:var(--success); color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:8px;">${i18n.t('verifiedBadge')}</span>` : ''}
                 </div>
-                <select class="lang-select" aria-label="Language" @change=${this.handleLangChange}>
+                <select id="select-lang" data-testid="select-lang" class="lang-select"
+                        aria-label="${i18n.t('language') || 'Language'}" @change=${this.handleLangChange}>
                     ${LANGUAGES.map(l => html`
                         <option value="${l.code}" ?selected=${i18n.lang === l.code}>${l.label}</option>
                     `)}
                 </select>
             </header>
 
-            <div class="toolbar-wrapper" role="toolbar" aria-label="${i18n.t('ariaToolbar')}">
-                <div class="toolbar-row">
-                    <button class="btn btn-primary" @click=${this.openSignModal}
-                            title="${i18n.t('addSig')}" aria-label="${i18n.t('addSig')}">
-                        ${ICONS.sign}<span class="btn-label">${i18n.t('addSig')}</span>
+            <div class="toolbar-top" role="toolbar" aria-label="${i18n.t('ariaToolbar')}">
+                <div class="toolbar-row primary-tools">
+                    <button data-testid="btn-add-sig" class="btn" aria-label="${i18n.t('addSig')}"
+                            @click=${this.openSignModal}>
+                        ${ICONS.sign}<span class="btn-label" style="margin-left:6px;">${i18n.t('addSig')}</span>
                     </button>
-                    <button class="btn" @click=${this.openInitialsModal}
-                            title="${i18n.t('addInitials')}" aria-label="${i18n.t('addInitials')}">
-                        ${ICONS.text}<span class="btn-label">${i18n.t('addInitials')}</span>
+                    <button data-testid="btn-add-initials" class="btn" aria-label="${i18n.t('addInitials')}"
+                            @click=${this.openInitialsModal}>
+                        ${ICONS.text}<span class="btn-label" style="margin-left:6px;">${i18n.t('addInitials')}</span>
                     </button>
-                    <button class="btn" @click=${this.addTextAnnotation}
-                            title="${i18n.t('addText')}" aria-label="${i18n.t('addText')}">
-                        ${ICONS.text}<span class="btn-label">${i18n.t('addText')}</span>
+                    <button data-testid="btn-add-text" class="btn" aria-label="${i18n.t('addText')}"
+                            @click=${this.addTextAnnotation}>
+                        ${ICONS.text}<span class="btn-label" style="margin-left:6px;">${i18n.t('addText')}</span>
                     </button>
-                    <button class="btn" @click=${this.addIdentity}
-                            title="${i18n.t('addIdentity')}" aria-label="${i18n.t('addIdentity')}">
-                        ${ICONS.identity}<span class="btn-label">${i18n.t('addIdentity') || 'Identity'}</span>
+                    <button data-testid="btn-add-identity" class="btn"
+                            aria-label="${i18n.t('addIdentity') || 'Identity'}" @click=${this.addIdentity}>
+                        ${ICONS.identity}<span class="btn-label"
+                                               style="margin-left:6px;">${i18n.t('addIdentity') || 'Identity'}</span>
                     </button>
-                    <button class="btn"
-                            @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}
-                            title="${i18n.t('addStamp')}" aria-label="${i18n.t('addStamp')}">
-                        ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
+                    <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
+                            @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
+                        ${ICONS.stamp}<span class="btn-label" style="margin-left:6px;">${i18n.t('addStamp')}</span>
                     </button>
-                    <button class="btn" @click=${this.addDateStamp}
-                            title="${i18n.t('addDate')}" aria-label="${i18n.t('addDate')}">
-                        ${ICONS.date}<span class="btn-label">${i18n.t('addDate')}</span>
+                    <button data-testid="btn-add-date" class="btn" aria-label="${i18n.t('addDate')}"
+                            @click=${this.addDateStamp}>
+                        ${ICONS.date}<span class="btn-label" style="margin-left:6px;">${i18n.t('addDate')}</span>
                     </button>
                 </div>
 
-                <div class="toolbar-row secondary">
-                    <div class="toolbar-actions">
-                        <button class="btn" @click=${this.undo} ?disabled=${this.history.length === 0}
-                                title="${i18n.t('undo')}" aria-label="${i18n.t('undo')}">${ICONS.undo}
+                <div class="toolbar-row" style="justify-content: space-between; background: var(--bg-muted);">
+                    <div style="display:flex; gap:8px;">
+                        <button data-testid="btn-undo" class="btn" style="padding: 8px 12px;"
+                                aria-label="${i18n.t('undo')}" @click=${this.undo}
+                                ?disabled=${this.history.length === 0}
+                                title="${i18n.t('undo')}">${ICONS.undo}
                         </button>
-                        <button class="btn" @click=${this.redo} ?disabled=${this.future.length === 0}
-                                title="${i18n.t('redo')}" aria-label="${i18n.t('redo')}">${ICONS.redo}
+                        <button data-testid="btn-redo" class="btn" style="padding: 8px 12px;"
+                                aria-label="${i18n.t('redo')}" @click=${this.redo} ?disabled=${this.future.length === 0}
+                                title="${i18n.t('redo')}">${ICONS.redo}
+                        </button>
+                        <div style="width:1px; background:var(--border); margin:4px 4px;"></div>
+                        <button data-testid="btn-zoom-out" class="btn" style="padding: 8px 12px;"
+                                aria-label="${i18n.t('zoomOut')}" title="${i18n.t('zoomOut')}"
+                                @click=${() => this.zoom(-0.2)}>－
+                        </button>
+                        <button data-testid="btn-zoom-in" class="btn" style="padding: 8px 12px;"
+                                aria-label="${i18n.t('zoomIn')}" title="${i18n.t('zoomIn')}"
+                                @click=${() => this.zoom(0.2)}>＋
                         </button>
                     </div>
 
-                    <div class="toolbar-actions">
-                        <button class="btn toggle ${this.includeFooter ? 'active' : ''}"
-                                aria-pressed="${this.includeFooter}"
+                    <div style="display:flex; gap:8px;">
+                        <button data-testid="btn-toggle-footer" class="btn toggle ${this.includeFooter ? 'active' : ''}"
+                                style="padding: 8px 12px;"
                                 aria-label="${i18n.t('addPageFooter')}"
                                 @click=${() => {
                                     this.includeFooter = !this.includeFooter;
                                     this.isDirty = true;
-                                    this.toast(this.includeFooter ? i18n.t('footerOn') : i18n.t('footerOff'));
                                 }} title="${i18n.t('addPageFooter')}">
-                            ${ICONS.footer}<span class="btn-label mobile-hide">${i18n.t('pageFooter')}</span>
+                            ${ICONS.footer}
                         </button>
-                        <button class="btn toggle ${this.includeAudit ? 'active' : ''}"
-                                aria-pressed="${this.includeAudit}"
+                        <button data-testid="btn-toggle-audit" class="btn toggle ${this.includeAudit ? 'active' : ''}"
+                                style="padding: 8px 12px;"
                                 aria-label="${i18n.t('addAuditPage')}"
                                 @click=${() => {
                                     this.includeAudit = !this.includeAudit;
                                     this.isDirty = true;
-                                    this.toast(this.includeAudit ? i18n.t('auditOn') : i18n.t('auditOff'));
                                 }} title="${i18n.t('addAuditPage')}">
-                            ${ICONS.audit}<span class="btn-label">${i18n.t('auditTrail')}</span>
+                            ${ICONS.audit}
                         </button>
-                        <button class="btn" @click=${this.shareLatest} ?disabled=${shareDisabled}
-                                aria-label="${i18n.t('sharePdf')}">
-                            ${ICONS.share}<span class="btn-label">${i18n.t('sharePdf')}</span>
+                        <button data-testid="btn-share" class="btn" style="padding: 8px 12px;"
+                                aria-label="${i18n.t('share')}" @click=${this.shareLatest} ?disabled=${shareDisabled}>
+                            ${ICONS.share}
                         </button>
-                        <button class="btn btn-primary"
-                                @click=${() => this.saveDocument({silentWeb: false, showToast: true})}
-                                ?disabled=${saveDisabled}
-                                aria-label="${i18n.t('savePdf')}">
-                            ${ICONS.save}<span class="btn-label">${i18n.t('savePdf')}</span>
+                        <button data-testid="btn-save" class="btn btn-primary" style="padding: 8px 12px;"
+                                aria-label="${i18n.t('done')}"
+                                @click=${() => this.saveDocument()}
+                                ?disabled=${saveDisabled}>
+                            ${ICONS.save}
                         </button>
                     </div>
                 </div>
             </div>
 
-            <input type="file" id="stamp-input" accept="image/*" style="display: none"
-                   @change=${this.handleStampUpload}/>
-
-            <div class="toolbar toolbar-secondary">
-                <div class="tool-group">
-                    <button class="btn toggle ${this.showThumbnails ? 'active' : ''}"
-                            title="${i18n.t('toggleThumbnails')}"
-                            aria-label="${i18n.t('toggleThumbnails')}"
-                            aria-pressed="${this.showThumbnails}"
-                            @click=${() => {
-                                this.showThumbnails = !this.showThumbnails;
-                                localStorage.setItem('signer_show_thumbs', String(this.showThumbnails));
-                                if (this.showThumbnails && this.thumbnailURLs.length === 0) {
-                                    void this.generateThumbnails();
-                                }
-                            }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                    </button>
-                    <button class="btn" title="${i18n.t('zoomOut')}" @click=${() => this.zoom(-0.2)}>－</button>
-                    <button class="btn" title="${i18n.t('zoomIn')}" @click=${() => this.zoom(0.2)}>＋</button>
-                </div>
-                <div class="tool-group">
-                    <button class="btn" @click=${() => this.changePage(-1)} ?disabled=${this.currentPage === 1}>‹
-                    </button>
-                    <span class="page-indicator">${this.currentPage} / ${this.totalPages}</span>
-                    <button class="btn" @click=${() => this.changePage(1)}
-                            ?disabled=${this.currentPage === this.totalPages}>›
-                    </button>
-                </div>
+            <div class="toolbar-bottom" role="toolbar" aria-label="${i18n.t('ariaToolbar')}">
+                <button data-testid="m-btn-add-sig" class="btn btn-tool" aria-label="${i18n.t('signMode')}"
+                        @click=${this.openSignModal}>
+                    ${ICONS.sign} <span>${i18n.t('signMode')}</span>
+                </button>
+                <button data-testid="m-btn-add-initials" class="btn btn-tool" aria-label="${i18n.t('addInitials')}"
+                        @click=${this.openInitialsModal}>
+                    ${ICONS.text} <span>${i18n.t('addInitials')}</span>
+                </button>
+                <button data-testid="m-btn-add-text" class="btn btn-tool" aria-label="${i18n.t('addText')}"
+                        @click=${this.addTextAnnotation}>
+                    ${ICONS.text} <span>${i18n.t('addText')}</span>
+                </button>
+                <button data-testid="m-btn-add-identity" class="btn btn-tool"
+                        aria-label="${i18n.t('addIdentity') || 'Identity'}" @click=${this.addIdentity}>
+                    ${ICONS.identity} <span>${i18n.t('addIdentity') || 'Identity'}</span>
+                </button>
+                <button data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
+                        @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
+                    ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
+                </button>
+                <button data-testid="m-btn-add-date" class="btn btn-tool" aria-label="${i18n.t('addDate')}"
+                        @click=${this.addDateStamp}>
+                    ${ICONS.date} <span>${i18n.t('addDate')}</span>
+                </button>
             </div>
 
+            <input type="file" id="stamp-input" accept="image/*" style="display: none"
+                   aria-hidden="true"
+                   @change=${this.handleStampUpload}/>
+
             <div class="workspace-area">
-            ${this.showThumbnails && this.thumbnailURLs.length > 0 ? html`
-                <div class="thumb-panel" role="navigation" aria-label="${i18n.t('pageOverview')}">
-                    ${this.thumbnailURLs.map((url, i) => html`
-                        <div class="thumb-item ${this.currentPage === i + 1 ? 'active' : ''}"
-                             title="Page ${i + 1}"
-                             role="button"
-                             tabindex="0"
-                             aria-label="Page ${i + 1}"
-                             aria-current="${this.currentPage === i + 1 ? 'page' : 'false'}"
-                             @click=${() => {
-                                 this.currentPage = i + 1;
-                                 this.selectedId = null;
-                                 void this.renderPage();
-                             }}
-                             @keydown=${(e: KeyboardEvent) => {
-                                 if (e.key === 'Enter' || e.key === ' ') {
+                ${this.showThumbnails && (this.thumbnailURLs.length > 0 || this.isGeneratingThumbs) ? html`
+                    <div class="thumb-panel">
+                        ${this.isGeneratingThumbs ? html`
+                            <div style="display:flex; justify-content:center; padding:20px;">
+                                <div class="spinner" style="width:24px; height:24px; border-width:2px;"></div>
+                            </div>
+                        ` : ''}
+                        ${this.thumbnailURLs.map((url, i) => html`
+                            <div class="thumb-item ${this.currentPage === i + 1 ? 'active' : ''}"
+                                 data-testid="thumb-page-${i + 1}"
+                                 aria-label="Page ${i + 1}"
+                                 @click=${() => {
                                      this.currentPage = i + 1;
                                      this.selectedId = null;
                                      void this.renderPage();
-                                 }
-                             }}>
-                            <img src="${url}" alt="Page ${i + 1}">
-                            <span class="thumb-num">${i + 1}</span>
-                            ${this.annotations.some(a => a.page === i) ? html`
-                                <div class="thumb-badge" title="Has annotations"></div>
-                            ` : ''}
-                        </div>
-                    `)}
-                </div>
-            ` : ''}
-
-            <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
-                <div class="page-container">
-                    ${this.guideX !== null ? html`
-                        <div style="position:absolute; left:${this.guideX * 100}%; top:0; bottom:0; width:1px; background:#ef4444; z-index:50;"></div>` : ''}
-                    ${this.guideY !== null ? html`
-                        <div style="position:absolute; top:${this.guideY * 100}%; left:0; right:0; height:1px; background:#ef4444; z-index:50;"></div>` : ''}
-                    <canvas id="pdf-canvas"></canvas>
-                    ${this.annotations.filter(ann => ann.page === this.currentPage - 1).map(ann => {
-                        const isSelected = this.selectedId === ann.id;
-                        const isText = ann.type === 'date' || ann.type === 'identity';
-                        return html`
-                            <div class="draggable ${isSelected ? 'selected' : ''}"
-                                 style="left:${ann.xPct * 100}%; top:${ann.yPct * 100}%; width:${isText ? 'auto' : (ann.widthPct ? ann.widthPct * 100 + '%' : 'auto')};"
-                                 @mousedown=${(e: any) => this.startDrag(e, ann.id)}
-                                 @touchstart=${(e: any) => this.startDrag(e, ann.id)}>
-                                <button class="delete-btn" @mousedown=${(e: Event) => {
-                                    e.stopPropagation();
-                                    this.deleteAnnotation(ann.id);
-                                }} @touchstart=${(e: Event) => {
-                                    e.stopPropagation();
-                                    this.deleteAnnotation(ann.id);
-                                }}>×
-                                </button>
-                                ${isSelected && isText ? html`
-                                    <div class="style-popup" @mousedown=${(e: Event) => e.stopPropagation()}
-                                         @touchstart=${(e: Event) => e.stopPropagation()}>
-                                        <button @click=${(e: Event) => {
-                                            e.stopPropagation();
-                                            this.handleTextEdit(ann.id, ann.data);
-                                        }}>✎
-                                        </button>
-                                        <div style="width:1px; background:#444; margin:0 2px;"></div>
-                                        <button class="${ann.fontWeight === 'bold' ? 'active' : ''}"
-                                                @click=${(e: Event) => {
-                                                    e.stopPropagation();
-                                                    this.updateStyle(ann.id, {fontWeight: ann.fontWeight === 'bold' ? 'normal' : 'bold'});
-                                                }}>B
-                                        </button>
-                                        <button @click=${(e: Event) => {
-                                            e.stopPropagation();
-                                            this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
-                                        }}>A-
-                                        </button>
-                                        <button @click=${(e: Event) => {
-                                            e.stopPropagation();
-                                            this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
-                                        }}>A+
-                                        </button>
-                                        <div style="width:1px; background:#444; margin:0 2px;"></div>
-                                        <button @click=${(e: Event) => {
-                                            e.stopPropagation();
-                                            this.applyToAllPages(ann.id);
-                                        }} title="${i18n.t('applyToAll')}">📄
-                                        </button>
-                                    </div>
-                                ` : isSelected && !isText ? html`
-                                    <div class="style-popup" @mousedown=${(e: Event) => e.stopPropagation()}
-                                         @touchstart=${(e: Event) => e.stopPropagation()}>
-                                        <button @click=${(e: Event) => {
-                                            e.stopPropagation();
-                                            this.applyToAllPages(ann.id);
-                                        }} title="${i18n.t('applyToAll')}">📄
-                                        </button>
-                                    </div>
+                                 }}>
+                                <img src="${url}" alt="Page ${i + 1}" style="width:100%; display:block;">
+                                <div style="font-size:0.6rem; color:#9ca3af; text-align:center; padding:2px 0;">
+                                    ${i + 1}
+                                </div>
+                                ${this.annotations.some(a => a.page === i) ? html`
+                                    <div style="position:absolute; top:2px; right:2px; width:8px; height:8px; border-radius:50%; background:var(--primary); border:1px solid #111827;"></div>
                                 ` : ''}
-                                ${!isText ? html`
-                                    <div class="resize-handle" @mousedown=${(e: any) => this.startResize(e, ann.id)}
-                                         @touchstart=${(e: any) => this.startResize(e, ann.id)}></div>
-                                    <img src="${ann.data}" alt="Annotation"/>
-                                ` : html`
-                                    <span class="text-content"
-                                          style="font-size:${ann.fontSize || 12}px; font-weight:${ann.fontWeight || 'normal'};"
-                                          @dblclick=${(e: Event) => {
-                                              e.stopPropagation();
-                                              this.handleTextEdit(ann.id, ann.data);
-                                          }}>${ann.data}</span>
-                                `}
                             </div>
-                        `;
-                    })}
+                        `)}
+                    </div>
+                ` : ''}
+
+                <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px; background:white; padding:8px 16px; border-radius:var(--radius-lg); box-shadow:var(--shadow-flat); border:1px solid var(--border);">
+                        <button data-testid="btn-prev-page" class="btn"
+                                aria-label="${i18n.t('prevPage') || 'Previous Page'}"
+                                style="padding:6px 12px; border:none;" @click=${() => this.changePage(-1)}
+                                ?disabled=${this.currentPage === 1}>‹
+                        </button>
+                        <span data-testid="page-indicator" aria-live="polite"
+                              style="font-weight:800; font-size:0.9rem; color:var(--text-main);">${this.currentPage} ${i18n.t('of') || '/'} ${this.totalPages}</span>
+                        <button data-testid="btn-next-page" class="btn"
+                                aria-label="${i18n.t('nextPage') || 'Next Page'}" style="padding:6px 12px; border:none;"
+                                @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>›
+                        </button>
+                        <div style="width:1px; height:20px; background:var(--border); margin:0 4px;"></div>
+                        <button data-testid="btn-toggle-thumbs"
+                                class="btn toggle ${this.showThumbnails ? 'active' : ''}"
+                                aria-label="${i18n.t('toggleThumbs') || 'Toggle Thumbnails'}"
+                                style="padding:6px; border:none;"
+                                @click=${() => {
+                                    this.showThumbnails = !this.showThumbnails;
+                                    localStorage.setItem('signer_show_thumbs', String(this.showThumbnails));
+                                }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2.5">
+                                <rect x="3" y="3" width="7" height="7"/>
+                                <rect x="14" y="3" width="7" height="7"/>
+                                <rect x="3" y="14" width="7" height="7"/>
+                                <rect x="14" y="14" width="7" height="7"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="page-container" data-testid="page-container">
+                        ${this.guideX !== null ? html`
+                            <div style="position:absolute; left:${this.guideX * 100}%; top:0; bottom:0; width:1px; background:var(--danger); z-index:50;"></div>` : ''}
+                        ${this.guideY !== null ? html`
+                            <div style="position:absolute; top:${this.guideY * 100}%; left:0; right:0; height:1px; background:var(--danger); z-index:50;"></div>` : ''}
+                        <canvas id="pdf-canvas"></canvas>
+                        ${this.annotations.filter(ann => ann.page === this.currentPage - 1).map(ann => {
+                            const isSelected = this.selectedId === ann.id;
+                            const isText = ann.type === 'date' || ann.type === 'identity';
+                            return html`
+                                <div class="draggable ${isSelected ? 'selected' : ''}"
+                                     data-testid="annotation-${ann.id}"
+                                     role="group"
+                                     aria-label="${ann.type} ${i18n.t('annotation') || 'annotation'}"
+                                     style="left:${ann.xPct * 100}%; top:${ann.yPct * 100}%; width:${isText ? 'auto' : (ann.widthPct ? ann.widthPct * 100 + '%' : 'auto')};"
+                                     @mousedown=${(e: any) => this.startDrag(e, ann.id)}
+                                     @touchstart=${(e: any) => this.startDrag(e, ann.id)}>
+                                    <button data-testid="btn-delete-ann" class="delete-btn"
+                                            aria-label="${i18n.t('delete') || 'Delete'}"
+                                            style="display:${isSelected ? 'flex' : 'none'};"
+                                            @mousedown=${(e: Event) => {
+                                                e.stopPropagation();
+                                                this.deleteAnnotation(ann.id);
+                                            }}
+                                            @touchstart=${(e: Event) => {
+                                                e.stopPropagation();
+                                                this.deleteAnnotation(ann.id);
+                                            }}>×
+                                    </button>
+                                    ${isSelected && isText ? html`
+                                        <div class="style-popup" data-testid="style-popup" role="toolbar"
+                                             aria-label="${i18n.t('styleToolbar') || 'Style Toolbar'}">
+                                            <button data-testid="btn-edit-text"
+                                                    aria-label="${i18n.t('editText') || 'Edit text'}"
+                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    @click=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.handleTextEdit(ann.id, ann.data);
+                                                    }}>✎
+                                            </button>
+                                            <button data-testid="btn-toggle-bold"
+                                                    aria-label="${i18n.t('bold') || 'Bold'}"
+                                                    style="background:${ann.fontWeight === 'bold' ? 'var(--primary)' : 'transparent'}; color:#fff; border:1px solid #374151; width:34px; height:34px; border-radius:4px; font-weight:bold; cursor:pointer;"
+                                                    @click=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.updateStyle(ann.id, {fontWeight: ann.fontWeight === 'bold' ? 'normal' : 'bold'});
+                                                    }}>B
+                                            </button>
+                                            <button data-testid="btn-font-down"
+                                                    aria-label="${i18n.t('decreaseFont') || 'Decrease font'}"
+                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    @click=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
+                                                    }}>A-
+                                            </button>
+                                            <button data-testid="btn-font-up"
+                                                    aria-label="${i18n.t('increaseFont') || 'Increase font'}"
+                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    @click=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
+                                                    }}>A+
+                                            </button>
+                                            <button data-testid="btn-apply-all"
+                                                    aria-label="${i18n.t('applyAll') || 'Apply to all pages'}"
+                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    @click=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.applyToAllPages(ann.id);
+                                                    }}>📄
+                                            </button>
+                                        </div>
+                                    ` : isSelected && !isText ? html`
+                                        <div class="style-popup" data-testid="style-popup" role="toolbar"
+                                             aria-label="${i18n.t('styleToolbar') || 'Style Toolbar'}">
+                                            <button data-testid="btn-apply-all"
+                                                    aria-label="${i18n.t('applyAll') || 'Apply to all pages'}"
+                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    @click=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.applyToAllPages(ann.id);
+                                                    }}>📄
+                                            </button>
+                                        </div>
+                                    ` : ''}
+                                    ${!isText ? html`
+                                        <div class="resize-handle" aria-label="${i18n.t('resize') || 'Resize'}"
+                                             style="position:absolute; bottom:-8px; right:-8px; width:16px; height:16px; background:var(--primary); border:3px solid white; border-radius:50%; cursor:nwse-resize; display:${isSelected ? 'block' : 'none'}; box-shadow:var(--shadow-raised);"
+                                             @mousedown=${(e: any) => this.startResize(e, ann.id)}
+                                             @touchstart=${(e: any) => this.startResize(e, ann.id)}></div>
+                                        <img src="${ann.data}" alt="${ann.type} annotation"
+                                             style="width:100%; display:block; pointer-events:none;"/>
+                                    ` : html`
+                                        <span class="text-content"
+                                              style="font-size:${ann.fontSize || 12}px; font-weight:${ann.fontWeight || 'normal'};"
+                                              @dblclick=${(e: Event) => {
+                                                  e.stopPropagation();
+                                                  this.handleTextEdit(ann.id, ann.data);
+                                              }}>${ann.data}</span>
+                                    `}
+                                </div>
+                            `;
+                        })}
+                    </div>
                 </div>
             </div>
-            </div><!-- workspace-area -->
 
             ${this.showHandoverModal ? html`
                 <div class="modal-overlay">
-                    <div class="modal-card">
-                        <h3 style="margin-top:0;">${i18n.t('previousSigDetected')}</h3>
+                    <div class="modal-card" data-testid="handover-modal" role="dialog" aria-modal="true"
+                         aria-labelledby="handover-title">
+                        <h3 id="handover-title" style="margin-top:0;">${i18n.t('previousSigDetected')}</h3>
                         <p style="font-size:0.9rem; color:var(--text-sub); margin-bottom:15px;">
                             ${i18n.t('verifyPreviousSigPrompt')}</p>
-                        <div class="alert-box alert-warning"><strong>Ref ID:</strong> ${this.detectedRefId}</div>
+                        <div class="alert-box alert-warning"><strong>${i18n.t('internalRefLabel')}:</strong>
+                            ${this.detectedRefId}
+                        </div>
                         <input type="text" class="input-field" style="margin-bottom:15px;"
+                               data-testid="input-handover-hash"
+                               aria-label="${i18n.t('pasteHashPlaceholder')}"
                                .value="${this.handoverHashInput}" @input="${(e: any) => {
                             this.handoverHashInput = e.target.value;
                             this.handoverResult = 'idle';
                         }}" placeholder="${i18n.t('pasteHashPlaceholder')}">
                         ${this.handoverResult === 'success' ? html`
-                            <div class="alert-box alert-success" .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
+                            <div class="alert-box alert-success" data-testid="handover-success"
+                                 .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
                         ${this.handoverResult === 'fail' ? html`
-                            <div class="alert-box alert-error" .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
+                            <div class="alert-box alert-error" data-testid="handover-fail"
+                                 .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
                         <div style="display:flex; gap:10px;">
-                            <button class="btn btn-primary" style="flex:1;" @click=${this.checkHandover}>
+                            <button class="btn btn-primary" data-testid="btn-verify-handover" style="flex:1;"
+                                    @click=${this.checkHandover}>
                                 ${i18n.t('verifyBtn')}
                             </button>
-                            <button class="btn" style="flex:1;" @click=${() => this.showHandoverModal = false}>
+                            <button class="btn" data-testid="btn-skip-handover" style="flex:1;"
+                                    @click=${() => this.showHandoverModal = false}>
                                 ${i18n.t('btnSkip')}
                             </button>
                         </div>
@@ -1316,36 +1385,43 @@ export class PdfWorkspace extends LitElement {
 
             ${this.showProofModal ? html`
                 <div class="modal-overlay">
-                    <div class="modal-card center">
-                        <div style="color:#10b981; margin-bottom:15px; display:flex; justify-content:center;">
-                            <div style="padding:15px; background:#ecfdf5; border-radius:50%;">${ICONS.check}</div>
+                    <div class="modal-card center" data-testid="proof-modal" role="dialog" aria-modal="true"
+                         aria-labelledby="proof-title">
+                        <div style="color:var(--success); margin-bottom:15px; display:flex; justify-content:center;">
+                            <div style="padding:15px; background:var(--success-bg); border-radius:50%;">${ICONS.check}
+                            </div>
                         </div>
-                        <h2 style="color:#166534; margin-top:0;">${i18n.t('savedMsg')}</h2>
+                        <h2 id="proof-title" style="color:#166534; margin-top:0;">${i18n.t('savedMsg')}</h2>
                         <p style="color:var(--text-sub); font-size:0.95rem; margin-bottom:20px;">
                             ${i18n.t('proveIdentityMsg')}</p>
-                        <div style="background:#f9fafb; padding:15px; margin:15px 0; border-radius:8px; border:1px solid var(--border); text-align:left;">
+                        <div style="background:var(--bg-app); padding:15px; margin:15px 0; border-radius:8px; border:1px solid var(--border); text-align:left;">
                             <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600;">
                                 ${i18n.t('internalRefLabel')}
                             </div>
-                            <div style="font-family:monospace; font-size:1.1rem; color:var(--text-main); margin-bottom:15px;">
+                            <div style="font-family:monospace; font-size:1.1rem; color:var(--text-main); margin-bottom:15px;"
+                                 data-testid="saved-doc-id">
                                 ${this.lastSavedId}
                             </div>
                             <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600; display:flex; align-items:center; gap:4px;">
                                 ${ICONS.lock} ${i18n.t('hashLabel')}
                             </div>
-                            <div style="font-family:monospace; font-size:0.75rem; color:var(--text-main); word-break:break-all; background:#e5e7eb; padding:8px; border-radius:6px; margin-top:4px;">
+                            <div style="font-family:monospace; font-size:0.75rem; color:var(--text-main); word-break:break-all; background:var(--border); padding:8px; border-radius:6px; margin-top:4px;"
+                                 data-testid="saved-doc-hash">
                                 ${this.lastSavedHash}
                             </div>
                         </div>
                         <div style="display:flex; gap:10px; margin-bottom:12px;">
-                            <button class="btn btn-primary" style="flex:1;" @click=${this.copyHash}>
+                            <button class="btn btn-primary" data-testid="btn-copy-hash" style="flex:1;"
+                                    @click=${this.copyHash}>
                                 ${ICONS.copy} ${i18n.t('copyShort')}
                             </button>
-                            <button class="btn" style="flex:1;" @click=${this.sendProofEmail}>${ICONS.email}
+                            <button class="btn" data-testid="btn-email-proof" style="flex:1;"
+                                    @click=${this.sendProofEmail}>${ICONS.email}
                                 ${i18n.t('email')}
                             </button>
                         </div>
-                        <button class="btn" style="width:100%;" @click=${() => this.showProofModal = false}>
+                        <button class="btn" data-testid="btn-close-proof" style="width:100%;"
+                                @click=${() => this.showProofModal = false}>
                             ${i18n.t('close')}
                         </button>
                     </div>
@@ -1354,20 +1430,26 @@ export class PdfWorkspace extends LitElement {
 
             ${this.customPrompt.show ? html`
                 <div class="modal-overlay" @click=${() => this.customPrompt.show = false}>
-                    <div class="modal-card" @click=${(e: Event) => e.stopPropagation()}>
-                        <h3 style="margin-top:0;">${this.customPrompt.title}</h3>
-                        <input type="text" class="input-field" style="margin-bottom: 20px; font-size: 1rem;"
+                    <div class="modal-card" data-testid="custom-prompt" role="dialog" aria-modal="true"
+                         aria-labelledby="prompt-title" @click=${(e: Event) => e.stopPropagation()}>
+                        <h3 id="prompt-title" style="margin-top:0;">${this.customPrompt.title}</h3>
+                        <input type="text" class="input-field" data-testid="input-custom-prompt"
+                               style="margin-bottom: 20px; font-size: 1rem;"
+                               aria-label="${this.customPrompt.title}"
                                .value=${this.customPrompt.value}
                                placeholder=${this.customPrompt.placeholder}
                                @input=${(e: any) => this.customPrompt.value = e.target.value}
                                @keydown=${(e: KeyboardEvent) => {
                                    if (e.key === 'Enter') this.saveCustomPrompt();
+                                   if (e.key === 'Escape') this.customPrompt.show = false;
                                }}>
                         <div style="display:flex; gap:10px; justify-content: flex-end;">
-                            <button class="btn" @click=${() => this.customPrompt.show = false}>
+                            <button class="btn" data-testid="btn-cancel-prompt"
+                                    @click=${() => this.customPrompt.show = false}>
                                 ${i18n.t('cancel') || 'Cancel'}
                             </button>
-                            <button class="btn btn-primary" @click=${this.saveCustomPrompt}>
+                            <button class="btn btn-primary" data-testid="btn-save-prompt"
+                                    @click=${this.saveCustomPrompt}>
                                 ${i18n.t('done') || 'Save'}
                             </button>
                         </div>

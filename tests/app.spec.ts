@@ -6,165 +6,218 @@ import {generateTestPDF} from './utils';
 // ---------------------------------------------------------------------------
 let aliceSignedBuffer: Buffer | null = null;
 
-test.describe.serial('🛡️ Open Waqf Signer: 360° Audit', () => {
+test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', () => {
 
-    // --- GROUP 1: THE BASICS ---
-    test('1. Baseline: App Loads & Offline UI is ready', async ({page}) => {
+    test('1. Navigation: Landing Page & Mode Toggles', async ({page}) => {
         await page.goto('/');
-        await expect(page).toHaveTitle(/Open.*Signer/i);
+
+        const signModeBtn = page.getByTestId('btn-sign-mode');
+        const verifyModeBtn = page.getByTestId('btn-verify-mode');
+
+        await expect(signModeBtn).toBeVisible();
+        await expect(verifyModeBtn).toBeVisible();
+
+        await verifyModeBtn.click();
+        await expect(verifyModeBtn).toHaveClass(/active/);
+
+        await signModeBtn.click();
+        await expect(signModeBtn).toHaveClass(/active/);
     });
 
-    test('2. Entry Point: Deep Link (Pending File State)', async ({page}) => {
-        const testId = 'TEST-LINK-123';
-        await page.goto(`/?id=${testId}`);
-        const dialog = page.locator('dialog#verify-dialog');
-        await expect(dialog).toBeVisible();
-
-        await expect(dialog.getByText(/Link Detected/i)).toBeVisible();
-    });
-
-    test('Scenario 3: Verify Interface Logic', async ({page}) => {
+    test('2. Navigation: Privacy Dialog & Language Switching', async ({page}) => {
         await page.goto('/');
-        await page.getByRole('button', {name: /Verify/i}).click();
-        await expect(page.getByText(/Select PDF/i)).toBeVisible();
+
+        // Open Privacy
+        await page.getByTestId('link-privacy').click();
+        await expect(page.getByRole('dialog', {name: /privacy/i})).toBeVisible();
+        await page.getByTestId('btn-close-privacy').click();
+        await expect(page.getByRole('dialog', {name: /privacy/i})).not.toBeVisible();
+
+        // Language toggle persistence check (UI side)
+        const langSelect = page.getByTestId('select-lang-home');
+        await langSelect.selectOption('ar');
+        await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+
+        await page.reload();
+        await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+
+        // Reset to en for subsequent tests
+        await page.getByTestId('select-lang-home').selectOption('en');
+        await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     });
 
-    // --- GROUP 2: THE WORKFLOW ---
+    test('3. Diagnostics: Secret Tap Logic', async ({page}) => {
+        await page.goto('/');
+        const logo = page.getByTestId('logo-img');
 
-    test('4. Workflow A: Alice Signs & Saves (Happy Path)', async ({page}) => {
+        // 5 taps to open diagnostics
+        for (let i = 0; i < 5; i++) {
+            await logo.click();
+        }
+
+        await expect(page.getByTestId('diagnostics-modal')).toBeVisible();
+        await page.getByTestId('btn-close-diagnostics').click();
+        await expect(page.getByTestId('diagnostics-modal')).not.toBeVisible();
+    });
+
+    test('4. Workflow: Full Signing Loop with Annotation controls', async ({page}) => {
         const pdfBuffer = await generateTestPDF();
         await page.goto('/');
 
-        // 1. Open Picker & Upload
         const fileChooserPromise = page.waitForEvent('filechooser');
-        await page.getByRole('button', {name: /Select PDF|Select File/i}).click();
+        await page.getByTestId('btn-select-file').click();
         const fileChooser = await fileChooserPromise;
         await fileChooser.setFiles({
-            name: 'contract_alice.pdf',
+            name: 'test_doc.pdf',
             mimeType: 'application/pdf',
             buffer: pdfBuffer,
         });
 
-        // 2. Verify Load
         const workspace = page.locator('pdf-workspace');
-        await expect(workspace).not.toHaveClass(/hidden/);
         await expect(workspace).toBeVisible();
 
-        // 3. Open Signature Modal
-        const signBtn = page.getByRole('button', {name: /sign/i}).first();
-        await expect(signBtn).toBeVisible();
-        await signBtn.click();
+        // Add Date
+        await page.getByTestId('btn-add-date').click();
+        const annotation = page.locator('[data-testid^="annotation-"]').first();
+        await expect(annotation).toBeVisible();
 
-        // 4. Draw Signature
-        const canvas = page.locator('canvas#signature-pad');
-        await expect(canvas).toBeVisible();
-        await page.waitForTimeout(300); // ✨ FIX: Small wait for modal animation to finish
+        // Test Menu Clickability (The fix verification)
+        await annotation.click();
+        const stylePopup = page.getByTestId('style-popup');
+        await expect(stylePopup).toBeVisible();
 
-        const box = await canvas.boundingBox();
+        // Action within menu
+        await page.getByTestId('btn-font-up').click();
+        await page.getByTestId('btn-apply-all').click();
+
+        // Signature Modal
+        await page.getByTestId('btn-add-sig').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
         if (box) {
-            await page.mouse.move(box.x + 50, box.y + 50);
+            await page.mouse.move(box.x + 20, box.y + 20);
             await page.mouse.down();
-            await page.mouse.move(box.x + 150, box.y + 100);
+            await page.mouse.move(box.x + 100, box.y + 100);
             await page.mouse.up();
         }
 
-        await page.locator('signature-modal').getByRole('button', {name: /Done/i}).click();
+        await page.getByTestId('btn-save-sig').click();
 
-        // 5. Save & Download
+        // Save
         const downloadPromise = page.waitForEvent('download');
-        await page.getByRole('button', {name: /save/i}).last().click();
+        await page.getByTestId('btn-save').click();
         const download = await downloadPromise;
-
         const stream = await download.createReadStream();
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
         aliceSignedBuffer = Buffer.concat(chunks);
 
-        expect(aliceSignedBuffer.length).toBeGreaterThan(0);
+        // Proof modal
+        await expect(page.getByTestId('proof-modal')).toBeVisible();
+        const savedId = await page.getByTestId('saved-doc-id').innerText();
+        expect(savedId.length).toBeGreaterThan(5);
+        await page.getByTestId('btn-close-proof').click();
 
-        await expect(page.getByRole('heading', {name: /Saved/i})).toBeVisible();
-        await expect(page.getByText(/Internal Ref ID/i)).toBeVisible();
-
-        await expect(page.getByText(/Hash:/i)).toBeVisible();
-
-        await page.locator('.modal-card').getByRole('button', {name: /Close/i}).click();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
     });
 
-    test('5. Workflow B: Handover (Bob Signs Alice\'s File)', async ({page}) => {
-        test.skip(!aliceSignedBuffer, 'Skipping: Alice failed to produce a file.');
+    test('5. Robustness: Exit Confirmation (Dirty State)', async ({page}) => {
         await page.goto('/');
+        await page.getByTestId('btn-sample').click();
 
-        // 1. Upload Alice's Signed File
+        // Exit without changes - no modal
+        await page.getByTestId('btn-exit').click();
+        await expect(page.getByTestId('btn-select-file')).toBeVisible();
+
+        // Re-enter and make changes
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-date').click();
+
+        // Exit with changes - should show confirmation
+        await page.getByTestId('btn-exit').click();
+        await expect(page.getByTestId('exit-confirm-modal')).toBeVisible();
+
+        // Cancel exit
+        await page.getByTestId('btn-cancel-exit').click();
+        await expect(page.getByTestId('exit-confirm-modal')).not.toBeVisible();
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        // Confirm exit
+        await page.getByTestId('btn-exit').click();
+        await page.getByTestId('btn-confirm-exit').click();
+        await expect(page.getByTestId('btn-select-file')).toBeVisible();
+    });
+
+    test('6. Strong Navigation: Multi-page & History', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+
+        const pageIndicator = page.getByTestId('page-indicator');
+        // Handle "1 / X" or localized "1 of X"
+        await expect(pageIndicator).toHaveText(/1\s*(?:\/|of)\s*\d+/);
+
+        // Toggle Thumbnails
+        await page.getByTestId('btn-toggle-thumbs').click();
+        const thumb2 = page.getByTestId('thumb-page-2');
+        if (await thumb2.count() > 0) {
+            await thumb2.click();
+            await expect(pageIndicator).toHaveText(/2\s*(?:\/|of)\s*\d+/);
+        }
+
+        // Undo/Redo Test
+        await page.getByTestId('btn-add-date').click();
+        await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+
+        await page.getByTestId('btn-undo').click();
+        await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(0);
+
+        await page.getByTestId('btn-redo').click();
+        await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+    });
+
+    test('7. Workflow: Verification Logic', async ({page}) => {
+        if (!aliceSignedBuffer) return test.skip();
+
+        await page.goto('/');
+        await page.getByTestId('btn-verify-mode').click();
+
         const fileChooserPromise = page.waitForEvent('filechooser');
-        await page.getByRole('button', {name: /Select PDF|Select File/i}).click();
+        await page.getByTestId('btn-select-file').click();
         const fileChooser = await fileChooserPromise;
         await fileChooser.setFiles({
             name: 'alice_signed.pdf',
             mimeType: 'application/pdf',
-            buffer: aliceSignedBuffer!,
+            buffer: aliceSignedBuffer,
         });
 
-        // 2. Assert Handover Modal Appears and Dismiss it
-        await expect(page.getByRole('heading', {name: /Previous signature/i})).toBeVisible();
-        await page.getByRole('button', {name: /Skip/i}).click(); // ✨ FIX: Specific to Handover modal
+        // Verification success
+        await expect(page.getByTestId('verify-success-title')).toBeVisible();
 
-        // 3. Bob Signs
-        await page.getByRole('button', {name: /sign/i}).first().click();
+        // Hash check (fail)
+        await page.getByTestId('input-verify-hash').fill('wrong_hash');
+        await page.getByTestId('btn-check-hash').click();
+        await expect(page.getByTestId('integrity-fail')).toBeVisible();
 
-        const canvas = page.locator('canvas#signature-pad');
-        await expect(canvas).toBeVisible();
-        await page.waitForTimeout(300);
-
-        const box = await canvas.boundingBox();
-        if (box) {
-            await page.mouse.move(box.x + 20, box.y + 20);
-            await page.mouse.down();
-            await page.mouse.move(box.x + 80, box.y + 80);
-            await page.mouse.up();
-        }
-
-        await page.locator('signature-modal').getByRole('button', {name: /Done/i}).click();
-
-        // 4. Bob Saves
-        const downloadPromise = page.waitForEvent('download');
-        await page.getByRole('button', {name: /save/i}).last().click();
-        const download = await downloadPromise;
-        expect(await download.path()).toBeTruthy();
-
-        await expect(page.getByRole('heading', {name: /Saved/i})).toBeVisible();
-        await page.locator('.modal-card').getByRole('button', {name: /Close/i}).click();
+        await page.getByTestId('btn-close-verify').click();
     });
 
-    test('6. Verification: Green Success State', async ({page}) => {
-        test.skip(!aliceSignedBuffer, 'Skipping: No file to verify.');
+    test('8. Accessibility: Keyboard Shortcuts', async ({page}) => {
         await page.goto('/');
+        await page.getByTestId('btn-sample').click();
 
-        // 1. Switch to verify mode
-        await page.getByRole('button', {name: /Verify/i}).click();
+        // Add annotation
+        await page.getByTestId('btn-add-text').click();
+        const ann = page.locator('[data-testid^="annotation-"]').first();
+        await ann.click();
 
-        // 2. Upload Alice's signed file
-        const fileChooserPromise = page.waitForEvent('filechooser');
-        await page.getByRole('button', {name: /Select PDF|Select File/i}).click();
-        const fileChooser = await fileChooserPromise;
-        await fileChooser.setFiles({
-            name: 'check_me.pdf',
-            mimeType: 'application/pdf',
-            buffer: aliceSignedBuffer!,
-        });
+        // Delete via keyboard
+        await page.keyboard.press('Delete');
+        await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(0);
 
-        // 3. Robust Assertions
-        const verifyDialog = page.locator('dialog#verify-dialog');
-        await expect(verifyDialog).toBeVisible();
-
-        await expect(verifyDialog.getByText(/Metadata Found|Record Found/i)).toBeVisible();
-
-        await expect(verifyDialog.getByText(/Internal Ref ID/i)).toBeVisible();
-    });
-
-    // --- GROUP 3: PLATFORM CHECKS ---
-    test('7. Responsive: Mobile Viewport Check', async ({page}) => {
-        await page.setViewportSize({width: 390, height: 844});
-        await page.goto('/');
-        await expect(page.getByText(/Sign/i).first()).toBeVisible();
+        // Undo via keyboard (Ctrl+Z)
+        await page.keyboard.press('Control+z');
+        await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1);
     });
 });

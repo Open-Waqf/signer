@@ -42,6 +42,28 @@ export class AppRoot extends LitElement {
         return this;
     }
 
+    private setupFocusTrap(container: HTMLElement) {
+        container.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Tab') {
+                const focusables = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                const first = focusables[0] as HTMLElement;
+                const last = focusables[focusables.length - 1] as HTMLElement;
+
+                if (e.shiftKey) {
+                    if (document.activeElement === first) {
+                        (last as HTMLElement).focus();
+                        e.preventDefault();
+                    }
+                } else {
+                    if (document.activeElement === last) {
+                        (first as HTMLElement).focus();
+                        e.preventDefault();
+                    }
+                }
+            }
+        });
+    }
+
     handleSecretTap = (e: Event) => {
         e.preventDefault();
         this.logoTapCount++;
@@ -253,7 +275,10 @@ export class AppRoot extends LitElement {
     }
 
     showPrivacy() {
-        if (this.privacyDialog) this.privacyDialog.showModal();
+        if (this.privacyDialog) {
+            this.setupFocusTrap(this.privacyDialog);
+            this.privacyDialog.showModal();
+        }
     }
 
     closePrivacy() {
@@ -270,6 +295,11 @@ export class AppRoot extends LitElement {
     handleExitWorkspace() {
         if (this.workspace && this.workspace.isDirty) {
             this.showExitConfirm = true;
+            // Focus trap for the exit confirm modal card
+            setTimeout(() => {
+                const modal = document.querySelector('[data-testid="exit-confirm-modal"]') as HTMLElement;
+                if (modal) this.setupFocusTrap(modal);
+            }, 50);
         } else {
             this.workspace.reset();
             this.mode = 'home';
@@ -299,87 +329,88 @@ export class AppRoot extends LitElement {
 
             <div class="drop-zone ${this.mode === 'workspace' ? 'hidden' : ''}"
                  @dragover=${(e: DragEvent) => e.preventDefault()} @drop=${this.handleDrop}>
-
-                <div class="layout-header">
-                    <select class="lang-select" @change=${this.handleLangChange}>
-                        ${LANGUAGES.map(l => html`
-                            <option value="${l.code}" ?selected=${i18n.lang === l.code}>${l.label}</option>
-                        `)}
-                    </select>
-                </div>
-
-                <div class="drop-card">
-                    <img src="./icons/icon-192.webp" alt="${i18n.t('appTitle')}" @click=${this.handleSecretTap}
-                         draggable="false"/>
-                    <h1>${i18n.t('appTitle')}</h1>
-                    <p class="sub">v${packageJson.version} • ${i18n.t('tagline')}</p>
-
-                    <div class="mode-toggle">
-                        <button class="${!this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = false}>
-                            <span style="display:flex; align-items:center; justify-content:center; gap:6px;">${ICONS.sign} ${i18n.t('signMode') || 'Sign'}</span>
-                        </button>
-                        <button class="${this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = true}>
-                            <span style="display:flex; align-items:center; justify-content:center; gap:6px;">${ICONS.search} ${i18n.t('verifyMode') || 'Verify'}</span>
-                        </button>
+                <div class="mode-container">
+                    <div class="layout-header">
+                        <select class="lang-select" data-testid="select-lang-home" @change=${this.handleLangChange}>
+                            ${LANGUAGES.map(l => html`
+                                <option value="${l.code}" ?selected=${i18n.lang === l.code}>${l.label}</option>
+                            `)}
+                        </select>
                     </div>
 
-                    <div class="drop-area-visual" @click=${this.openFile}>
-                        <button class="btn btn-primary">
-                            ${this.verifyMode ? i18n.t('selectFileVerify') : i18n.t('selectFile')}
+                    <div class="drop-card">
+                        <img src="./icons/icon-192.webp" alt="${i18n.t('appTitle')}" data-testid="logo-img" @click=${this.handleSecretTap}
+                             draggable="false"/>
+                        <h1>${i18n.t('appTitle')}</h1>
+                        <p class="sub">v${packageJson.version} • ${i18n.t('tagline')}</p>
+
+                        <div class="mode-toggle">
+                            <button id="btn-sign-mode" data-testid="btn-sign-mode" class="${!this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = false}>
+                                <span style="display:flex; align-items:center; justify-content:center; gap:6px;">${ICONS.sign} ${i18n.t('signMode') || 'Sign'}</span>
+                            </button>
+                            <button id="btn-verify-mode" data-testid="btn-verify-mode" class="${this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = true}>
+                                <span style="display:flex; align-items:center; justify-content:center; gap:6px;">${ICONS.search} ${i18n.t('verifyMode') || 'Verify'}</span>
+                            </button>
+                        </div>
+
+                        <div id="drop-area" data-testid="drop-area" class="drop-area-visual" @click=${this.openFile}>
+                            <button class="btn btn-primary" data-testid="btn-select-file">
+                                ${this.verifyMode ? i18n.t('selectFileVerify') : i18n.t('selectFile')}
+                            </button>
+                            <p class="sub" style="margin-top: 12px; font-size: 0.85rem;">
+                                ${this.verifyMode ? i18n.t('dropHintVerify') : i18n.t('dragDropHint')}
+                            </p>
+                        </div>
+
+                        ${!this.verifyMode ? html`
+                            <button id="btn-sample" data-testid="btn-sample" class="text-link" style="margin-top: 15px;" @click=${this.loadSamplePdf}>
+                                ${i18n.t('trySample') || 'No file? Try with a sample PDF'}
+                            </button>
+                        ` : ''}
+
+                        <div style="margin-top: 16px;">
+                            <span class="badge-success">${ICONS.shield} ${i18n.t('privacyBadge')}</span>
+                        </div>
+
+                        <div class="footer-links">
+                            <a class="footer-link" data-testid="link-privacy" @click=${this.showPrivacy}>${i18n.t('privacyTitle')}</a>
+                            <span>•</span>
+                            <a href="mailto:${AppConfig.supportEmail}" class="footer-link">${i18n.t('contactUs')}</a>
+                        </div>
+
+                        <button class="btn" data-testid="btn-share-app" style="margin-top: 20px; width: 100%;" @click=${() => {
+                            navigator.clipboard.writeText(`${AppConfig.website}/?lang=${i18n.lang}`);
+                            this.showToast(i18n.t('linkCopied'));
+                        }}>
+                            ${ICONS.link} ${i18n.t('shareApp')}
                         </button>
-                        <p class="sub" style="margin-top: 12px; font-size: 0.85rem;">
-                            ${this.verifyMode ? i18n.t('dropHintVerify') : i18n.t('dragDropHint')}
-                        </p>
                     </div>
 
                     ${!this.verifyMode ? html`
-                        <button class="text-link" style="margin-top: 15px;" @click=${this.loadSamplePdf}>
-                            ${i18n.t('trySample') || 'No file? Try with a sample PDF'}
-                        </button>
-                    ` : ''}
-
-                    <div style="margin-top: 16px;">
-                        <span class="badge-success">${ICONS.shield} ${i18n.t('privacyBadge')}</span>
-                    </div>
-
-                    <div class="footer-links">
-                        <a class="footer-link" @click=${this.showPrivacy}>${i18n.t('privacyTitle')}</a>
-                        <span>•</span>
-                        <a href="mailto:${AppConfig.supportEmail}" class="footer-link">${i18n.t('contactUs')}</a>
-                    </div>
-
-                    <button class="btn" style="margin-top: 20px; width: 100%;" @click=${() => {
-                        navigator.clipboard.writeText(`${AppConfig.website}/?lang=${i18n.lang}`);
-                        this.showToast(i18n.t('linkCopied'));
-                    }}>
-                        ${ICONS.link} ${i18n.t('shareApp')}
-                    </button>
-                </div>
-
-                ${!this.verifyMode ? html`
-                    <div class="features-section">
-                        <h3 style="text-align: center; color: var(--text-main); margin-bottom: 24px;">
-                            ${i18n.t('howItWorks')}</h3>
-                        <div class="features-grid">
-                            <div class="feature-card">
-                                <div class="feature-icon">${ICONS.sign}</div>
-                                <h4>${i18n.t('step1Title')}</h4>
-                                <p>${i18n.t('step1Desc')}</p>
-                            </div>
-                            <div class="feature-card">
-                                <div class="feature-icon">${ICONS.lock}</div>
-                                <h4>${i18n.t('step2Title')}</h4>
-                                <p>${i18n.t('step2Desc')}</p>
-                            </div>
-                            <div class="feature-card">
-                                <div class="feature-icon">${ICONS.shield}</div>
-                                <h4>${i18n.t('step3Title')}</h4>
-                                <p>${i18n.t('step3Desc')}</p>
+                        <div class="features-section">
+                            <h3 style="text-align: center; color: var(--text-main); margin-bottom: 24px;">
+                                ${i18n.t('howItWorks')}</h3>
+                            <div class="features-grid">
+                                <div class="feature-card">
+                                    <div class="feature-icon">${ICONS.sign}</div>
+                                    <h4>${i18n.t('step1Title')}</h4>
+                                    <p>${i18n.t('step1Desc')}</p>
+                                </div>
+                                <div class="feature-card">
+                                    <div class="feature-icon">${ICONS.lock}</div>
+                                    <h4>${i18n.t('step2Title')}</h4>
+                                    <p>${i18n.t('step2Desc')}</p>
+                                </div>
+                                <div class="feature-card">
+                                    <div class="feature-icon">${ICONS.shield}</div>
+                                    <h4>${i18n.t('step3Title')}</h4>
+                                    <p>${i18n.t('step3Desc')}</p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ` : ''}
-                <div style="height: 40px; flex-shrink: 0;"></div>
+                    ` : ''}
+                    <div style="height: 40px; flex-shrink: 0;"></div>
+                </div>
             </div>
 
             <pdf-workspace class="${this.mode === 'home' ? 'hidden' : ''}"
@@ -410,18 +441,18 @@ export class AppRoot extends LitElement {
                         </a>
                     </div>
 
-                    <button class="btn btn-danger" style="width: 100%; margin-top: 15px;" @click=${this.clearAppCache}>
+                    <button class="btn btn-danger" data-testid="btn-clear-cache" style="width: 100%; margin-top: 15px;" @click=${this.clearAppCache}>
                         ${i18n.t('forgetData')}
                     </button>
                 </div>
                 <div class="dialog-footer">
-                    <button class="btn" @click=${this.closePrivacy}>${i18n.t('close')}</button>
+                    <button class="btn" data-testid="btn-close-privacy" @click=${this.closePrivacy}>${i18n.t('close')}</button>
                 </div>
             </dialog>
 
             ${this.showDiagnostics ? html`
                 <div class="modal-overlay" @click=${() => this.showDiagnostics = false}>
-                    <div class="modal-card" style="max-width: 420px; border-radius: 16px;"
+                    <div class="modal-card" data-testid="diagnostics-modal" style="max-width: 420px; border-radius: 16px;"
                          @click=${(e: Event) => e.stopPropagation()}>
                         <h2 style="margin-top:0; display:flex; align-items:center; gap:8px;">${ICONS.cog}
                             ${i18n.t('diagnostics')}</h2>
@@ -436,7 +467,7 @@ export class AppRoot extends LitElement {
                             </div>
                         </div>
                         <div style="display: flex; justify-content: center; margin-top: 15px;">
-                            <button class="btn" style="width:100%;" @click=${() => this.showDiagnostics = false}>
+                            <button class="btn" data-testid="btn-close-diagnostics" style="width:100%;" @click=${() => this.showDiagnostics = false}>
                                 ${i18n.t('close')}
                             </button>
                         </div>
@@ -452,14 +483,14 @@ export class AppRoot extends LitElement {
                         </div>
                         <h2>${i18n.t('linkDetected')}</h2>
                         <p class="sub">${i18n.t('linkDetectedMsg')} <strong>${this.verifyResult.id}</strong></p>
-                        <button class="btn btn-primary" style="width: 100%;" @click=${this.startPendingVerification}>
+                        <button class="btn btn-primary" data-testid="btn-start-verify" style="width: 100%;" @click=${this.startPendingVerification}>
                             ${i18n.t('selectFileVerify')}
                         </button>
                     ` : this.verifyResult.status === 'success' ? html`
                         <div style="color:#10b981; margin-bottom:15px; display:flex; justify-content:center;">
                             <div style="padding:15px; background:#ecfdf5; border-radius:50%;">${ICONS.info}</div>
                         </div>
-                        <h2 style="color:#166534;">${i18n.t('recordFound')}</h2>
+                        <h2 style="color:#166534;" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
                         <p class="sub">${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong></p>
                         <div class="amanah-panel"
                              style="text-align:left; color:#b45309; background:#fffbeb; border-color:#fde68a;">
@@ -469,7 +500,7 @@ export class AppRoot extends LitElement {
                         <div style="color:#ef4444; margin-bottom:15px; display:flex; justify-content:center;">
                             <div style="padding:15px; background:#fee2e2; border-radius:50%;">${ICONS.alert}</div>
                         </div>
-                        <h2 style="color:#991b1b;">${i18n.t('noRecordFound')}</h2>
+                        <h2 style="color:#991b1b;" data-testid="verify-fail-title">${i18n.t('noRecordFound')}</h2>
                     `}
 
                     ${this.verifyResult.status !== 'pending_file' ? html`
@@ -477,31 +508,31 @@ export class AppRoot extends LitElement {
                         <div class="info-panel" style="text-align:left;">
                             <h3 style="margin: 0 0 10px 0; font-size: 0.95rem;">${i18n.t('integrityCheck')}</h3>
                             <div style="display:flex; gap:8px;">
-                                <input type="text" class="input-field" .value="${this.verifyHashInput}"
+                                <input type="text" class="input-field" data-testid="input-verify-hash" .value="${this.verifyHashInput}"
                                        @input="${(e: any) => {
                                            this.verifyHashInput = e.target.value;
                                            this.integrityStatus = 'idle';
                                        }}" placeholder="${i18n.t('pasteHashPlaceholder')}">
-                                <button class="btn btn-primary" @click="${this.checkHash}">${i18n.t('verifyBtn')}
+                                <button class="btn btn-primary" data-testid="btn-check-hash" @click="${this.checkHash}">${i18n.t('verifyBtn')}
                                 </button>
                             </div>
                             ${this.integrityStatus === 'success' ? html`
-                                <div class="info-panel alert-success" style="margin-top:10px;"
+                                <div class="info-panel alert-success" data-testid="integrity-success" style="margin-top:10px;"
                                      .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
                             ${this.integrityStatus === 'fail' ? html`
-                                <div class="info-panel alert-error" style="margin-top:10px;"
+                                <div class="info-panel alert-error" data-testid="integrity-fail" style="margin-top:10px;"
                                      .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
                         </div>
                     ` : ''}
                 </div>
                 <div class="dialog-footer">
-                    <button class="btn" style="width: 100%;" @click=${this.closeVerify}>${i18n.t('close')}</button>
+                    <button class="btn" data-testid="btn-close-verify" style="width: 100%;" @click=${this.closeVerify}>${i18n.t('close')}</button>
                 </div>
             </dialog>
 
             ${this.showExitConfirm ? html`
                 <div class="modal-overlay" @click=${() => this.showExitConfirm = false}>
-                    <div class="modal-card center" role="dialog" aria-modal="true"
+                    <div class="modal-card center" role="dialog" aria-modal="true" data-testid="exit-confirm-modal"
                          aria-label="${i18n.t('exitConfirmTitle')}"
                          @click=${(e: Event) => e.stopPropagation()}>
                         <div style="color:#ef4444; margin-bottom:15px; display:flex; justify-content:center;">
@@ -513,10 +544,10 @@ export class AppRoot extends LitElement {
                             ${i18n.t('exitConfirmText') || 'You have unsaved changes. Are you sure you want to go back? Your edits will be lost.'}
                         </p>
                         <div style="display:flex; gap:10px;">
-                            <button class="btn" style="flex:1;" @click=${() => this.showExitConfirm = false}>
+                            <button class="btn" data-testid="btn-cancel-exit" style="flex:1;" @click=${() => this.showExitConfirm = false}>
                                 ${i18n.t('cancel') || 'Cancel'}
                             </button>
-                            <button class="btn btn-danger" style="flex:1;" @click=${() => {
+                            <button class="btn btn-danger" data-testid="btn-confirm-exit" style="flex:1;" @click=${() => {
                                 this.showExitConfirm = false;
                                 this.workspace.reset();
                                 this.mode = 'home';

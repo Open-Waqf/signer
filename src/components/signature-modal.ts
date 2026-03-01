@@ -3,6 +3,7 @@ import {customElement, property, query, state} from 'lit/decorators.js';
 import {i18n} from '../lib/i18n-service';
 import {sharedStyles} from '../styles/shared-styles';
 import {TranslationKey} from '../i18n/locales';
+import {HapticService} from '../lib/haptic-service';
 
 const INK_COLORS: Array<{ value: string; labelKey: TranslationKey }> = [
     {value: '#1a1a2e', labelKey: 'inkDark'},
@@ -61,10 +62,18 @@ export class SignatureModal extends LitElement {
             touch-action: none;
             background: #fafafa;
             width: 100%;
-            height: 250px;
+            height: auto;
+            min-height: 180px;
+            aspect-ratio: 2 / 1;
             display: block;
             cursor: crosshair;
             margin-bottom: 20px;
+        }
+
+        @media (max-width: 480px) {
+            canvas {
+                min-height: 140px;
+            }
         }
 
         .actions {
@@ -75,14 +84,14 @@ export class SignatureModal extends LitElement {
 
         .color-strip {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             align-items: center;
             margin-bottom: 14px;
         }
 
         .color-swatch {
-            width: 28px;
-            height: 28px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             border: 3px solid transparent;
             cursor: pointer;
@@ -92,7 +101,7 @@ export class SignatureModal extends LitElement {
         }
 
         .color-swatch:hover {
-            transform: scale(1.2);
+            transform: scale(1.1);
         }
 
         .color-swatch.selected {
@@ -113,7 +122,7 @@ export class SignatureModal extends LitElement {
 
         .presets-strip {
             display: flex;
-            gap: 8px;
+            gap: 10px;
             flex-wrap: wrap;
         }
 
@@ -124,8 +133,8 @@ export class SignatureModal extends LitElement {
             border-radius: 6px;
             background: #fff;
             padding: 0;
-            width: 72px;
-            height: 40px;
+            width: 80px;
+            height: 48px;
             overflow: hidden;
             transition: border-color 0.15s;
         }
@@ -142,16 +151,16 @@ export class SignatureModal extends LitElement {
 
         .preset-delete {
             position: absolute;
-            top: 1px;
-            right: 1px;
-            width: 16px;
-            height: 16px;
+            top: 2px;
+            right: 2px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
-            background: rgba(220, 38, 38, 0.85);
+            background: rgba(220, 38, 38, 0.9);
             color: #fff;
             border: none;
             cursor: pointer;
-            font-size: 10px;
+            font-size: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -202,7 +211,7 @@ export class SignatureModal extends LitElement {
 
         .save-name-row input {
             flex: 1;
-            padding: 4px 8px;
+            padding: 8px 12px;
             border: 1px solid #d1d5db;
             border-radius: 6px;
             font-size: 0.85rem;
@@ -212,7 +221,7 @@ export class SignatureModal extends LitElement {
 
         .save-name-row input:focus {
             border-color: var(--primary, #1447e6);
-            box-shadow: 0 0 0 2px rgba(20,71,230,0.15);
+            box-shadow: 0 0 0 3px rgba(20,71,230,0.15);
         }
     `];
 
@@ -230,6 +239,30 @@ export class SignatureModal extends LitElement {
         window.addEventListener('resize', this._resizeHandler!);
         this.setupEvents();
         this.loadSaved();
+
+        // Focus trap
+        this.shadowRoot?.addEventListener('keydown', ((e: KeyboardEvent) => {
+            if (e.key === 'Tab') {
+                const focusables = this.shadowRoot!.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                const first = focusables[0] as HTMLElement;
+                const last = focusables[focusables.length - 1] as HTMLElement;
+
+                if (e.shiftKey) {
+                    if (document.activeElement === first || this.shadowRoot!.activeElement === first) {
+                        last.focus();
+                        e.preventDefault();
+                    }
+                } else {
+                    if (document.activeElement === last || this.shadowRoot!.activeElement === last) {
+                        first.focus();
+                        e.preventDefault();
+                    }
+                }
+            }
+            if (e.key === 'Escape') {
+                this.remove();
+            }
+        }) as EventListener);
     }
 
     updated(changed: Map<string, unknown>) {
@@ -362,6 +395,7 @@ export class SignatureModal extends LitElement {
     }
 
     clear() {
+        HapticService.impact();
         this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.isDirty = false;
         this.originalData = null;
@@ -370,6 +404,7 @@ export class SignatureModal extends LitElement {
     }
 
     private setInkColor(color: string) {
+        HapticService.selection();
         this.inkColor = color;
         localStorage.setItem('signer_ink_color', color);
         if (this.ctx) {
@@ -382,6 +417,7 @@ export class SignatureModal extends LitElement {
     }
 
     private usePreset(preset: SignaturePreset) {
+        HapticService.impact();
         this.originalData = preset.dataURL;
         this.isDirty = false;
         if (this.ctx) {
@@ -393,6 +429,7 @@ export class SignatureModal extends LitElement {
     }
 
     private deletePreset(id: string) {
+        HapticService.impact();
         const target = this.presets.find(p => p.id === id);
         if (target && this.originalData === target.dataURL) {
             this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -407,6 +444,7 @@ export class SignatureModal extends LitElement {
     }
 
     private saveAsPreset() {
+        HapticService.selection();
         if (this.presets.length >= MAX_PRESETS) return;
         const defaultName = `${this.mode === 'signature' ? 'Signature' : 'Initials'} ${this.presets.length + 1}`;
         this.saveNameValue = defaultName;
@@ -420,6 +458,7 @@ export class SignatureModal extends LitElement {
         const dataUrl = this.exportCanvas();
         if (!dataUrl) return;
 
+        HapticService.success();
         const preset: SignaturePreset = {id: Date.now().toString(), name, dataURL: dataUrl};
         const updated = [...this.presets, preset];
         this.presets = updated;
@@ -444,6 +483,7 @@ export class SignatureModal extends LitElement {
 
     save() {
         if (!this.isDirty && this.originalData) {
+            HapticService.impact();
             this.dispatchEvent(new CustomEvent('signed', {detail: this.originalData}));
             this.remove();
             return;
@@ -455,6 +495,7 @@ export class SignatureModal extends LitElement {
 
         const dataUrl = this.exportCanvas();
         if (!dataUrl) return;
+        HapticService.success();
         localStorage.setItem(`signer_${this.mode}`, dataUrl);
         this.dispatchEvent(new CustomEvent('signed', {detail: dataUrl}));
         this.remove();
@@ -474,11 +515,12 @@ export class SignatureModal extends LitElement {
                         ` : html`
                             <div class="presets-strip">
                                 ${this.presets.map(p => html`
-                                    <div class="preset-item" title="${p.name}" @click=${() => this.usePreset(p)}>
+                                    <div class="preset-item" title="${p.name}" data-testid="preset-${p.id}" @click=${() => this.usePreset(p)}>
                                         <img src="${p.dataURL}" alt="${p.name}">
                                         <span class="preset-name">${p.name}</span>
                                         <button
                                             class="preset-delete"
+                                            data-testid="btn-delete-preset-${p.id}"
                                             title="${i18n.t('deletePreset')}"
                                             aria-label="${i18n.t('deletePreset')}"
                                             @click=${(e: Event) => {
@@ -495,6 +537,7 @@ export class SignatureModal extends LitElement {
                         ${INK_COLORS.map(c => html`
                             <button
                                 class="color-swatch ${this.inkColor === c.value ? 'selected' : ''}"
+                                data-testid="color-${c.value}"
                                 style="background:${c.value}"
                                 title="${i18n.t(c.labelKey)}"
                                 aria-label="${i18n.t(c.labelKey)}"
@@ -504,19 +547,20 @@ export class SignatureModal extends LitElement {
                         `)}
                     </div>
 
-                    <canvas id="signature-pad"></canvas>
+                    <canvas id="signature-pad" data-testid="signature-pad"></canvas>
 
                     ${(this.isDirty || this.originalData) && this.presets.length < MAX_PRESETS ? html`
                         ${this.showSaveNameRow ? html`
                             <div class="save-name-row">
                                 <input
                                     type="text"
+                                    data-testid="input-preset-name"
                                     .value=${this.saveNameValue}
                                     @input=${(e: Event) => { this.saveNameValue = (e.target as HTMLInputElement).value; }}
                                     @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter') this.confirmSavePreset(); if (e.key === 'Escape') { this.showSaveNameRow = false; } }}
                                     placeholder="${i18n.t('presetName')}"
                                 >
-                                <button class="btn btn-primary" style="font-size:0.8rem; padding:4px 10px;"
+                                <button class="btn btn-primary" data-testid="btn-confirm-preset" style="font-size:0.8rem; padding:4px 10px;"
                                         @click=${() => this.confirmSavePreset()}>
                                     ${i18n.t('savePreset')}
                                 </button>
@@ -527,7 +571,7 @@ export class SignatureModal extends LitElement {
                             </div>
                         ` : html`
                             <div class="save-preset-row">
-                                <button class="btn" style="font-size:0.8rem; padding:4px 10px;"
+                                <button class="btn" data-testid="btn-save-preset" style="font-size:0.8rem; padding:4px 10px;"
                                         @click=${() => this.saveAsPreset()}>
                                     + ${i18n.t('savePreset')}
                                 </button>
@@ -537,8 +581,8 @@ export class SignatureModal extends LitElement {
 
                     <div class="actions">
                         <button class="btn" @click=${() => this.remove()}>${i18n.t('cancel')}</button>
-                        <button class="btn btn-danger" @click=${() => this.clear()}>${i18n.t('clear')}</button>
-                        <button class="btn btn-primary" @click=${() => this.save()}>${i18n.t('done')}</button>
+                        <button class="btn btn-danger" data-testid="btn-clear-sig" @click=${() => this.clear()}>${i18n.t('clear')}</button>
+                        <button class="btn btn-primary" data-testid="btn-save-sig" @click=${() => this.save()}>${i18n.t('done')}</button>
                     </div>
                 </div>
             </div>
