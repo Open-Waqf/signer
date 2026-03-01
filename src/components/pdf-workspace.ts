@@ -32,7 +32,7 @@ export class PdfWorkspace extends LitElement {
     @state() handoverResult: 'idle' | 'success' | 'fail' = 'idle';
     @state() detectedRefId = '';
 
-    @state() selectedId: string | null = null;
+    @state() selectedIds: string[] = [];
     @state() isDragging = false;
     @state() isResizing = false;
     @state() dragOffset = {x: 0, y: 0};
@@ -486,7 +486,7 @@ export class PdfWorkspace extends LitElement {
         }
 
         if (e.key === 'Escape') {
-            this.selectedId = null;
+            this.selectedIds = [];
             return;
         }
 
@@ -495,7 +495,8 @@ export class PdfWorkspace extends LitElement {
             const pageAnns = this.annotations.filter(a => a.page === this.currentPage - 1);
             if (pageAnns.length > 0) {
                 e.preventDefault();
-                const idx = pageAnns.findIndex(a => a.id === this.selectedId);
+                const lastSelected = this.selectedIds[this.selectedIds.length - 1];
+                const idx = pageAnns.findIndex(a => a.id === lastSelected);
                 let next: number;
                 if (idx === -1) {
                     next = e.shiftKey ? pageAnns.length - 1 : 0;
@@ -504,38 +505,42 @@ export class PdfWorkspace extends LitElement {
                         ? (idx - 1 + pageAnns.length) % pageAnns.length
                         : (idx + 1) % pageAnns.length;
                 }
-                this.selectedId = pageAnns[next].id;
+                this.selectedIds = [pageAnns[next].id];
             }
             return;
         }
 
-        if (!this.selectedId) return;
+        if (this.selectedIds.length === 0) return;
 
         // Delete selected annotation
         if (e.key === 'Delete' || e.key === 'Backspace') {
             e.preventDefault();
             this.snapshot();
-            this.annotations = this.annotations.filter(a => a.id !== this.selectedId);
-            this.selectedId = null;
+            this.annotations = this.annotations.filter(a => !this.selectedIds.includes(a.id));
+            this.selectedIds = [];
             this.isDirty = true;
             return;
         }
 
         // Arrow keys: nudge selected annotation (Shift = 4× step)
         if (e.key.startsWith('Arrow')) {
-            const ann = this.annotations.find(a => a.id === this.selectedId);
-            if (!ann) return;
+            const annsToMove = this.annotations.filter(a => this.selectedIds.includes(a.id));
+            if (annsToMove.length === 0) return;
             e.preventDefault();
             if (!e.repeat) this.snapshot(); // Snapshot only on first keydown, not on hold
             const step = e.shiftKey ? 0.02 : 0.005;
-            let {xPct, yPct} = ann;
-            if (e.key === 'ArrowLeft') xPct = Math.max(0, xPct - step);
-            else if (e.key === 'ArrowRight') xPct = Math.min(1 - ann.widthPct, xPct + step);
-            else if (e.key === 'ArrowUp') yPct = Math.max(0, yPct - step);
-            else if (e.key === 'ArrowDown') yPct = Math.min(1, yPct + step);
-            this.annotations = this.annotations.map(a =>
-                a.id === this.selectedId ? {...a, xPct, yPct} : a
-            );
+            
+            this.annotations = this.annotations.map(a => {
+                if (this.selectedIds.includes(a.id)) {
+                    let {xPct, yPct} = a;
+                    if (e.key === 'ArrowLeft') xPct = Math.max(0, xPct - step);
+                    else if (e.key === 'ArrowRight') xPct = Math.min(1 - a.widthPct, xPct + step);
+                    else if (e.key === 'ArrowUp') yPct = Math.max(0, yPct - step);
+                    else if (e.key === 'ArrowDown') yPct = Math.min(1, yPct + step);
+                    return {...a, xPct, yPct};
+                }
+                return a;
+            });
             this.isDirty = true;
         }
     };
@@ -551,7 +556,7 @@ export class PdfWorkspace extends LitElement {
         HapticService.impact();
         this.future = [JSON.parse(JSON.stringify(this.annotations)), ...this.future];
         this.annotations = this.history.pop()!;
-        this.selectedId = null;
+        this.selectedIds = [];
         this.isDirty = true;
     }
 
@@ -560,7 +565,7 @@ export class PdfWorkspace extends LitElement {
         HapticService.impact();
         this.history = [...this.history, JSON.parse(JSON.stringify(this.annotations))];
         this.annotations = this.future.shift()!;
-        this.selectedId = null;
+        this.selectedIds = [];
         this.isDirty = true;
     }
 
@@ -594,7 +599,7 @@ export class PdfWorkspace extends LitElement {
         this.currentPage = 1;
         this.scale = window.innerWidth < 768 ? 0.55 : 1.0;
         this.annotations = [];
-        this.selectedId = null;
+        this.selectedIds = [];
         this.isDirty = false;
         this.lastSaved = null;
         this.lastSavedBytes = null;
@@ -676,7 +681,7 @@ export class PdfWorkspace extends LitElement {
     gotoPage(page: number) {
         if (page >= 1 && page <= this.totalPages) {
             this.currentPage = page;
-            this.selectedId = null;
+            this.selectedIds = [];
             void this.renderPage();
             if (this.viewport) {
                 this.viewport.scrollTop = 0;
@@ -732,7 +737,7 @@ export class PdfWorkspace extends LitElement {
         };
 
         this.annotations = [...this.annotations, newAnn];
-        this.selectedId = newAnn.id;
+        this.selectedIds = [newAnn.id];
         this.isDirty = true;
     }
 
@@ -756,7 +761,9 @@ export class PdfWorkspace extends LitElement {
         this.snapshot();
         HapticService.impact();
         this.annotations = this.annotations.filter((a) => a.id !== id);
-        if (this.selectedId === id) this.selectedId = null;
+        if (this.selectedIds.includes(id)) {
+            this.selectedIds = this.selectedIds.filter(selId => selId !== id);
+        }
         this.isDirty = true;
     }
 
@@ -774,8 +781,10 @@ export class PdfWorkspace extends LitElement {
     onContainerClick(e: Event) {
         const target = e.target as Element;
         if (target.closest('.draggable') || target.closest('.style-popup')) return;
-        this.selectedId = null;
+        this.selectedIds = [];
     }
+
+    private touchTimer: ReturnType<typeof setTimeout> | null = null;
 
     startDrag(e: MouseEvent | TouchEvent, id: string) {
         const target = e.target as Element;
@@ -789,8 +798,34 @@ export class PdfWorkspace extends LitElement {
         if (e.cancelable) e.preventDefault();
         e.stopPropagation();
 
-        // Use passive:true compatible logic
-        this.selectedId = id;
+        const isShift = 'shiftKey' in e ? e.shiftKey : false;
+        
+        const applySelection = (multi: boolean) => {
+            if (multi) {
+                if (this.selectedIds.includes(id)) {
+                    this.selectedIds = this.selectedIds.filter(i => i !== id);
+                } else {
+                    this.selectedIds = [...this.selectedIds, id];
+                }
+            } else {
+                if (!this.selectedIds.includes(id)) {
+                    this.selectedIds = [id];
+                }
+            }
+        };
+
+        if ('touches' in e) {
+            // Touch device: start a long-press timer for multi-select
+            applySelection(false); // Default to single select initially
+            this.touchTimer = setTimeout(() => {
+                HapticService.impact();
+                applySelection(true); // Toggle on long press
+            }, 500);
+        } else {
+            // Mouse device: use Shift key
+            applySelection(isShift);
+        }
+        
         this.isDragging = true;
         this.interactionSnapshotTaken = false;
         this.interactionChanged = false;
@@ -809,19 +844,20 @@ export class PdfWorkspace extends LitElement {
         if (e.cancelable) e.preventDefault();
         e.stopPropagation();
         this.isResizing = true;
-        this.selectedId = id;
+        this.selectedIds = [id]; // Resize only works on one item at a time for simplicity
         this.interactionSnapshotTaken = false;
         this.interactionChanged = false;
     }
 
     handleGlobalMove = (e: MouseEvent | TouchEvent) => {
-        if (!this.selectedId || (!this.isDragging && !this.isResizing)) return;
+        if (this.selectedIds.length === 0 || (!this.isDragging && !this.isResizing)) return;
         if (e.cancelable) e.preventDefault();
 
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
         const rect = this.container.getBoundingClientRect();
-        const ann = this.annotations.find((a) => a.id === this.selectedId);
+        const primaryId = this.selectedIds[0];
+        const ann = this.annotations.find((a) => a.id === primaryId);
         if (!ann) return;
 
         const takeSnapshotIfNeeded = () => {
@@ -896,7 +932,21 @@ export class PdfWorkspace extends LitElement {
             if (Math.abs(nextXPct - ann.xPct) > 0.0005 || Math.abs(nextYPct - ann.yPct) > 0.0005) {
                 takeSnapshotIfNeeded();
                 this.interactionChanged = true;
-                this.updateAnnotation(this.selectedId, {xPct: nextXPct, yPct: nextYPct});
+                const dx = nextXPct - ann.xPct;
+                const dy = nextYPct - ann.yPct;
+                this.annotations = this.annotations.map(a => {
+                    if (this.selectedIds.includes(a.id)) {
+                        return { ...a, xPct: a.xPct + dx, yPct: a.yPct + dy };
+                    }
+                    return a;
+                });
+                this.isDirty = true;
+                
+                // Update drag offset so subsequent moves calculate relative to the new snapped position
+                this.dragOffset = {
+                    x: clientX - rect.left - nextXPct * rect.width,
+                    y: clientY - rect.top - nextYPct * rect.height
+                };
             }
 
             // Collision detection for popup/delete
@@ -910,7 +960,7 @@ export class PdfWorkspace extends LitElement {
             if (Math.abs(nextWidthPct - (ann.widthPct || 0)) > 0.0005) {
                 takeSnapshotIfNeeded();
                 this.interactionChanged = true;
-                this.updateAnnotation(this.selectedId, {widthPct: nextWidthPct});
+                this.updateAnnotation(primaryId, {widthPct: nextWidthPct});
             }
         }
     };
@@ -1227,7 +1277,7 @@ export class PdfWorkspace extends LitElement {
                                  aria-label="Page ${i + 1}"
                                  @click=${() => {
                                      this.currentPage = i + 1;
-                                     this.selectedId = null;
+                                     this.selectedIds = [];
                                      void this.renderPage();
                                  }}>
                                 <img src="${url}" alt="Page ${i + 1}" style="width:100%; display:block;">
@@ -1285,7 +1335,7 @@ export class PdfWorkspace extends LitElement {
                         `)}
                         <canvas id="pdf-canvas"></canvas>
                         ${this.annotations.filter(ann => ann.page === this.currentPage - 1).map(ann => {
-                            const isSelected = this.selectedId === ann.id;
+                            const isSelected = this.selectedIds.includes(ann.id);
                             const isText = ann.type === 'date' || ann.type === 'identity';
                             return html`
                                 <div class="draggable ${isSelected ? 'selected' : ''}"
