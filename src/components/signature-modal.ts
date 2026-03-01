@@ -135,12 +135,13 @@ export class SignatureModal extends LitElement {
             padding: 0;
             width: 80px;
             height: 48px;
-            overflow: hidden;
+            overflow: visible;
             transition: border-color 0.15s;
         }
 
         .preset-item:hover {
             border-color: var(--primary, #1447e6);
+            z-index: 10;
         }
 
         .preset-item img {
