@@ -16,6 +16,12 @@ export class WebAuthnService {
         return Uint8Array.from(atob(base64), c => c.charCodeAt(0)).buffer;
     }
 
+    private static base64UrlToUint8Array(base64url: string): Uint8Array {
+        const padding = '='.repeat((4 - (base64url.length % 4)) % 4);
+        const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/');
+        return new Uint8Array(this.base64ToBuffer(base64));
+    }
+
     static async register(challenge: Uint8Array, userName: string = 'User'): Promise<{ id: string; publicKeySpki: string }> {
         const rpId = window.location.hostname || 'localhost';
         
@@ -54,9 +60,10 @@ export class WebAuthnService {
             const spkiBuffer = credential.getPublicKey();
             publicKeySpki = this.bufferToBase64(spkiBuffer);
         } else {
-            // Fallback for older browsers (parsing Attestation Object) would be here.
-            // For 2026, we assume getPublicKey() is available.
-            throw new Error('Public Key extraction not supported on this browser.');
+            // Fallback mode: allow signing flow even if SPKI extraction is unavailable.
+            // Hardware assertion is still produced; local offline cryptographic verification
+            // may be skipped later when the public key is missing.
+            console.warn('WebAuthn: Public Key extraction not supported on this browser, continuing without local SPKI.');
         }
 
         const credInfo = {
@@ -136,13 +143,25 @@ export class WebAuthnService {
         publicKeySpki: string,
         signature: string,
         authData: string,
-        clientDataJSON: string
+        clientDataJSON: string,
+        expectedChallenge?: Uint8Array
     ): Promise<boolean> {
         try {
+            if (!publicKeySpki) return false;
             const pubKeyBuffer = this.base64ToBuffer(publicKeySpki);
             const sigBuffer = this.base64ToBuffer(signature);
             const authDataBuffer = this.base64ToBuffer(authData);
             const clientDataBuffer = this.base64ToBuffer(clientDataJSON);
+            const clientDataText = new TextDecoder().decode(clientDataBuffer);
+            const parsedClientData = JSON.parse(clientDataText);
+
+            if (expectedChallenge) {
+                const challengeBytes = this.base64UrlToUint8Array(parsedClientData.challenge || '');
+                if (challengeBytes.length !== expectedChallenge.length) return false;
+                for (let i = 0; i < challengeBytes.length; i++) {
+                    if (challengeBytes[i] !== expectedChallenge[i]) return false;
+                }
+            }
 
             // 1. Import Key
             // We assume ES256 for biometric signatures

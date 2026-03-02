@@ -33,7 +33,11 @@ device's RAM.
 
 * **The "Handover" Protocol:** Securely pass documents between multiple signers.
 * **Pre-Sign Validation:** When you open a document signed by someone else, the app automatically detects it and
-  requires you to verify the previous signer's hash *before* you add yours.
+  asks for the previous signer's **6-digit handover code** before you add yours (with an explicit skip flag if unavailable).
+* **Sequential Hash Chaining:** Each signer payload stores the opened document hash, manual-verification status, and
+  chain metadata so verification can validate the signer chain locally in reverse order.
+* **Single Accumulated Audit Page:** When enabled, the app renders one final audit page listing all signers in history
+  and warning labels for any skipped manual handover checks.
 
 ### ✍️ Professional UX & Tools
 

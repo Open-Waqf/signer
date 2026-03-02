@@ -27,6 +27,7 @@ export class AppRoot extends LitElement {
     @state() verifyFileHash = '';
     @query('dialog#verify-dialog') verifyDialog!: HTMLDialogElement;
     @state() integrityStatus: 'idle' | 'success' | 'fail' = 'idle';
+    @state() chainStatus: { status: 'idle' | 'success' | 'fail', failedSignerIndex?: number, total?: number } = {status: 'idle'};
 
     @state() showDiagnostics = false;
     private logoTapCount = 0;
@@ -154,6 +155,7 @@ export class AppRoot extends LitElement {
             const meta = await pdfEngine.readMetadataID(new Uint8Array(buffer));
             const fileId = meta.id;
             this.verifyFileHash = await pdfEngine.getFileHash(data)
+            const chainCheck = await pdfEngine.verifySignatureChain(data);
             this.isLoading = false;
 
             let status: 'success' | 'fail' | null = null;
@@ -167,6 +169,13 @@ export class AppRoot extends LitElement {
             this.verifyResult = {status, id: fileId || undefined};
             this.verifyHashInput = '';
             this.integrityStatus = 'idle';
+            this.chainStatus = chainCheck.valid
+                ? {status: 'success', total: chainCheck.signatures.length}
+                : {
+                    status: chainCheck.signatures.length > 0 ? 'fail' : 'idle',
+                    failedSignerIndex: chainCheck.failedSignerIndex,
+                    total: chainCheck.signatures.length,
+                };
 
             if (this.verifyDialog && !this.verifyDialog.open) this.verifyDialog.showModal();
         } catch (e) {
@@ -176,13 +185,20 @@ export class AppRoot extends LitElement {
     }
 
     checkHash() {
-        const input = this.verifyHashInput.replace(/[\s\n-]/g, '').trim().toLowerCase();
+        const input = this.extractHex64(this.verifyHashInput) || this.verifyHashInput.replace(/[\s\n-]/g, '').trim().toLowerCase();
         const actual = this.verifyFileHash.toLowerCase();
         if (!input) return;
         this.integrityStatus = (input === actual) ? 'success' : 'fail';
     }
 
+    private extractHex64(input: string): string | null {
+        const match = input.match(/(?:^|[^a-fA-F0-9])([a-fA-F0-9]{64})(?:[^a-fA-F0-9]|$)/);
+        return match ? match[1].toLowerCase() : null;
+    }
+
     private normalizedHashInput() {
+        const strict = this.extractHex64(this.verifyHashInput);
+        if (strict) return strict;
         return this.verifyHashInput.replace(/[\s\n-]/g, '').trim().toLowerCase();
     }
 
@@ -196,6 +212,7 @@ export class AppRoot extends LitElement {
         this.verifyResult = {status: null};
         this.expectedVerifyId = null;
         this.integrityStatus = 'idle';
+        this.chainStatus = {status: 'idle'};
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 
@@ -542,6 +559,15 @@ export class AppRoot extends LitElement {
                                 <div class="alert-box alert-error" data-testid="integrity-fail" style="margin-top:12px;"
                                      .innerHTML=${i18n.t('strictMismatch')}></div>` : ''}
                         </div>
+
+                        ${this.chainStatus.status === 'success' ? html`
+                            <div class="alert-box alert-success" data-testid="chain-success" style="margin-top:12px;"
+                                 .innerHTML=${i18n.t('chainValidated').replace('{count}', String(this.chainStatus.total || 0))}></div>
+                        ` : ''}
+                        ${this.chainStatus.status === 'fail' ? html`
+                            <div class="alert-box alert-error" data-testid="chain-fail" style="margin-top:12px;"
+                                 .innerHTML=${i18n.t('chainFailed').replace('{index}', String(this.chainStatus.failedSignerIndex || 0))}></div>
+                        ` : ''}
                     `}
                 </div>
                 <div class="dialog-footer">

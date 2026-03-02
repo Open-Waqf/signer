@@ -1,10 +1,22 @@
 import {expect, test} from '@playwright/test';
 import {generateTestPDF} from './utils';
+import {PDFDocument} from 'pdf-lib';
 
 // ---------------------------------------------------------------------------
 // 🌍 SHARED STATE
 // ---------------------------------------------------------------------------
 let aliceSignedBuffer: Buffer | null = null;
+let signerABuffer: Buffer | null = null;
+let signerBBuffer: Buffer | null = null;
+let signerCSingleAuditBuffer: Buffer | null = null;
+
+async function readPdfSignatures(buffer: Buffer): Promise<any[]> {
+    const pdf = await PDFDocument.load(buffer, {updateMetadata: false});
+    const subject = pdf.getSubject() || '';
+    if (!subject.startsWith('OWQ_CHAIN:')) return [];
+    const parsed = JSON.parse(subject.slice('OWQ_CHAIN:'.length));
+    return Array.isArray(parsed?.signatures) ? parsed.signatures : [];
+}
 
 test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', () => {
 
@@ -284,5 +296,224 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
 
         await page.keyboard.press('Delete');
         await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+    });
+
+    test('10. REQ-19 TC-01: Sequential chain happy path', async ({page}) => {
+        const sourcePdf = await generateTestPDF();
+        await page.goto('/');
+
+        const chooserA = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooserA).setFiles({name: 'tc01.pdf', mimeType: 'application/pdf', buffer: sourcePdf});
+
+        await page.getByTestId('btn-add-date').click();
+        const dlA = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const dA = await dlA;
+        const codeA = (await page.getByTestId('saved-handover-code').innerText()).trim();
+        const streamA = await dA.createReadStream();
+        const chunksA = [];
+        for await (const chunk of streamA) chunksA.push(chunk);
+        signerABuffer = Buffer.concat(chunksA);
+        await page.getByTestId('btn-close-proof').click();
+
+        await page.goto('/');
+        const chooserB = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooserB).setFiles({name: 'tc01_a.pdf', mimeType: 'application/pdf', buffer: signerABuffer});
+
+        await expect(page.getByTestId('handover-modal')).toBeVisible();
+        await page.getByTestId('input-handover-hash').fill(codeA);
+        await page.getByTestId('btn-verify-handover').click();
+        await expect(page.getByTestId('handover-modal')).not.toBeVisible();
+
+        await page.getByTestId('btn-add-date').click();
+        const dlB = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const dB = await dlB;
+        const streamB = await dB.createReadStream();
+        const chunksB = [];
+        for await (const chunk of streamB) chunksB.push(chunk);
+        signerBBuffer = Buffer.concat(chunksB);
+        await page.getByTestId('btn-close-proof').click();
+
+        await page.goto('/');
+        await page.getByTestId('btn-verify-mode').click();
+        const chooserV = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooserV).setFiles({name: 'tc01_b.pdf', mimeType: 'application/pdf', buffer: signerBBuffer});
+        await expect(page.getByTestId('chain-success')).toBeVisible();
+    });
+
+    test('11. REQ-19 TC-02 + TC-03: Skip handover and lock prior visuals', async ({page}) => {
+        test.skip(!signerABuffer);
+        await page.goto('/');
+
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({name: 'tc02_a.pdf', mimeType: 'application/pdf', buffer: signerABuffer!});
+
+        await expect(page.getByTestId('handover-modal')).toBeVisible();
+        await page.getByTestId('btn-skip-handover').click();
+        await expect(page.locator('[data-testid^=\"annotation-\"]')).toHaveCount(0);
+
+        await page.getByTestId('btn-add-date').click();
+        const dl = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const d = await dl;
+        const stream = await d.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const signerBSkipped = Buffer.concat(chunks);
+        await page.getByTestId('btn-close-proof').click();
+
+        const signatures = await readPdfSignatures(signerBSkipped);
+        expect(signatures.length).toBe(2);
+        expect(signatures[1].previousHashManuallyVerified).toBeFalsy();
+
+        await page.goto('/');
+        await page.getByTestId('btn-verify-mode').click();
+        const chooserV = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooserV).setFiles({name: 'tc02_b.pdf', mimeType: 'application/pdf', buffer: signerBSkipped});
+        await expect(page.getByTestId('chain-success')).toBeVisible();
+    });
+
+    test('12. REQ-19 TC-04: Audit page stacking produces exactly one final audit page', async ({page}) => {
+        const sourcePdf = await generateTestPDF();
+        await page.goto('/');
+
+        const chooseA = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooseA).setFiles({name: 'tc04.pdf', mimeType: 'application/pdf', buffer: sourcePdf});
+        await page.getByTestId('btn-add-date').click();
+        const dlA = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const dA = await dlA;
+        const codeA = (await page.getByTestId('saved-handover-code').innerText()).trim();
+        const streamA = await dA.createReadStream();
+        const chunksA = [];
+        for await (const chunk of streamA!) chunksA.push(chunk);
+        const bufA = Buffer.concat(chunksA);
+        await page.getByTestId('btn-close-proof').click();
+
+        await page.goto('/');
+        const chooseB = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooseB).setFiles({name: 'tc04_a.pdf', mimeType: 'application/pdf', buffer: bufA});
+        await page.getByTestId('input-handover-hash').fill(codeA);
+        await page.getByTestId('btn-verify-handover').click();
+        await expect(page.getByTestId('handover-modal')).not.toBeVisible();
+        await page.getByTestId('btn-toggle-audit').click(); // Signer B audit OFF
+        await page.getByTestId('btn-add-date').click();
+        const dlB = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const dB = await dlB;
+        const codeB = (await page.getByTestId('saved-handover-code').innerText()).trim();
+        const streamB = await dB.createReadStream();
+        const chunksB = [];
+        for await (const chunk of streamB!) chunksB.push(chunk);
+        const bufB = Buffer.concat(chunksB);
+        await page.getByTestId('btn-close-proof').click();
+
+        await page.goto('/');
+        const chooseC = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooseC).setFiles({name: 'tc04_b.pdf', mimeType: 'application/pdf', buffer: bufB});
+        await page.getByTestId('input-handover-hash').fill(codeB);
+        await page.getByTestId('btn-verify-handover').click();
+        await expect(page.getByTestId('handover-modal')).not.toBeVisible();
+        await page.getByTestId('btn-add-date').click();
+        const dlC = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const dC = await dlC;
+        const streamC = await dC.createReadStream();
+        const chunksC = [];
+        for await (const chunk of streamC!) chunksC.push(chunk);
+        signerCSingleAuditBuffer = Buffer.concat(chunksC);
+        await page.getByTestId('btn-close-proof').click();
+
+        const pdf = await PDFDocument.load(signerCSingleAuditBuffer, {updateMetadata: false});
+        expect(pdf.getPageCount()).toBe(2);
+        const signatures = await readPdfSignatures(signerCSingleAuditBuffer);
+        expect(signatures.length).toBe(3);
+    });
+
+    test('13. REQ-19 TC-05: Tamper breaks chain at latest signer', async ({page}) => {
+        test.skip(!signerCSingleAuditBuffer);
+        const parsed = await PDFDocument.load(signerCSingleAuditBuffer!, {updateMetadata: false});
+        parsed.setTitle('tampered');
+        const tampered = Buffer.from(await parsed.save());
+
+        await page.goto('/');
+        await page.getByTestId('btn-verify-mode').click();
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({name: 'tampered.pdf', mimeType: 'application/pdf', buffer: tampered});
+        await expect(page.getByTestId('chain-fail')).toBeVisible();
+        await expect(page.getByTestId('chain-fail')).toContainText('3');
+    });
+
+    test('14. REQ-19: Preserve externally appended pages when refreshing audit page', async ({page}) => {
+        test.skip(!signerCSingleAuditBuffer);
+
+        const external = await PDFDocument.load(signerCSingleAuditBuffer!, {updateMetadata: false});
+        for (let i = 0; i < 5; i++) {
+            external.addPage([595.28, 841.89]);
+        }
+        const externallyAppended = Buffer.from(await external.save());
+
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({name: 'external-appended.pdf', mimeType: 'application/pdf', buffer: externallyAppended});
+
+        await expect(page.getByTestId('handover-modal')).toBeVisible();
+        await page.getByTestId('btn-skip-handover').click();
+        await page.getByTestId('btn-add-date').click();
+
+        const dl = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const d = await dl;
+        const stream = await d.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream!) chunks.push(chunk);
+        const saved = Buffer.concat(chunks);
+
+        const pdf = await PDFDocument.load(saved, {updateMetadata: false});
+        expect(pdf.getPageCount()).toBe(8);
+    });
+
+    test('15. REQ-19: Tamper between signers must fail chain even if next signer skips handover', async ({page}) => {
+        test.skip(!signerABuffer);
+
+        const tamperedA = await PDFDocument.load(signerABuffer!, {updateMetadata: false});
+        tamperedA.setTitle('tampered-between-signers');
+        const tamperedABuffer = Buffer.from(await tamperedA.save());
+
+        await page.goto('/');
+        const chooserB = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooserB).setFiles({name: 'tampered-a.pdf', mimeType: 'application/pdf', buffer: tamperedABuffer});
+        await expect(page.getByTestId('handover-modal')).toBeVisible();
+        await page.getByTestId('btn-skip-handover').click();
+        await page.getByTestId('btn-add-date').click();
+
+        const dl = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const d = await dl;
+        const stream = await d.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream!) chunks.push(chunk);
+        const tamperedSignedByB = Buffer.concat(chunks);
+        await page.getByTestId('btn-close-proof').click();
+
+        await page.goto('/');
+        await page.getByTestId('btn-verify-mode').click();
+        const chooserV = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooserV).setFiles({name: 'tampered-signed-b.pdf', mimeType: 'application/pdf', buffer: tamperedSignedByB});
+        await expect(page.getByTestId('chain-fail')).toBeVisible();
+        await expect(page.getByTestId('chain-fail')).toContainText('2');
     });
 });

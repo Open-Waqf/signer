@@ -4,7 +4,7 @@ import {Capacitor} from '@capacitor/core';
 import {pdfEngine} from '../lib/pdf-engine';
 import {fileService} from '../lib/file-service';
 import {i18n} from '../lib/i18n-service';
-import {Annotation, AnnotationType} from '../types';
+import {Annotation, AnnotationType, SignaturePayload} from '../types';
 import './signature-modal';
 import {ICONS} from '../lib/icons';
 import {sharedStyles} from '../styles/shared-styles';
@@ -26,6 +26,8 @@ export class PdfWorkspace extends LitElement {
     @state() showProofModal = false;
     @state() lastSavedId: string | null = null;
     @state() lastSavedHash: string | null = null;
+    @state() lastSavedCode: string | null = null;
+    @state() lastSaveHardwareFallback = false;
     @state() includeFooter = false;
 
     @state() validationMsg: string | null = null;
@@ -37,6 +39,9 @@ export class PdfWorkspace extends LitElement {
     @state() handoverResult: 'idle' | 'success' | 'fail' = 'idle';
     @state() detectedRefId = '';
     @state() detectedAssertions: any[] = [];
+    @state() signaturesChain: SignaturePayload[] = [];
+    @state() previousHashManuallyVerified = true;
+    @state() openedDocumentHash = '';
 
     @state() selectedIds: string[] = [];
     @state() isDragging = false;
@@ -98,8 +103,9 @@ export class PdfWorkspace extends LitElement {
 
     private closeHandoverModal(markSkipped = false) {
         if (markSkipped && this.detectedRefId) {
-            this.validationMsg = `Previous signature verification skipped (Ref ${this.detectedRefId})`;
+            this.validationMsg = i18n.t('handoverSkippedMsg').replace('{ref}', this.detectedRefId);
             this.isVerified = false;
+            this.previousHashManuallyVerified = false;
         }
         this.showHandoverModal = false;
         this.handoverResult = 'idle';
@@ -131,6 +137,21 @@ export class PdfWorkspace extends LitElement {
 
     private generateId(): string {
         return crypto.randomUUID().split('-')[0];
+    }
+
+    private isAnnotationLocked(id: string): boolean {
+        return !!this.annotations.find((a) => a.id === id)?.lockedByChain;
+    }
+
+    private extractHex64(input: string): string | null {
+        const match = input.match(/(?:^|[^a-fA-F0-9])([a-fA-F0-9]{64})(?:[^a-fA-F0-9]|$)/);
+        return match ? match[1].toLowerCase() : null;
+    }
+
+    private extractPin6(input: string): string | null {
+        const all = input.match(/\d{6}/g);
+        if (!all || all.length === 0) return null;
+        return all[all.length - 1];
     }
 
     addIdentity() {
@@ -166,16 +187,23 @@ export class PdfWorkspace extends LitElement {
         if (!this.lastSavedId) return;
         const subject = (i18n.t('emailSubject') || 'Signature Receipt: {id}').replace('{id}', this.lastSavedId);
         let body = (i18n.t('emailBody') || '').replace('{id}', this.lastSavedId).replace('{hash}', this.lastSavedHash || 'N/A');
+        if (this.lastSavedCode) {
+            body += `\n\n${i18n.t('handoverPinLabel')}: ${this.lastSavedCode}`;
+        }
         window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
         this.showProofModal = false;
     }
 
     copyHash() {
         if (this.lastSavedHash) {
-            navigator.clipboard.writeText(this.lastSavedHash);
-            this.toast((i18n.t('linkCopied') as string) || 'Copied to clipboard!');
+            const value = this.lastSavedCode
+                ? `${this.lastSavedHash}\n${i18n.t('handoverPinLabel')}: ${this.lastSavedCode}`
+                : this.lastSavedHash;
+            navigator.clipboard.writeText(value);
+            this.toast((i18n.t('hashPinCopied') as string) || 'Hash and PIN copied.');
         }
     }
+
 
     static styles = [sharedStyles, css`
         :host {
@@ -419,6 +447,11 @@ export class PdfWorkspace extends LitElement {
             box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
         }
 
+        .draggable.locked {
+            border-color: rgba(107, 114, 128, 0.4);
+            cursor: not-allowed;
+        }
+
         .delete-btn {
             position: absolute;
             top: -14px;
@@ -611,8 +644,10 @@ export class PdfWorkspace extends LitElement {
         // Delete selected annotation
         if (e.key === 'Delete' || e.key === 'Backspace') {
             e.preventDefault();
+            const deletableIds = this.selectedIds.filter((id) => !this.isAnnotationLocked(id));
+            if (deletableIds.length === 0) return;
             this.snapshot();
-            this.annotations = this.annotations.filter(a => !this.selectedIds.includes(a.id));
+            this.annotations = this.annotations.filter(a => !deletableIds.includes(a.id));
             this.selectedIds = [];
             this.isDirty = true;
             return;
@@ -620,7 +655,7 @@ export class PdfWorkspace extends LitElement {
 
         // Arrow keys: nudge selected annotation (Shift = 4× step)
         if (e.key.startsWith('Arrow')) {
-            const annsToMove = this.annotations.filter(a => this.selectedIds.includes(a.id));
+            const annsToMove = this.annotations.filter(a => this.selectedIds.includes(a.id) && !a.lockedByChain);
             if (annsToMove.length === 0) return;
             e.preventDefault();
             if (!e.repeat) this.snapshot(); // Snapshot only on first keydown, not on hold
@@ -669,18 +704,28 @@ export class PdfWorkspace extends LitElement {
         pdfEngine.destroy();
         this.pdfName = name;
         this.loadedBytes = file;
+        this.openedDocumentHash = await pdfEngine.getIntegrityAnchorHash(file);
+        this.previousHashManuallyVerified = true;
         this.isVerified = false;
         this.validationMsg = null;
         this.lastSavedId = null;
         this.lastSavedHash = null;
+        this.lastSavedCode = null;
+        this.lastSaveHardwareFallback = false;
         this.totalPages = await pdfEngine.load(file);
         const meta = await pdfEngine.readMetadataID(file);
         const existingID = meta.id;
-        if (existingID) {
+        this.signaturesChain = meta.signatures || [];
+        if (existingID || this.signaturesChain.length > 0) {
             this.includeAudit = true;
             this.toast(i18n.t('previousSigDetected'));
-            this.detectedRefId = existingID;
-            this.detectedAssertions = meta.assertions || [];
+            this.detectedRefId = existingID || this.signaturesChain[this.signaturesChain.length - 1]?.refId || '';
+            const latestSignature = this.signaturesChain[this.signaturesChain.length - 1];
+            this.detectedAssertions = latestSignature?.webauthnData ? [{
+                publicKey: latestSignature.webauthnData.publicKey,
+                assertion: latestSignature.webauthnData.assertion
+            }] : (meta.assertions || []);
+            this.previousHashManuallyVerified = false;
             this.handoverHashInput = '';
             this.handoverResult = 'idle';
             this.showHandoverModal = true;
@@ -694,6 +739,8 @@ export class PdfWorkspace extends LitElement {
             }, 50);
         } else {
             this.includeAudit = false;
+            this.detectedRefId = '';
+            this.detectedAssertions = [];
         }
         this.currentPage = 1;
         this.scale = window.innerWidth < 768 ? 0.55 : 1.0;
@@ -720,14 +767,21 @@ export class PdfWorkspace extends LitElement {
 
     async checkHandover() {
         if (!this.loadedBytes) return;
-        const input = this.handoverHashInput.replace(/[\s\n-]/g, '').trim().toLowerCase();
+        const inputPin = this.extractPin6(this.handoverHashInput);
+        const fullHashInput = this.extractHex64(this.handoverHashInput);
         const actual = await pdfEngine.getFileHash(this.loadedBytes);
+        const expectedCode = pdfEngine.getSixDigitCode(actual);
 
-        if (input === actual.toLowerCase()) {
-            // Hash matches. Now verify hardware assertions if any.
+        if (inputPin === expectedCode || fullHashInput === actual.toLowerCase()) {
+            // Hash matches. Now verify prior chain integrity/proofs.
             let hwVerified = true;
-            if (this.detectedAssertions.length > 0) {
+            if (this.signaturesChain.length > 0) {
+                const chainCheck = await pdfEngine.verifySignatureChain(this.loadedBytes);
+                hwVerified = chainCheck.valid;
+            } else if (this.detectedAssertions.length > 0) {
+                // Legacy fallback for old files that only stored creator assertions.
                 for (const a of this.detectedAssertions) {
+                    if (!a?.publicKey) continue;
                     const parsed = JSON.parse(a.assertion);
                     const ok = await WebAuthnService.verifyLocal(
                         a.publicKey,
@@ -742,8 +796,9 @@ export class PdfWorkspace extends LitElement {
             if (hwVerified) {
                 this.handoverResult = 'success';
                 this.isVerified = true;
+                this.previousHashManuallyVerified = true;
                 const hwText = this.detectedAssertions.length > 0 ? ' + Hardware Sign Verified' : '';
-                this.validationMsg = `Previous signature hash verified (Ref ${this.detectedRefId})${hwText}`;
+                this.validationMsg = i18n.t('handoverVerifiedMsg').replace('{ref}', this.detectedRefId) + hwText;
                 setTimeout(() => {
                     this.closeHandoverModal(false);
                     this.toast(i18n.t('integrityVerified'));
@@ -751,12 +806,13 @@ export class PdfWorkspace extends LitElement {
             } else {
                 this.handoverResult = 'fail';
                 this.isVerified = false;
-                this.validationMsg = `Hardware assertion verification failed for Ref ${this.detectedRefId}`;
+                this.validationMsg = i18n.t('handoverHardwareFailMsg').replace('{ref}', this.detectedRefId);
             }
         } else {
             this.handoverResult = 'fail';
             this.isVerified = false;
-            this.validationMsg = `Previous signature hash mismatch (Ref ${this.detectedRefId})`;
+            this.previousHashManuallyVerified = false;
+            this.validationMsg = i18n.t('handoverMismatchMsg').replace('{ref}', this.detectedRefId);
         }
     }
 
@@ -827,6 +883,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     applyToAllPages(id: string) {
+        if (this.isAnnotationLocked(id)) return;
         this.snapshot();
         const sourceAnn = this.annotations.find(a => a.id === id);
         if (!sourceAnn) return;
@@ -865,6 +922,7 @@ export class PdfWorkspace extends LitElement {
         const newAnn: Annotation = {
             id: this.generateId(),
             type, page: this.currentPage - 1, xPct, yPct, widthPct, data, aspectRatio,
+            lockedByChain: false,
         };
 
         this.annotations = [...this.annotations, newAnn];
@@ -889,6 +947,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     deleteAnnotation(id: string) {
+        if (this.isAnnotationLocked(id)) return;
         this.snapshot();
         HapticService.impact();
         this.annotations = this.annotations.filter((a) => a.id !== id);
@@ -899,11 +958,13 @@ export class PdfWorkspace extends LitElement {
     }
 
     updateAnnotation(id: string, updates: Partial<Annotation>) {
+        if (this.isAnnotationLocked(id)) return;
         this.annotations = this.annotations.map((a) => (a.id === id ? {...a, ...updates} : a));
         this.isDirty = true;
     }
 
     updateStyle(id: string, style: Partial<Annotation>) {
+        if (this.isAnnotationLocked(id)) return;
         this.snapshot();
         this.annotations = this.annotations.map((a) => (a.id === id ? {...a, ...style} : a));
         this.isDirty = true;
@@ -918,6 +979,7 @@ export class PdfWorkspace extends LitElement {
     private touchTimer: ReturnType<typeof setTimeout> | null = null;
 
     startDrag(e: MouseEvent | TouchEvent, id: string) {
+        if (this.isAnnotationLocked(id)) return;
         const target = e.target as Element;
         const isControl = !!target.closest('.delete-btn') || !!target.closest('.resize-handle') || !!target.closest('.style-popup');
 
@@ -972,6 +1034,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     startResize(e: MouseEvent | TouchEvent, id: string) {
+        if (this.isAnnotationLocked(id)) return;
         if (e.cancelable) e.preventDefault();
         e.stopPropagation();
         this.isResizing = true;
@@ -1171,6 +1234,7 @@ export class PdfWorkspace extends LitElement {
                 page: this.currentPage - 1,
                 xPct, yPct,
                 widthPct: 0.25,
+                lockedByChain: false,
                 publicKey: result.publicKeySpki,
                 assertion: JSON.stringify({
                     signature: result.signature,
@@ -1198,6 +1262,7 @@ export class PdfWorkspace extends LitElement {
     public reset() {
         pdfEngine.destroy();
         this.annotations = [];
+        this.signaturesChain = [];
         this.history = [];
         this.future = [];
         this.lastSaved = null;
@@ -1206,6 +1271,10 @@ export class PdfWorkspace extends LitElement {
         this.outputFilename = '';
         this.isDirty = false;
         this.isVerified = false;
+        this.lastSavedCode = null;
+        this.lastSaveHardwareFallback = false;
+        this.previousHashManuallyVerified = true;
+        this.openedDocumentHash = '';
         if (this.canvas) {
             this.canvas.getContext('2d')?.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.canvas.width = 0;
@@ -1221,7 +1290,7 @@ export class PdfWorkspace extends LitElement {
 
         // --- Hardware-Backed Signing (WebAuthn) v2.0 Logic ---
         let useHardware = false;
-        const hasVisualSig = this.annotations.some(a => a.type === 'signature' || a.type === 'initials');
+        const hasVisualSig = this.annotations.some(a => a.type !== 'biometric');
         console.log('Save logic:', {hasHardwareSupport: this.hasHardwareSupport, hasVisualSig, pref: this.hardwarePref, isBasic: this.isBasicMode});
 
         if (this.hasHardwareSupport && hasVisualSig) {
@@ -1230,7 +1299,6 @@ export class PdfWorkspace extends LitElement {
             } else if (this.hardwarePref === 'never') {
                 useHardware = false;
             } else if (!this.isBasicMode) {
-                // Advanced Mode + 'prompt' (or null) -> Show Modal
                 console.log('Showing hardware prompt modal...');
                 this.showHardwarePrompt = true;
                 const decision = await new Promise<boolean | null>((resolve) => {
@@ -1239,40 +1307,57 @@ export class PdfWorkspace extends LitElement {
                 if (decision === null) return; // 🛑 USER CANCELLED EVERYTHING
                 useHardware = decision;
             }
-            // IF BasicMode + 'prompt' -> useHardware remains false (Step 3: Bypass)
+            // IF BasicMode + 'prompt' -> useHardware remains false
         }
 
         this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
         await new Promise((r) => setTimeout(r, 50));
 
         try {
-            if (useHardware && this.loadedBytes) {
-                const hashHex = await pdfEngine.getFileHash(this.loadedBytes);
-                const hashBytes = new Uint8Array(hashHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-                const savedEmail = localStorage.getItem('user_email') || 'User';
-                const hwResult = await WebAuthnService.sign(hashBytes, savedEmail);
-                
-                // Add invisible biometric annotation for the audit trail
-                const hwAnn: Annotation = {
-                    id: this.generateId(),
-                    type: 'biometric',
-                    page: -1, // Hidden / Internal
-                    xPct: 0, yPct: 0, widthPct: 0,
-                    publicKey: hwResult.publicKeySpki,
-                    assertion: JSON.stringify({
-                        signature: hwResult.signature,
-                        authData: hwResult.authData,
-                        clientDataJSON: hwResult.clientDataJSON
-                    })
-                };
-                // We add it to the local copy for saving but not to this.annotations to keep UI clean
-                const tempAnns = [...this.annotations, hwAnn];
-                let result = await pdfEngine.saveProfessional(tempAnns, this.pdfName, this.includeAudit, this.includeFooter, this.validationMsg);
-                this.finishSave(result, opts);
-            } else {
-                let result = await pdfEngine.saveProfessional(this.annotations, this.pdfName, this.includeAudit, this.includeFooter, this.validationMsg);
-                this.finishSave(result, opts);
+            const savedEmail = localStorage.getItem('user_email') || 'User';
+            let result;
+            try {
+                result = await pdfEngine.saveProfessional(
+                    this.annotations,
+                    this.pdfName,
+                    this.includeAudit,
+                    this.includeFooter,
+                    this.validationMsg,
+                    {
+                        previousSignatures: this.signaturesChain,
+                        previousHashManuallyVerified: this.previousHashManuallyVerified,
+                        openedDocumentHash: this.openedDocumentHash,
+                        enableWebAuthn: useHardware,
+                        userName: savedEmail,
+                    }
+                );
+            } catch (e: any) {
+                const message = String(e?.message || '');
+                if (useHardware && message.includes('Hardware proof unavailable')) {
+                    this.hardwarePref = 'never';
+                    localStorage.setItem('signer_hardware_pref', 'never');
+                    console.warn('Hardware proof fallback: browser could not embed WebAuthn public key proof; saving as visual-only.');
+                    this.toast(i18n.t('hardwareProofUnavailable') || 'Hardware proof unavailable on this browser. Saved as visual-only.');
+                    result = await pdfEngine.saveProfessional(
+                        this.annotations,
+                        this.pdfName,
+                        this.includeAudit,
+                        this.includeFooter,
+                        this.validationMsg,
+                        {
+                            previousSignatures: this.signaturesChain,
+                            previousHashManuallyVerified: this.previousHashManuallyVerified,
+                            openedDocumentHash: this.openedDocumentHash,
+                            enableWebAuthn: false,
+                            userName: savedEmail,
+                            hardwareFallbackUsed: true,
+                        }
+                    );
+                } else {
+                    throw e;
+                }
             }
+            this.finishSave(result, opts);
         } catch (e: any) {
             console.error('Save Error', e);
             this.toast(e.message.includes('OOM') ? i18n.t('outOfMemory') : `${i18n.t('errorSaving')}: ${e.message}`);
@@ -1280,7 +1365,7 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
-    private async finishSave(result: {pdfBytes: Uint8Array, docId: string, finalHash: string}, opts?: { silentWeb?: boolean; showToast?: boolean }) {
+    private async finishSave(result: {pdfBytes: Uint8Array, docId: string, finalHash: string, finalCode: string, signatures: SignaturePayload[]}, opts?: { silentWeb?: boolean; showToast?: boolean }) {
         const silentWeb = !!opts?.silentWeb;
         const showToast = opts?.showToast ?? true;
         const filename = `${this.outputFilename}.pdf`;
@@ -1300,6 +1385,12 @@ export class PdfWorkspace extends LitElement {
         this.isDirty = false;
         this.lastSavedId = result.docId;
         this.lastSavedHash = result.finalHash;
+        this.lastSavedCode = result.finalCode;
+        this.lastSaveHardwareFallback = !!result.signatures[result.signatures.length - 1]?.hardwareFallbackUsed;
+        this.signaturesChain = result.signatures;
+        this.loadedBytes = result.pdfBytes;
+        this.openedDocumentHash = result.signatures[result.signatures.length - 1]?.integrityAnchorHash || result.finalHash;
+        this.previousHashManuallyVerified = true;
         this.showProofModal = true;
         HapticService.success();
         if (showToast) this.toast(i18n.t('savedMsg'));
@@ -1447,12 +1538,6 @@ export class PdfWorkspace extends LitElement {
                             @click=${this.toggleUIMode}>
                         ${ICONS.cog}<span class="btn-label" style="margin-left:6px;">${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
                     </button>
-                    ${this.hasHardwareSupport ? html`
-                        <button data-testid="btn-add-biometric" class="btn" aria-label="${i18n.t('addBiometric')}"
-                                @click=${this.addBiometric}>
-                            ${ICONS.biometric}<span class="btn-label" style="margin-left:6px;">${i18n.t('addBiometric')}</span>
-                        </button>
-                    ` : ''}
                     ${!this.isBasicMode ? html`
                         <button data-testid="btn-add-initials" class="btn" aria-label="${i18n.t('addInitials')}"
                                 @click=${this.openInitialsModal}>
@@ -1702,17 +1787,19 @@ export class PdfWorkspace extends LitElement {
                         ${this.annotations.filter(ann => ann.page === this.currentPage - 1).map(ann => {
                             const isSelected = this.selectedIds.includes(ann.id);
                             const isText = ann.type === 'date' || ann.type === 'identity';
+                            const isLocked = !!ann.lockedByChain;
                             return html`
-                                <div class="draggable ${isSelected ? 'selected' : ''}"
+                                <div class="draggable ${isSelected ? 'selected' : ''} ${isLocked ? 'locked' : ''}"
                                      data-testid="annotation-${ann.id}"
+                                     data-locked="${isLocked ? 'true' : 'false'}"
                                      role="group"
                                      aria-label="${ann.type} ${i18n.t('annotation') || 'annotation'}"
-                                     style="left:${ann.xPct * 100}%; top:${ann.yPct * 100}%; width:${isText ? 'auto' : (ann.widthPct ? ann.widthPct * 100 + '%' : 'auto')};"
-                                     @mousedown=${(e: any) => this.startDrag(e, ann.id)}
-                                     @touchstart=${(e: any) => this.startDrag(e, ann.id)}>
+                                     style="left:${ann.xPct * 100}%; top:${ann.yPct * 100}%; width:${isText ? 'auto' : (ann.widthPct ? ann.widthPct * 100 + '%' : 'auto')}; ${isLocked ? 'opacity:0.92; cursor:not-allowed;' : ''}"
+                                     @mousedown=${(e: any) => !isLocked && this.startDrag(e, ann.id)}
+                                     @touchstart=${(e: any) => !isLocked && this.startDrag(e, ann.id)}>
                                     <button data-testid="btn-delete-ann" class="delete-btn"
                                             aria-label="${i18n.t('delete') || 'Delete'}"
-                                            style="display:${isSelected ? 'flex' : 'none'};"
+                                            style="display:${isSelected && !isLocked ? 'flex' : 'none'};"
                                             @mousedown=${(e: Event) => {
                                                 e.stopPropagation();
                                                 this.deleteAnnotation(ann.id);
@@ -1722,7 +1809,7 @@ export class PdfWorkspace extends LitElement {
                                                 this.deleteAnnotation(ann.id);
                                             }}>×
                                     </button>
-                                    ${isSelected && isText ? html`
+                                    ${isSelected && isText && !isLocked ? html`
                                         <div class="style-popup" data-testid="style-popup" role="toolbar"
                                              aria-label="${i18n.t('styleToolbar') || 'Style Toolbar'}">
                                             <button data-testid="btn-edit-text"
@@ -1787,7 +1874,7 @@ export class PdfWorkspace extends LitElement {
                                                     }}>📄
                                             </button>
                                         </div>
-                                    ` : isSelected && !isText ? html`
+                                    ` : isSelected && !isText && !isLocked ? html`
                                         <div class="style-popup" data-testid="style-popup" role="toolbar"
                                              aria-label="${i18n.t('styleToolbar') || 'Style Toolbar'}">
                                             <button data-testid="btn-apply-all"
@@ -1802,7 +1889,7 @@ export class PdfWorkspace extends LitElement {
                                     ` : ''}
                                     ${!isText ? html`
                                         <div class="resize-handle" aria-label="${i18n.t('resize') || 'Resize'}"
-                                             style="position:absolute; bottom:-8px; right:-8px; width:16px; height:16px; background:var(--primary); border:3px solid white; border-radius:50%; cursor:nwse-resize; display:${isSelected ? 'block' : 'none'}; box-shadow:var(--shadow-raised);"
+                                             style="position:absolute; bottom:-8px; right:-8px; width:16px; height:16px; background:var(--primary); border:3px solid white; border-radius:50%; cursor:nwse-resize; display:${isSelected && !isLocked ? 'block' : 'none'}; box-shadow:var(--shadow-raised);"
                                              @mousedown=${(e: any) => this.startResize(e, ann.id)}
                                              @touchstart=${(e: any) => this.startResize(e, ann.id)}></div>
                                         <img src="${ann.data}" alt="${ann.type} annotation"
@@ -1834,11 +1921,11 @@ export class PdfWorkspace extends LitElement {
                         </div>
                         <input type="text" class="input-field" style="margin-bottom:15px;"
                                data-testid="input-handover-hash"
-                               aria-label="${i18n.t('pasteHashPlaceholder')}"
+                               aria-label="${i18n.t('handoverCodePlaceholder')}"
                                .value="${this.handoverHashInput}" @input="${(e: any) => {
                             this.handoverHashInput = e.target.value;
                             this.handoverResult = 'idle';
-                        }}" placeholder="${i18n.t('pasteHashPlaceholder')}">
+                        }}" placeholder="${i18n.t('handoverCodePlaceholder')}">
                         ${this.handoverResult === 'success' ? html`
                             <div class="alert-box alert-success" data-testid="handover-success"
                                  .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
@@ -1897,6 +1984,18 @@ export class PdfWorkspace extends LitElement {
                                  data-testid="saved-doc-hash">
                                 ${this.lastSavedHash}
                             </div>
+                            <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600; margin-top:10px;">
+                                ${i18n.t('handoverCodeLabel')}
+                            </div>
+                            <div style="font-family:monospace; font-size:1.2rem; letter-spacing:0.2rem; color:var(--text-main); background:var(--bg-surface); padding:8px; border-radius:6px; margin-top:4px;"
+                                 data-testid="saved-handover-code">
+                                ${this.lastSavedCode || '------'}
+                            </div>
+                            ${this.lastSaveHardwareFallback ? html`
+                                <div class="alert-box alert-warning" data-testid="hardware-fallback-warning" style="margin-top:10px;">
+                                    ${i18n.t('hardwareProofUnavailable')}
+                                </div>
+                            ` : ''}
                         </div>
                         <div class="modal-actions" style="margin-bottom:12px;">
                             <button class="btn btn-primary btn-block" data-testid="btn-copy-hash"

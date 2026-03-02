@@ -17,4 +17,24 @@ export interface Annotation {
     // WebAuthn / Hardware Proofs
     publicKey?: string;    // SPKI Public Key (Base64)
     assertion?: string;    // JSON stringified WebAuthn response (sig, authData, clientData)
+    lockedByChain?: boolean;
+}
+
+export interface SignaturePayload {
+    signerIndex: number;
+    challengeHash: string;
+    openedDocumentHash: string;
+    integrityAnchorHash?: string;
+    previousHashManuallyVerified: boolean;
+    timestampIso: string;
+    signerAnnotationIds: string[];
+    validationLog?: string | null;
+    refId?: string;
+    auditPageIncluded?: boolean;
+    hardwareFallbackUsed?: boolean;
+    isHardwareBacked?: boolean;
+    webauthnData?: {
+        publicKey: string;
+        assertion: string;
+    };
 }
