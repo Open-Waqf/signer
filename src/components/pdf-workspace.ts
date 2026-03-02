@@ -11,9 +11,19 @@ import {sharedStyles} from '../styles/shared-styles';
 import {LANGUAGES} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
 import {WebAuthnService} from '../lib/webauthn-service';
-import {extractHex64} from '../domain/hash';
-import {extractPin6} from '../domain/handover';
 import {preferences} from '../lib/preferences';
+import {
+    applyAnnotationStyle,
+    applyToAllPages as applyToAllPagesStore,
+    createCenteredAnnotation,
+    deleteAnnotationById,
+    isAnnotationLocked as isAnnotationLockedStore,
+    updateAnnotationById
+} from '../features/workspace/annotation-store';
+import {redoHistory, takeSnapshot, undoHistory} from '../features/workspace/history-store';
+import {runHandoverCheck} from '../features/workspace/handover-workflow';
+import {computeDragMove, computeResizeWidthPct} from '../features/workspace/interaction-controller';
+import {executeSave, finalizeSave, resolveHardwareUsage, shareLatestDocument} from '../features/workspace/save-workflow';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
@@ -137,7 +147,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     private isAnnotationLocked(id: string): boolean {
-        return !!this.annotations.find((a) => a.id === id)?.lockedByChain;
+        return isAnnotationLockedStore(this.annotations, id);
     }
 
     addIdentity() {
@@ -663,25 +673,29 @@ export class PdfWorkspace extends LitElement {
     };
 
     snapshot() {
-        const current = JSON.parse(JSON.stringify(this.annotations));
-        this.history = [...this.history, current];
-        this.future = [];
+        const next = takeSnapshot({history: this.history, future: this.future}, this.annotations);
+        this.history = next.history;
+        this.future = next.future;
     }
 
     undo() {
-        if (this.history.length === 0) return;
+        const result = undoHistory({history: this.history, future: this.future}, this.annotations);
+        if (!result.changed) return;
         HapticService.impact();
-        this.future = [JSON.parse(JSON.stringify(this.annotations)), ...this.future];
-        this.annotations = this.history.pop()!;
+        this.history = result.state.history;
+        this.future = result.state.future;
+        this.annotations = result.annotations;
         this.selectedIds = [];
         this.isDirty = true;
     }
 
     redo() {
-        if (this.future.length === 0) return;
+        const result = redoHistory({history: this.history, future: this.future}, this.annotations);
+        if (!result.changed) return;
         HapticService.impact();
-        this.history = [...this.history, JSON.parse(JSON.stringify(this.annotations))];
-        this.annotations = this.future.shift()!;
+        this.history = result.state.history;
+        this.future = result.state.future;
+        this.annotations = result.annotations;
         this.selectedIds = [];
         this.isDirty = true;
     }
@@ -753,52 +767,39 @@ export class PdfWorkspace extends LitElement {
 
     async checkHandover() {
         if (!this.loadedBytes) return;
-        const inputPin = extractPin6(this.handoverHashInput);
-        const fullHashInput = extractHex64(this.handoverHashInput);
-        const actual = await pdfEngine.getFileHash(this.loadedBytes);
-        const expectedCode = pdfEngine.getSixDigitCode(actual);
+        const result = await runHandoverCheck({
+            handoverInput: this.handoverHashInput,
+            loadedBytes: this.loadedBytes,
+            signaturesChain: this.signaturesChain,
+            detectedAssertions: this.detectedAssertions,
+            detectedRefId: this.detectedRefId,
+            deps: {
+                getFileHash: (bytes) => pdfEngine.getFileHash(bytes),
+                getSixDigitCode: (hash) => pdfEngine.getSixDigitCode(hash),
+                verifySignatureChain: (bytes) => pdfEngine.verifySignatureChain(bytes),
+                verifyLocalAssertion: (publicKey, signature, authData, clientDataJSON) =>
+                    WebAuthnService.verifyLocal(publicKey, signature, authData, clientDataJSON),
+            },
+        });
 
-        if (inputPin === expectedCode || fullHashInput === actual.toLowerCase()) {
-            // Hash matches. Now verify prior chain integrity/proofs.
-            let hwVerified = true;
-            if (this.signaturesChain.length > 0) {
-                const chainCheck = await pdfEngine.verifySignatureChain(this.loadedBytes);
-                hwVerified = chainCheck.valid;
-            } else if (this.detectedAssertions.length > 0) {
-                // Legacy fallback for old files that only stored creator assertions.
-                for (const a of this.detectedAssertions) {
-                    if (!a?.publicKey) continue;
-                    const parsed = JSON.parse(a.assertion);
-                    const ok = await WebAuthnService.verifyLocal(
-                        a.publicKey,
-                        parsed.signature,
-                        parsed.authData,
-                        parsed.clientDataJSON
-                    );
-                    if (!ok) hwVerified = false;
-                }
-            }
+        this.handoverResult = result.handoverResult;
+        this.isVerified = result.isVerified;
+        this.previousHashManuallyVerified = result.previousHashManuallyVerified;
+        const validationBase = result.validationMessageKey === 'handoverVerifiedMsg'
+            ? i18n.t('handoverVerifiedMsg')
+            : result.validationMessageKey === 'handoverHardwareFailMsg'
+                ? i18n.t('handoverHardwareFailMsg')
+                : i18n.t('handoverMismatchMsg');
+        this.validationMsg = validationBase.replace('{ref}', this.detectedRefId);
+        if (result.appendHardwareVerifiedSuffix) {
+            this.validationMsg += ' + Hardware Sign Verified';
+        }
 
-            if (hwVerified) {
-                this.handoverResult = 'success';
-                this.isVerified = true;
-                this.previousHashManuallyVerified = true;
-                const hwText = this.detectedAssertions.length > 0 ? ' + Hardware Sign Verified' : '';
-                this.validationMsg = i18n.t('handoverVerifiedMsg').replace('{ref}', this.detectedRefId) + hwText;
-                setTimeout(() => {
-                    this.closeHandoverModal(false);
-                    this.toast(i18n.t('integrityVerified'));
-                }, 1500);
-            } else {
-                this.handoverResult = 'fail';
-                this.isVerified = false;
-                this.validationMsg = i18n.t('handoverHardwareFailMsg').replace('{ref}', this.detectedRefId);
-            }
-        } else {
-            this.handoverResult = 'fail';
-            this.isVerified = false;
-            this.previousHashManuallyVerified = false;
-            this.validationMsg = i18n.t('handoverMismatchMsg').replace('{ref}', this.detectedRefId);
+        if (result.shouldAutoClose) {
+            setTimeout(() => {
+                this.closeHandoverModal(false);
+                this.toast(i18n.t('integrityVerified'));
+            }, 1500);
         }
     }
 
@@ -871,45 +872,31 @@ export class PdfWorkspace extends LitElement {
     applyToAllPages(id: string) {
         if (this.isAnnotationLocked(id)) return;
         this.snapshot();
-        const sourceAnn = this.annotations.find(a => a.id === id);
-        if (!sourceAnn) return;
-
-        const newAnnotations: Annotation[] = [];
-        for (let p = 0; p < this.totalPages; p++) {
-            if (p === sourceAnn.page) continue;
-            const exists = this.annotations.some(a =>
-                a.page === p && a.type === sourceAnn.type &&
-                Math.abs(a.xPct - sourceAnn.xPct) < 0.01 && Math.abs(a.yPct - sourceAnn.yPct) < 0.01 && a.data === sourceAnn.data
-            );
-            if (!exists) {
-                newAnnotations.push({...sourceAnn, id: this.generateId(), page: p});
-            }
-        }
-        if (newAnnotations.length > 0) {
-            this.annotations = [...this.annotations, ...newAnnotations];
+        const applied = applyToAllPagesStore({
+            annotations: this.annotations,
+            id,
+            totalPages: this.totalPages,
+            generateId: () => this.generateId(),
+        });
+        if (applied.addedCount > 0) {
+            this.annotations = applied.annotations;
             this.isDirty = true;
-            this.toast(i18n.t('appliedToPages').replace('{count}', newAnnotations.length.toString()));
+            this.toast(i18n.t('appliedToPages').replace('{count}', applied.addedCount.toString()));
         }
     }
 
     addAnnotation(type: AnnotationType, data: string, aspectRatio = 1) {
         this.snapshot();
         HapticService.impact();
-        const pageRect = this.container.getBoundingClientRect();
-        const viewportRect = this.viewport.getBoundingClientRect();
-        const screenCenterX = viewportRect.left + viewportRect.width / 2;
-        const screenCenterY = viewportRect.top + viewportRect.height / 2;
-        const relativeX = screenCenterX - pageRect.left;
-        const relativeY = screenCenterY - pageRect.top;
-        const xPct = Math.max(0.1, Math.min(0.8, relativeX / pageRect.width));
-        const yPct = Math.max(0.1, Math.min(0.8, relativeY / pageRect.height));
-        const widthPct = type === 'initials' ? 0.15 : 0.25;
-
-        const newAnn: Annotation = {
-            id: this.generateId(),
-            type, page: this.currentPage - 1, xPct, yPct, widthPct, data, aspectRatio,
-            lockedByChain: false,
-        };
+        const newAnn = createCenteredAnnotation({
+            type,
+            data,
+            aspectRatio,
+            currentPage: this.currentPage,
+            pageRect: this.container.getBoundingClientRect(),
+            viewportRect: this.viewport.getBoundingClientRect(),
+            generateId: () => this.generateId(),
+        });
 
         this.annotations = [...this.annotations, newAnn];
         this.selectedIds = [newAnn.id];
@@ -936,7 +923,7 @@ export class PdfWorkspace extends LitElement {
         if (this.isAnnotationLocked(id)) return;
         this.snapshot();
         HapticService.impact();
-        this.annotations = this.annotations.filter((a) => a.id !== id);
+        this.annotations = deleteAnnotationById(this.annotations, id);
         if (this.selectedIds.includes(id)) {
             this.selectedIds = this.selectedIds.filter(selId => selId !== id);
         }
@@ -945,14 +932,14 @@ export class PdfWorkspace extends LitElement {
 
     updateAnnotation(id: string, updates: Partial<Annotation>) {
         if (this.isAnnotationLocked(id)) return;
-        this.annotations = this.annotations.map((a) => (a.id === id ? {...a, ...updates} : a));
+        this.annotations = updateAnnotationById(this.annotations, id, updates);
         this.isDirty = true;
     }
 
     updateStyle(id: string, style: Partial<Annotation>) {
         if (this.isAnnotationLocked(id)) return;
         this.snapshot();
-        this.annotations = this.annotations.map((a) => (a.id === id ? {...a, ...style} : a));
+        this.annotations = applyAnnotationStyle(this.annotations, id, style);
         this.isDirty = true;
     }
 
@@ -1048,99 +1035,42 @@ export class PdfWorkspace extends LitElement {
         };
 
         if (this.isDragging) {
-            const newX = clientX - rect.left - this.dragOffset.x;
-            const newY = clientY - rect.top - this.dragOffset.y;
-            let nextXPct = Math.max(0, Math.min(0.95, newX / rect.width));
-            let nextYPct = Math.max(0, Math.min(0.95, newY / rect.height));
-
-            let visualWidthPct = ann.widthPct || 0.1;
-            let visualHeightPct = visualWidthPct * (ann.aspectRatio || 1);
             const contentEl = this.shadowRoot?.querySelector('.draggable.selected img, .draggable.selected .text-content') as HTMLElement;
-            if (contentEl && contentEl.offsetWidth > 0 && contentEl.offsetHeight > 0) {
-                visualWidthPct = contentEl.offsetWidth / rect.width;
-                visualHeightPct = contentEl.offsetHeight / rect.height;
-            }
-            const centerX = nextXPct + (visualWidthPct / 2);
-            const centerY = nextYPct + (visualHeightPct / 2);
-            const SNAP_THRESHOLD = 0.015;
-            this.guideLines = [];
+            const move = computeDragMove({
+                clientX,
+                clientY,
+                rect,
+                ann,
+                annotations: this.annotations,
+                selectedIds: this.selectedIds,
+                dragOffset: this.dragOffset,
+                visualSize: contentEl && contentEl.offsetWidth > 0 && contentEl.offsetHeight > 0
+                    ? {
+                        widthPct: contentEl.offsetWidth / rect.width,
+                        heightPct: contentEl.offsetHeight / rect.height,
+                    }
+                    : undefined,
+            });
+            this.guideLines = move.guideLines;
 
-            // 1. Check center of page
-            if (Math.abs(centerX - 0.5) < SNAP_THRESHOLD) {
-                nextXPct = 0.5 - (visualWidthPct / 2);
-                this.guideLines.push({ axis: 'x', pos: 0.5 });
-            }
-            if (Math.abs(centerY - 0.5) < SNAP_THRESHOLD) {
-                nextYPct = 0.5 - (visualHeightPct / 2);
-                this.guideLines.push({ axis: 'y', pos: 0.5 });
-            }
-
-            // 2. Check alignment with other annotations
-            const otherAnns = this.annotations.filter(a => a.page === ann.page && a.id !== ann.id);
-            for (const other of otherAnns) {
-                const otherWidthPct = other.widthPct || 0.1;
-                const otherHeightPct = otherWidthPct * (other.aspectRatio || 1);
-                
-                const otherCenterX = other.xPct + otherWidthPct / 2;
-                const otherCenterY = other.yPct + otherHeightPct / 2;
-
-                // X-axis alignment (center, left edge, right edge)
-                if (Math.abs(centerX - otherCenterX) < SNAP_THRESHOLD) {
-                    nextXPct = otherCenterX - (visualWidthPct / 2);
-                    this.guideLines.push({ axis: 'x', pos: otherCenterX });
-                } else if (Math.abs(nextXPct - other.xPct) < SNAP_THRESHOLD) {
-                    nextXPct = other.xPct;
-                    this.guideLines.push({ axis: 'x', pos: other.xPct });
-                } else if (Math.abs((nextXPct + visualWidthPct) - (other.xPct + otherWidthPct)) < SNAP_THRESHOLD) {
-                    nextXPct = (other.xPct + otherWidthPct) - visualWidthPct;
-                    this.guideLines.push({ axis: 'x', pos: other.xPct + otherWidthPct });
-                }
-
-                // Y-axis alignment (center, top edge, bottom edge)
-                if (Math.abs(centerY - otherCenterY) < SNAP_THRESHOLD) {
-                    nextYPct = otherCenterY - (visualHeightPct / 2);
-                    this.guideLines.push({ axis: 'y', pos: otherCenterY });
-                } else if (Math.abs(nextYPct - other.yPct) < SNAP_THRESHOLD) {
-                    nextYPct = other.yPct;
-                    this.guideLines.push({ axis: 'y', pos: other.yPct });
-                } else if (Math.abs((nextYPct + visualHeightPct) - (other.yPct + otherHeightPct)) < SNAP_THRESHOLD) {
-                    nextYPct = (other.yPct + otherHeightPct) - visualHeightPct;
-                    this.guideLines.push({ axis: 'y', pos: other.yPct + otherHeightPct });
-                }
-            }
-
-            if (Math.abs(nextXPct - ann.xPct) > 0.0005 || Math.abs(nextYPct - ann.yPct) > 0.0005) {
+            if (move.changed) {
                 takeSnapshotIfNeeded();
                 this.interactionChanged = true;
-                const dx = nextXPct - ann.xPct;
-                const dy = nextYPct - ann.yPct;
-                this.annotations = this.annotations.map(a => {
-                    if (this.selectedIds.includes(a.id)) {
-                        return { ...a, xPct: a.xPct + dx, yPct: a.yPct + dy };
-                    }
-                    return a;
-                });
+                this.annotations = move.nextAnnotations;
                 this.isDirty = true;
-                
-                // Update drag offset so subsequent moves calculate relative to the new snapped position
-                this.dragOffset = {
-                    x: clientX - rect.left - nextXPct * rect.width,
-                    y: clientY - rect.top - nextYPct * rect.height
-                };
+                this.dragOffset = move.nextDragOffset;
             }
 
             // Collision detection for popup/delete
-            this.container.toggleAttribute('data-near-top', nextYPct < 0.1);
-            this.container.toggleAttribute('data-near-right', nextXPct > 0.85);
+            this.container.toggleAttribute('data-near-top', move.nextYPct < 0.1);
+            this.container.toggleAttribute('data-near-right', move.nextXPct > 0.85);
 
         } else if (this.isResizing) {
-            const mouseRelX = clientX - rect.left;
-            const newWidthPx = Math.max(mouseRelX - ann.xPct * rect.width, rect.width * 0.05);
-            const nextWidthPct = Math.min(0.8, newWidthPx / rect.width);
-            if (Math.abs(nextWidthPct - (ann.widthPct || 0)) > 0.0005) {
+            const resized = computeResizeWidthPct({clientX, rect, ann});
+            if (resized.changed) {
                 takeSnapshotIfNeeded();
                 this.interactionChanged = true;
-                this.updateAnnotation(primaryId, {widthPct: nextWidthPct});
+                this.updateAnnotation(primaryId, {widthPct: resized.widthPct});
             }
         }
     };
@@ -1274,76 +1204,58 @@ export class PdfWorkspace extends LitElement {
             return;
         }
 
-        // --- Hardware-Backed Signing (WebAuthn) v2.0 Logic ---
-        let useHardware = false;
         const hasVisualSig = this.annotations.some(a => a.type !== 'biometric');
         console.log('Save logic:', {hasHardwareSupport: this.hasHardwareSupport, hasVisualSig, pref: this.hardwarePref, isBasic: this.isBasicMode});
 
-        if (this.hasHardwareSupport && hasVisualSig) {
-            if (this.hardwarePref === 'always') {
-                useHardware = true;
-            } else if (this.hardwarePref === 'never') {
-                useHardware = false;
-            } else if (!this.isBasicMode) {
+        const decision = await resolveHardwareUsage({
+            hasHardwareSupport: this.hasHardwareSupport,
+            hasVisualSig,
+            hardwarePref: this.hardwarePref,
+            isBasicMode: this.isBasicMode,
+            requestPromptDecision: async () => {
                 console.log('Showing hardware prompt modal...');
                 this.showHardwarePrompt = true;
-                const decision = await new Promise<boolean | null>((resolve) => {
+                return new Promise<boolean | null>((resolve) => {
                     this.hardwareResolver = resolve;
                 });
-                if (decision === null) return; // 🛑 USER CANCELLED EVERYTHING
-                useHardware = decision;
-            }
-            // IF BasicMode + 'prompt' -> useHardware remains false
-        }
+            },
+        });
+        if (decision.cancelled) return;
 
         this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
         await new Promise((r) => setTimeout(r, 50));
 
         try {
-            const savedEmail = preferences.getUserEmail('User');
-            let result;
-            try {
-                result = await pdfEngine.saveProfessional(
-                    this.annotations,
-                    this.pdfName,
-                    this.includeAudit,
-                    this.includeFooter,
-                    this.validationMsg,
-                    {
-                        previousSignatures: this.signaturesChain,
-                        previousHashManuallyVerified: this.previousHashManuallyVerified,
-                        openedDocumentHash: this.openedDocumentHash,
-                        enableWebAuthn: useHardware,
-                        userName: savedEmail,
-                    }
-                );
-            } catch (e: any) {
-                const message = String(e?.message || '');
-                if (useHardware && message.includes('Hardware proof unavailable')) {
-                    this.hardwarePref = 'never';
-                    preferences.setHardwarePref('never');
-                    console.warn('Hardware proof fallback: browser could not embed WebAuthn public key proof; saving as visual-only.');
-                    this.toast(i18n.t('hardwareProofUnavailable') || 'Hardware proof unavailable on this browser. Saved as visual-only.');
-                    result = await pdfEngine.saveProfessional(
-                        this.annotations,
-                        this.pdfName,
-                        this.includeAudit,
-                        this.includeFooter,
-                        this.validationMsg,
-                        {
-                            previousSignatures: this.signaturesChain,
-                            previousHashManuallyVerified: this.previousHashManuallyVerified,
-                            openedDocumentHash: this.openedDocumentHash,
-                            enableWebAuthn: false,
-                            userName: savedEmail,
-                            hardwareFallbackUsed: true,
-                        }
-                    );
-                } else {
-                    throw e;
-                }
+            const executed = await executeSave({
+                deps: {
+                    saveProfessional: (...args: any[]) => (pdfEngine.saveProfessional as any)(...args),
+                    savePdf: (filename, data) => fileService.savePdf(filename, data),
+                    sharePdf: (file, bytes) => fileService.sharePdf(file, bytes),
+                    getSavedEmail: () => preferences.getUserEmail('User'),
+                    setHardwarePrefNever: () => {
+                        this.hardwarePref = 'never';
+                        preferences.setHardwarePref('never');
+                    },
+                    isNativePlatform: () => Capacitor.isNativePlatform(),
+                    toast: (msg) => this.toast(msg),
+                    t: (key) => i18n.t(key),
+                    hapticSuccess: () => HapticService.success(),
+                    setLoading: (loading) => this.dispatchEvent(new CustomEvent('set-loading', {detail: loading, bubbles: true, composed: true})),
+                },
+                annotations: this.annotations,
+                pdfName: this.pdfName,
+                includeAudit: this.includeAudit,
+                includeFooter: this.includeFooter,
+                validationMsg: this.validationMsg,
+                signaturesChain: this.signaturesChain,
+                previousHashManuallyVerified: this.previousHashManuallyVerified,
+                openedDocumentHash: this.openedDocumentHash,
+                useHardware: decision.useHardware,
+            });
+            if (executed.hardwareFallbackUsed) {
+                console.warn('Hardware proof fallback: browser could not embed WebAuthn public key proof; saving as visual-only.');
             }
-            this.finishSave(result, opts);
+            await this.finishSave(executed.result, opts);
         } catch (e: any) {
             console.error('Save Error', e);
             this.toast(e.message.includes('OOM') ? i18n.t('outOfMemory') : `${i18n.t('errorSaving')}: ${e.message}`);
@@ -1354,20 +1266,29 @@ export class PdfWorkspace extends LitElement {
     private async finishSave(result: {pdfBytes: Uint8Array, docId: string, finalHash: string, finalCode: string, signatures: SignaturePayload[]}, opts?: { silentWeb?: boolean; showToast?: boolean }) {
         const silentWeb = !!opts?.silentWeb;
         const showToast = opts?.showToast ?? true;
-        const filename = `${this.outputFilename}.pdf`;
-        this.lastSavedBytes = result.pdfBytes;
-
-        if (!Capacitor.isNativePlatform() && silentWeb) {
-            this.lastSaved = {filename};
-        } else {
-            this.lastSaved = await fileService.savePdf(filename, result.pdfBytes);
-            if (Capacitor.isNativePlatform() && showToast) {
-                setTimeout(() => {
-                    this.toast(i18n.t('exportingFile'));
-                    fileService.sharePdf(this.lastSaved!, this.lastSavedBytes!);
-                }, 200);
-            }
-        }
+        const finalized = await finalizeSave({
+            deps: {
+                saveProfessional: (...args: any[]) => (pdfEngine.saveProfessional as any)(...args),
+                savePdf: (filename, data) => fileService.savePdf(filename, data),
+                sharePdf: (file, bytes) => fileService.sharePdf(file, bytes),
+                getSavedEmail: () => preferences.getUserEmail('User'),
+                setHardwarePrefNever: () => {
+                    this.hardwarePref = 'never';
+                    preferences.setHardwarePref('never');
+                },
+                isNativePlatform: () => Capacitor.isNativePlatform(),
+                toast: (msg) => this.toast(msg),
+                t: (key) => i18n.t(key),
+                hapticSuccess: () => HapticService.success(),
+                setLoading: (loading) => this.dispatchEvent(new CustomEvent('set-loading', {detail: loading, bubbles: true, composed: true})),
+            },
+            result,
+            outputFilename: this.outputFilename,
+            silentWeb,
+            showToast,
+        });
+        this.lastSaved = finalized.saved;
+        this.lastSavedBytes = finalized.savedBytes;
         this.isDirty = false;
         this.lastSavedId = result.docId;
         this.lastSavedHash = result.finalHash;
@@ -1378,8 +1299,6 @@ export class PdfWorkspace extends LitElement {
         this.openedDocumentHash = result.signatures[result.signatures.length - 1]?.integrityAnchorHash || result.finalHash;
         this.previousHashManuallyVerified = true;
         this.showProofModal = true;
-        HapticService.success();
-        if (showToast) this.toast(i18n.t('savedMsg'));
         this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
     }
 
@@ -1410,15 +1329,30 @@ export class PdfWorkspace extends LitElement {
     }
 
     async shareLatest() {
-        if (!this.hasEdits) {
-            this.toast(i18n.t('noChanges'));
-            return;
-        }
-        if (this.isDirty || !this.lastSavedBytes || !this.lastSaved) await this.saveDocument({
-            silentWeb: !Capacitor.isNativePlatform(),
-            showToast: false
+        await shareLatestDocument({
+            deps: {
+                saveProfessional: (...args: any[]) => (pdfEngine.saveProfessional as any)(...args),
+                savePdf: (filename, data) => fileService.savePdf(filename, data),
+                sharePdf: (file, bytes) => fileService.sharePdf(file, bytes),
+                getSavedEmail: () => preferences.getUserEmail('User'),
+                setHardwarePrefNever: () => {
+                    this.hardwarePref = 'never';
+                    preferences.setHardwarePref('never');
+                },
+                isNativePlatform: () => Capacitor.isNativePlatform(),
+                toast: (msg) => this.toast(msg),
+                t: (key) => i18n.t(key),
+                hapticSuccess: () => HapticService.success(),
+                setLoading: (loading) => this.dispatchEvent(new CustomEvent('set-loading', {detail: loading, bubbles: true, composed: true})),
+            },
+            hasEdits: this.hasEdits,
+            isDirty: this.isDirty,
+            lastSavedBytes: this.lastSavedBytes,
+            lastSaved: this.lastSaved,
+            saveIfNeeded: async () => {
+                await this.saveDocument({silentWeb: !Capacitor.isNativePlatform(), showToast: false});
+            },
         });
-        if (this.lastSaved && this.lastSavedBytes) await fileService.sharePdf(this.lastSaved, this.lastSavedBytes);
     }
 
     requestExit() {
