@@ -151,7 +151,8 @@ export class AppRoot extends LitElement {
         try {
             const buffer = await file.arrayBuffer();
             const data = new Uint8Array(buffer);
-            const fileId = await pdfEngine.readMetadataID(new Uint8Array(buffer));
+            const meta = await pdfEngine.readMetadataID(new Uint8Array(buffer));
+            const fileId = meta.id;
             this.verifyFileHash = await pdfEngine.getFileHash(data)
             this.isLoading = false;
 

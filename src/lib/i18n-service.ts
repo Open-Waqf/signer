@@ -1,4 +1,4 @@
-import {config, LanguageCode, LANGUAGES, resources, TranslationKey} from '../i18n/locales';
+import {config, LanguageCode, LANGUAGES, resources} from '../i18n/locales';
 
 class I18nService {
     private currentLang: LanguageCode = 'en';
@@ -39,8 +39,8 @@ class I18nService {
         return this.currentLang;
     }
 
-    t(key: TranslationKey): string {
-        return resources[this.currentLang]?.[key] || resources['en'][key] || key;
+    t(key: any): string {
+        return (resources[this.currentLang] as any)?.[key] || (resources['en'] as any)[key] || key;
     }
 
     setLanguage(lang: LanguageCode) {

@@ -10,6 +10,7 @@ import {ICONS} from '../lib/icons';
 import {sharedStyles} from '../styles/shared-styles';
 import {LANGUAGES} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
+import {WebAuthnService} from '../lib/webauthn-service';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
@@ -17,6 +18,10 @@ export class PdfWorkspace extends LitElement {
     @state() currentPage = 1;
     @state() totalPages = 0;
     @state() scale = 1.0;
+    @state() hasHardwareSupport = false;
+    @state() hardwarePref: 'prompt' | 'always' | 'never' = (localStorage.getItem('signer_hardware_pref') as any) || 'prompt';
+    @state() showHardwarePrompt = false;
+    @state() rememberHardwareChoice = false;
 
     @state() showProofModal = false;
     @state() lastSavedId: string | null = null;
@@ -31,6 +36,7 @@ export class PdfWorkspace extends LitElement {
     @state() handoverHashInput = '';
     @state() handoverResult: 'idle' | 'success' | 'fail' = 'idle';
     @state() detectedRefId = '';
+    @state() detectedAssertions: any[] = [];
 
     @state() selectedIds: string[] = [];
     @state() isDragging = false;
@@ -535,6 +541,7 @@ export class PdfWorkspace extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
+        WebAuthnService.isAvailable().then(avail => this.hasHardwareSupport = avail);
         if (this.activeSidebar === 'annotations' && this.annotations.length === 0) {
             this.activeSidebar = 'thumbnails';
             this.persistActiveSidebar();
@@ -667,11 +674,13 @@ export class PdfWorkspace extends LitElement {
         this.lastSavedId = null;
         this.lastSavedHash = null;
         this.totalPages = await pdfEngine.load(file);
-        const existingID = await pdfEngine.readMetadataID(file);
+        const meta = await pdfEngine.readMetadataID(file);
+        const existingID = meta.id;
         if (existingID) {
             this.includeAudit = true;
             this.toast(i18n.t('previousSigDetected'));
             this.detectedRefId = existingID;
+            this.detectedAssertions = meta.assertions || [];
             this.handoverHashInput = '';
             this.handoverResult = 'idle';
             this.showHandoverModal = true;
@@ -715,13 +724,35 @@ export class PdfWorkspace extends LitElement {
         const actual = await pdfEngine.getFileHash(this.loadedBytes);
 
         if (input === actual.toLowerCase()) {
-            this.handoverResult = 'success';
-            this.isVerified = true;
-            this.validationMsg = `Previous signature hash verified (Ref ${this.detectedRefId})`;
-            setTimeout(() => {
-                this.closeHandoverModal(false);
-                this.toast(i18n.t('integrityVerified'));
-            }, 1500);
+            // Hash matches. Now verify hardware assertions if any.
+            let hwVerified = true;
+            if (this.detectedAssertions.length > 0) {
+                for (const a of this.detectedAssertions) {
+                    const parsed = JSON.parse(a.assertion);
+                    const ok = await WebAuthnService.verifyLocal(
+                        a.publicKey,
+                        parsed.signature,
+                        parsed.authData,
+                        parsed.clientDataJSON
+                    );
+                    if (!ok) hwVerified = false;
+                }
+            }
+
+            if (hwVerified) {
+                this.handoverResult = 'success';
+                this.isVerified = true;
+                const hwText = this.detectedAssertions.length > 0 ? ' + Hardware Sign Verified' : '';
+                this.validationMsg = `Previous signature hash verified (Ref ${this.detectedRefId})${hwText}`;
+                setTimeout(() => {
+                    this.closeHandoverModal(false);
+                    this.toast(i18n.t('integrityVerified'));
+                }, 1500);
+            } else {
+                this.handoverResult = 'fail';
+                this.isVerified = false;
+                this.validationMsg = `Hardware assertion verification failed for Ref ${this.detectedRefId}`;
+            }
         } else {
             this.handoverResult = 'fail';
             this.isVerified = false;
@@ -1111,6 +1142,55 @@ export class PdfWorkspace extends LitElement {
         this.addAnnotation('date', dateStr, 0.3);
     }
 
+    async addBiometric() {
+        if (!this.loadedBytes) return;
+        this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
+        try {
+            const hashHex = await pdfEngine.getFileHash(this.loadedBytes);
+            // Convert hex to bytes
+            const hashBytes = new Uint8Array(hashHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+            
+            const savedEmail = localStorage.getItem('user_email') || 'User';
+            const result = await WebAuthnService.sign(hashBytes, savedEmail);
+            
+            this.snapshot();
+            HapticService.impact();
+            
+            const pageRect = this.container.getBoundingClientRect();
+            const viewportRect = this.viewport.getBoundingClientRect();
+            const screenCenterX = viewportRect.left + viewportRect.width / 2;
+            const screenCenterY = viewportRect.top + viewportRect.height / 2;
+            const relativeX = screenCenterX - pageRect.left;
+            const relativeY = screenCenterY - pageRect.top;
+            const xPct = Math.max(0.1, Math.min(0.8, relativeX / pageRect.width));
+            const yPct = Math.max(0.1, Math.min(0.8, relativeY / pageRect.height));
+
+            const newAnn: Annotation = {
+                id: this.generateId(),
+                type: 'biometric',
+                page: this.currentPage - 1,
+                xPct, yPct,
+                widthPct: 0.25,
+                publicKey: result.publicKeySpki,
+                assertion: JSON.stringify({
+                    signature: result.signature,
+                    authData: result.authData,
+                    clientDataJSON: result.clientDataJSON
+                })
+            };
+
+            this.annotations = [...this.annotations, newAnn];
+            this.selectedIds = [newAnn.id];
+            this.isDirty = true;
+            this.toast(i18n.t('biometricVerified'));
+        } catch (e: any) {
+            console.error('Biometric Error', e);
+            this.toast(i18n.t('biometricError'));
+        } finally {
+            this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
+        }
+    }
+
     private toast(msg: string) {
         this.dispatchEvent(new CustomEvent('toast', {detail: msg, bubbles: true, composed: true}));
     }
@@ -1134,43 +1214,96 @@ export class PdfWorkspace extends LitElement {
     }
 
     async saveDocument(opts?: { silentWeb?: boolean; showToast?: boolean }) {
-        const silentWeb = !!opts?.silentWeb;
-        const showToast = opts?.showToast ?? true;
-
         if (!this.hasEdits) {
             this.toast(i18n.t('noChanges') || 'No changes');
             return;
         }
+
+        // --- Hardware-Backed Signing (WebAuthn) v2.0 Logic ---
+        let useHardware = false;
+        const hasVisualSig = this.annotations.some(a => a.type === 'signature' || a.type === 'initials');
+        console.log('Save logic:', {hasHardwareSupport: this.hasHardwareSupport, hasVisualSig, pref: this.hardwarePref, isBasic: this.isBasicMode});
+
+        if (this.hasHardwareSupport && hasVisualSig) {
+            if (this.hardwarePref === 'always') {
+                useHardware = true;
+            } else if (this.hardwarePref === 'never') {
+                useHardware = false;
+            } else if (!this.isBasicMode) {
+                // Advanced Mode + 'prompt' (or null) -> Show Modal
+                console.log('Showing hardware prompt modal...');
+                this.showHardwarePrompt = true;
+                const decision = await new Promise<boolean | null>((resolve) => {
+                    this.hardwareResolver = resolve;
+                });
+                if (decision === null) return; // 🛑 USER CANCELLED EVERYTHING
+                useHardware = decision;
+            }
+            // IF BasicMode + 'prompt' -> useHardware remains false (Step 3: Bypass)
+        }
+
         this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
         await new Promise((r) => setTimeout(r, 50));
 
         try {
-            const filename = `${this.outputFilename}.pdf`;
-            let result = await pdfEngine.saveProfessional(this.annotations, this.pdfName, this.includeAudit, this.includeFooter, this.validationMsg);
-            this.lastSavedBytes = result.pdfBytes;
-
-            if (!Capacitor.isNativePlatform() && silentWeb) {
-                this.lastSaved = {filename};
+            if (useHardware && this.loadedBytes) {
+                const hashHex = await pdfEngine.getFileHash(this.loadedBytes);
+                const hashBytes = new Uint8Array(hashHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+                const savedEmail = localStorage.getItem('user_email') || 'User';
+                const hwResult = await WebAuthnService.sign(hashBytes, savedEmail);
+                
+                // Add invisible biometric annotation for the audit trail
+                const hwAnn: Annotation = {
+                    id: this.generateId(),
+                    type: 'biometric',
+                    page: -1, // Hidden / Internal
+                    xPct: 0, yPct: 0, widthPct: 0,
+                    publicKey: hwResult.publicKeySpki,
+                    assertion: JSON.stringify({
+                        signature: hwResult.signature,
+                        authData: hwResult.authData,
+                        clientDataJSON: hwResult.clientDataJSON
+                    })
+                };
+                // We add it to the local copy for saving but not to this.annotations to keep UI clean
+                const tempAnns = [...this.annotations, hwAnn];
+                let result = await pdfEngine.saveProfessional(tempAnns, this.pdfName, this.includeAudit, this.includeFooter, this.validationMsg);
+                this.finishSave(result, opts);
             } else {
-                this.lastSaved = await fileService.savePdf(filename, result.pdfBytes);
-                if (Capacitor.isNativePlatform() && showToast) {
-                    setTimeout(() => {
-                        this.toast(i18n.t('exportingFile'));
-                        fileService.sharePdf(this.lastSaved!, this.lastSavedBytes!);
-                    }, 200);
-                }
+                let result = await pdfEngine.saveProfessional(this.annotations, this.pdfName, this.includeAudit, this.includeFooter, this.validationMsg);
+                this.finishSave(result, opts);
             }
-            this.isDirty = false;
-            this.lastSavedId = result.docId;
-            this.lastSavedHash = result.finalHash;
-            this.showProofModal = true;
-            HapticService.success();
-            if (showToast) this.toast(i18n.t('savedMsg'));
         } catch (e: any) {
+            console.error('Save Error', e);
             this.toast(e.message.includes('OOM') ? i18n.t('outOfMemory') : `${i18n.t('errorSaving')}: ${e.message}`);
-        } finally {
             this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
         }
+    }
+
+    private async finishSave(result: {pdfBytes: Uint8Array, docId: string, finalHash: string}, opts?: { silentWeb?: boolean; showToast?: boolean }) {
+        const silentWeb = !!opts?.silentWeb;
+        const showToast = opts?.showToast ?? true;
+        const filename = `${this.outputFilename}.pdf`;
+        this.lastSavedBytes = result.pdfBytes;
+
+        if (!Capacitor.isNativePlatform() && silentWeb) {
+            this.lastSaved = {filename};
+        } else {
+            this.lastSaved = await fileService.savePdf(filename, result.pdfBytes);
+            if (Capacitor.isNativePlatform() && showToast) {
+                setTimeout(() => {
+                    this.toast(i18n.t('exportingFile'));
+                    fileService.sharePdf(this.lastSaved!, this.lastSavedBytes!);
+                }, 200);
+            }
+        }
+        this.isDirty = false;
+        this.lastSavedId = result.docId;
+        this.lastSavedHash = result.finalHash;
+        this.showProofModal = true;
+        HapticService.success();
+        if (showToast) this.toast(i18n.t('savedMsg'));
+        this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
     }
 
     handleStampUpload(e: Event) {
@@ -1228,6 +1361,46 @@ export class PdfWorkspace extends LitElement {
         localStorage.setItem('signer_ui_mode', this.uiMode);
     }
 
+    private getHardwareIcon() {
+        if (this.hardwarePref === 'always') return ICONS.biometric;
+        if (this.hardwarePref === 'never') return html`
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+                <path d="M5 12c0-2.8 2.2-5 5-5s5 2.2 5 5"/>
+                <path d="M10 20v-4"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>`;
+        return html`
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+                <path d="M10 20v-4"/>
+                <circle cx="18" cy="19" r="3"/>
+                <line x1="18" y1="16" x2="18" y2="16.01"/>
+            </svg>`;
+    }
+
+    toggleHardwarePref() {
+        if (this.hardwarePref === 'prompt') this.hardwarePref = 'always';
+        else if (this.hardwarePref === 'always') this.hardwarePref = 'never';
+        else this.hardwarePref = 'prompt';
+        localStorage.setItem('signer_hardware_pref', this.hardwarePref);
+        this.toast(`${i18n.t('hardwareSign') || 'Hardware Sign'}: ${this.hardwarePref.toUpperCase()}`);
+    }
+
+    private hardwareResolver: ((val: boolean | null) => void) | null = null;
+
+    async resolveHardwarePrompt(choice: boolean | null) {
+        if (choice !== null && this.rememberHardwareChoice) {
+            this.hardwarePref = choice ? 'always' : 'never';
+            localStorage.setItem('signer_hardware_pref', this.hardwarePref);
+        }
+        this.showHardwarePrompt = false;
+        if (this.hardwareResolver) {
+            this.hardwareResolver(choice);
+            this.hardwareResolver = null;
+        }
+    }
+
     render() {
         const saveDisabled = !this.pdfName || !this.hasEdits;
         const shareDisabled = !this.pdfName || !this.hasEdits;
@@ -1274,6 +1447,12 @@ export class PdfWorkspace extends LitElement {
                             @click=${this.toggleUIMode}>
                         ${ICONS.cog}<span class="btn-label" style="margin-left:6px;">${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
                     </button>
+                    ${this.hasHardwareSupport ? html`
+                        <button data-testid="btn-add-biometric" class="btn" aria-label="${i18n.t('addBiometric')}"
+                                @click=${this.addBiometric}>
+                            ${ICONS.biometric}<span class="btn-label" style="margin-left:6px;">${i18n.t('addBiometric')}</span>
+                        </button>
+                    ` : ''}
                     ${!this.isBasicMode ? html`
                         <button data-testid="btn-add-initials" class="btn" aria-label="${i18n.t('addInitials')}"
                                 @click=${this.openInitialsModal}>
@@ -1291,6 +1470,10 @@ export class PdfWorkspace extends LitElement {
                         <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
                                 @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
                             ${ICONS.stamp}<span class="btn-label" style="margin-left:6px;">${i18n.t('addStamp')}</span>
+                        </button>
+                        <button data-testid="btn-hw-pref" class="btn" aria-label="Hardware Sign Preference"
+                                @click=${this.toggleHardwarePref}>
+                            ${this.getHardwareIcon()}<span class="btn-label" style="margin-left:6px;">${i18n.t('hardwareSign') || 'Hardware Sign'}: ${this.hardwarePref.toUpperCase()}</span>
                         </button>
                     ` : ''}
                 </div>
@@ -1368,6 +1551,12 @@ export class PdfWorkspace extends LitElement {
                         @click=${this.toggleUIMode}>
                     ${ICONS.cog} <span>${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
                 </button>
+                ${(this.hasHardwareSupport && !this.isBasicMode) ? html`
+                    <button data-testid="m-btn-hw-pref" class="btn btn-tool" aria-label="Hardware Sign Preference"
+                            @click=${this.toggleHardwarePref}>
+                        ${this.getHardwareIcon()} <span>${i18n.t('hardwareSign') || 'Hardware Sign'}: ${this.hardwarePref.toUpperCase()}</span>
+                    </button>
+                ` : ''}
                 ${!this.isBasicMode ? html`
                     <button data-testid="m-btn-add-initials" class="btn btn-tool" aria-label="${i18n.t('addInitials')}"
                             @click=${this.openInitialsModal}>
@@ -1750,6 +1939,39 @@ export class PdfWorkspace extends LitElement {
                             <button class="btn btn-primary" data-testid="btn-save-prompt" style="flex:1;"
                                     @click=${this.saveCustomPrompt}>
                                 ${i18n.t('done') || 'Save'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+
+            ${this.showHardwarePrompt ? html`
+                <div class="modal-overlay" @click=${() => this.resolveHardwarePrompt(null)}>
+                    <div class="modal-card" data-testid="hardware-prompt-modal" role="dialog" aria-modal="true"
+                         aria-labelledby="hw-prompt-title" @click=${(e: Event) => e.stopPropagation()}>
+                        <h3 id="hw-prompt-title" style="margin-top:0;">${i18n.t('secureYourSignature') || 'Secure your signature?'}</h3>
+                        <p style="font-size:0.95rem; color:var(--text-sub); margin-bottom:20px;">
+                            ${i18n.t('secureYourSignatureHelp') || 'Add an invisible, mathematically verifiable hardware lock using FaceID, TouchID, or a Security Key.'}
+                        </p>
+                        
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:20px; cursor:pointer; font-size:0.9rem;">
+                            <input type="checkbox" id="remember-hardware-pref" .checked=${this.rememberHardwareChoice} 
+                                   @change=${(e: any) => this.rememberHardwareChoice = e.target.checked}>
+                            ${i18n.t('rememberMyChoice') || "Remember my choice (Don't ask again)"}
+                        </label>
+
+                        <div class="modal-actions">
+                            <button class="btn btn-primary" data-testid="btn-hw-yes" style="flex:1 1 100%;"
+                                    @click=${() => this.resolveHardwarePrompt(true)}>
+                                ${i18n.t('yesSecureIt') || 'Yes, Secure It'}
+                            </button>
+                            <button class="btn" data-testid="btn-hw-no" style="flex:1;"
+                                    @click=${() => this.resolveHardwarePrompt(false)}>
+                                ${i18n.t('noStandardSave') || 'No, Standard Save'}
+                            </button>
+                            <button class="btn" data-testid="btn-hw-cancel" style="flex:1;"
+                                    @click=${() => this.resolveHardwarePrompt(null)}>
+                                ${i18n.t('cancelSave') || 'Cancel'}
                             </button>
                         </div>
                     </div>

@@ -22,6 +22,7 @@ device's RAM.
 ### 🛡️ Security & Trust
 
 * **Zero-Knowledge Architecture:** Documents never leave your device.
+* **Hardware-Backed Signing (WebAuthn):** Sign using **FaceID, TouchID, or YubiKey**. Generates a local cryptographic proof (FIDO2) embedded in the PDF for superior non-repudiation.
 * **Dual-Layer Verification:**
     1. **Metadata Check (Internal):** Instantly identifies files processed by the app via hidden metadata markers.
     2. **Strict Integrity Check (External):** Uses military-grade `crypto.subtle` SHA-256 hashing to prove

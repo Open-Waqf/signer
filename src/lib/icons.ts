@@ -50,6 +50,16 @@ export const ICONS = {
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
         </svg>`,
+    biometric: html`
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+            <path d="M5 12c0-2.8 2.2-5 5-5s5 2.2 5 5"/>
+            <path d="M8 12c0-1.1.9-2 2-2s2 .9 2 2"/>
+            <path d="M10 20v-4"/>
+            <path d="M13 18v-2"/>
+            <path d="M7 18v-2"/>
+        </svg>`,
     save: html`
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round">

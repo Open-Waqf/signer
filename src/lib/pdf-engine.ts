@@ -192,6 +192,11 @@ export class PdfEngine {
                 desc = `IDENTITY CLAIM: ${email}`;
             }
 
+            // If Biometric, log the credential ID
+            if (a.type === 'biometric') {
+                desc = `HARDWARE SIGN: Credential ${a.id.substring(0, 8)}... (WebAuthn/FIDO2)`;
+            }
+
             events.push(desc);
         });
 
@@ -204,6 +209,13 @@ export class PdfEngine {
             }
         }
         drawLabel("Valid only if digital structure is intact.", 50, 40, 8);
+    }
+
+    private hexToRgb(hex: string) {
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+        return rgb(r, g, b);
     }
 
     async saveProfessional(
@@ -230,6 +242,17 @@ export class PdfEngine {
         pdfDoc.setProducer('Open Waqf Signer');
         pdfDoc.setModificationDate(signingDate);
         pdfDoc.setKeywords([`ref:${docId}`]);
+
+        const biometricAnns = annotations.filter(a => a.type === 'biometric');
+        if (biometricAnns.length > 0) {
+            const assertions = biometricAnns.map(a => ({
+                id: a.id,
+                publicKey: a.publicKey,
+                assertion: a.assertion
+            }));
+            // Store as a hidden JSON blob in the Creator field (standard but often unused)
+            pdfDoc.setCreator(`Open Waqf Signer | Assertions:${JSON.stringify(assertions)}`);
+        }
 
         const identityAnn = annotations.find(a => a.type === 'identity');
         if (identityAnn && identityAnn.data) {
@@ -259,7 +282,25 @@ export class PdfEngine {
             const page = pages[ann.page];
             const {width, height} = page.getSize();
 
-            if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
+            if (ann.type === 'biometric') {
+                const targetWidth = width * (ann.widthPct || 0.2);
+                const targetHeight = 25; // Fixed height for biometric seal
+                const x = width * ann.xPct;
+                const y = height - (height * ann.yPct) - targetHeight;
+                
+                const textColor = ann.color ? this.hexToRgb(ann.color) : rgb(0, 0, 0.5);
+                page.drawRectangle({
+                    x, y, width: targetWidth, height: targetHeight,
+                    borderWidth: 1, borderColor: textColor,
+                    color: rgb(0.95, 0.95, 1)
+                });
+                page.drawText('🛡️ BIOMETRIC VERIFIED', {
+                    x: x + 5, y: y + 10, size: 7, font, color: textColor,
+                });
+                page.drawText(`ID: ${ann.id.substring(0, 8)}`, {
+                    x: x + 5, y: y + 2, size: 5, font, color: textColor,
+                });
+            } else if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
                 const imgBuffer = await this.textToImage(ann.data, ann.fontSize || 12, ann.fontWeight === 'bold', ann.fontFamily || 'Amiri', ann.color || '#000000');
                 const pngImage = await pdfDoc.embedPng(imgBuffer);
                 const scaleFactor = 0.75;
@@ -298,15 +339,28 @@ export class PdfEngine {
         return calculateSHA256(fileData);
     }
 
-    async readMetadataID(fileData: Uint8Array): Promise<string | null> {
+    async readMetadataID(fileData: Uint8Array): Promise<{id: string | null, assertions: any[]}> {
         try {
             const pdfDoc = await PDFDocument.load(fileData, {updateMetadata: false});
             const keywords = pdfDoc.getKeywords();
             const match = keywords?.match(/ref:([A-Za-z0-9]+)/i);
-            return match ? match[1] : null;
+            const id = match ? match[1] : null;
+            
+            let assertions: any[] = [];
+            const creator = pdfDoc.getCreator() || '';
+            const assertionMatch = creator.match(/Assertions:(.*)$/);
+            if (assertionMatch) {
+                try {
+                    assertions = JSON.parse(assertionMatch[1]);
+                } catch (e) {
+                    console.error('Failed to parse assertions from metadata', e);
+                }
+            }
+            
+            return {id, assertions};
         } catch (e) {
             console.error("Read Error", e);
-            return null;
+            return {id: null, assertions: []};
         }
     }
 }

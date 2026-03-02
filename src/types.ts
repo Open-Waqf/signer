@@ -1,4 +1,4 @@
-export type AnnotationType = 'signature' | 'initials' | 'date' | 'stamp' | 'identity';
+export type AnnotationType = 'signature' | 'initials' | 'date' | 'stamp' | 'identity' | 'biometric';
 
 export interface Annotation {
     id: string;            // Unique ID to track items
@@ -13,4 +13,8 @@ export interface Annotation {
     fontWeight?: 'normal' | 'bold';
     fontFamily?: string;
     color?: string; // hex color e.g. #000000
+    
+    // WebAuthn / Hardware Proofs
+    publicKey?: string;    // SPKI Public Key (Base64)
+    assertion?: string;    // JSON stringified WebAuthn response (sig, authData, clientData)
 }
