@@ -167,7 +167,7 @@ export class AppRoot extends LitElement {
             this.showVerifyModal = true;
         } catch (e) {
             this.isLoading = false;
-            this.showToast(i18n.t('errorReadingFile') || 'Error reading file');
+            this.showToast(i18n.t('errorReadingFile'));
         }
     }
 
@@ -316,8 +316,8 @@ export class AppRoot extends LitElement {
 
             ${this.updateAvailable ? html`
                 <div class="toast show">
-                    <span style="display:flex; align-items:center; gap:8px;">${ICONS.alert} ${i18n.t('updateAvailable')}</span>
-                    <button class="btn btn-primary" style="padding: 4px 8px; margin-top: 8px;"
+                    <span class="update-banner-label">${ICONS.alert} ${i18n.t('updateAvailable')}</span>
+                    <button class="btn btn-primary update-banner-btn"
                             @click=${() => this.updateSW && this.updateSW(true)}>
                         ${i18n.t('reload')}
                     </button>
@@ -339,14 +339,14 @@ export class AppRoot extends LitElement {
                         <img src="./icons/icon-192.webp" alt="${i18n.t('appTitle')}" data-testid="logo-img" @click=${this.handleSecretTap}
                              draggable="false"/>
                         <h1>${i18n.t('appTitle')}</h1>
-                        <p class="sub">v${packageJson.version} • ${i18n.t('tagline')}</p>
+                        <p class="sub hero-subtitle">v${packageJson.version} • ${i18n.t('tagline')}</p>
 
                         <div class="mode-toggle">
                             <button id="btn-sign-mode" data-testid="btn-sign-mode" class="${!this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = false}>
-                                <span style="display:flex; align-items:center; justify-content:center; gap:6px;">${ICONS.sign} ${i18n.t('signMode') || 'Sign'}</span>
+                                <span class="mode-label">${ICONS.sign} ${i18n.t('signMode')}</span>
                             </button>
                             <button id="btn-verify-mode" data-testid="btn-verify-mode" class="${this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = true}>
-                                <span style="display:flex; align-items:center; justify-content:center; gap:6px;">${ICONS.search} ${i18n.t('verifyMode') || 'Verify'}</span>
+                                <span class="mode-label">${ICONS.search} ${i18n.t('verifyMode')}</span>
                             </button>
                         </div>
 
@@ -354,18 +354,18 @@ export class AppRoot extends LitElement {
                             <button class="btn btn-primary" data-testid="btn-select-file">
                                 ${this.verifyMode ? i18n.t('selectFileVerify') : i18n.t('selectFile')}
                             </button>
-                            <p class="sub" style="margin-top: 12px; font-size: 0.85rem;">
+                            <p class="sub drop-hint">
                                 ${this.verifyMode ? i18n.t('dropHintVerify') : i18n.t('dragDropHint')}
                             </p>
                         </div>
 
                         ${!this.verifyMode ? html`
-                            <button id="btn-sample" data-testid="btn-sample" class="text-link" style="margin-top: 15px;" @click=${this.loadSamplePdf}>
-                                ${i18n.t('trySample') || 'No file? Try with a sample PDF'}
+                            <button id="btn-sample" data-testid="btn-sample" class="text-link sample-link" @click=${this.loadSamplePdf}>
+                                ${i18n.t('trySample')}
                             </button>
                         ` : ''}
 
-                        <div style="margin-top: 16px;">
+                        <div class="trust-pill-wrap">
                             <span class="badge-success">${ICONS.shield} ${i18n.t('privacyBadge')}</span>
                         </div>
 
@@ -375,7 +375,7 @@ export class AppRoot extends LitElement {
                             <a href="mailto:${AppConfig.supportEmail}" class="footer-link">${i18n.t('contactUs')}</a>
                         </div>
 
-                        <button class="btn" data-testid="btn-share-app" style="margin-top: 20px; width: 100%;" @click=${() => {
+                        <button class="btn share-app-btn" data-testid="btn-share-app" @click=${() => {
                             navigator.clipboard.writeText(`${AppConfig.website}/?lang=${i18n.lang}`);
                             this.showToast(i18n.t('linkCopied'));
                         }}>
@@ -385,7 +385,7 @@ export class AppRoot extends LitElement {
 
                     ${!this.verifyMode ? html`
                         <div class="features-section">
-                            <h3 style="text-align: center; color: var(--text-main); margin-bottom: 24px;">
+                            <h3 class="features-title">
                                 ${i18n.t('howItWorks')}</h3>
                             <div class="features-grid">
                                 <div class="feature-card">
@@ -406,7 +406,7 @@ export class AppRoot extends LitElement {
                             </div>
                         </div>
                     ` : ''}
-                    <div style="height: 40px; flex-shrink: 0;"></div>
+                    <div class="home-bottom-spacer"></div>
                 </div>
             </div>
 
@@ -424,24 +424,24 @@ export class AppRoot extends LitElement {
                        ariaLabel="${i18n.t('privacyTitle')}"
                        @modal-close=${this.closePrivacy}>
                 <div class="dialog-content">
-                    <h2 id="privacy-title">${i18n.t('privacyTitle')}</h2>
-                    <p style="font-size: 0.95rem; color: var(--text-sub);">${i18n.t('privacyContent')}</p>
+                    <h2 id="privacy-title" class="modal-title">${i18n.t('privacyTitle')}</h2>
+                    <p class="modal-copy">${i18n.t('privacyContent')}</p>
 
                     <div class="amanah-panel">
-                        <h4 style="margin: 0 0 5px 0; color: #065f46; display:flex; align-items:center; gap:6px;">
+                        <h4 class="modal-section-title modal-inline-icon privacy-heading">
                             ${ICONS.shield} ${i18n.t('securityModel')}
                         </h4>
-                        <p style="margin: 0; font-size: 0.85rem; color: #047857;">${i18n.t('securityModelText')}</p>
+                        <p class="modal-note privacy-model-text">${i18n.t('securityModelText')}</p>
                     </div>
 
                     <div class="info-panel">
                         <a href="https://github.com/open-waqf/signer" target="_blank"
-                           style="color: var(--primary); display: block; margin-bottom: 4px;">
+                           class="modal-link">
                             ${i18n.t('viewSourceCode')} ↗
                         </a>
                     </div>
 
-                    <button class="btn btn-danger" data-testid="btn-clear-cache" style="width: 100%; margin-top: 15px;" @click=${this.clearAppCache}>
+                    <button class="btn btn-danger btn-full btn-top-gap" data-testid="btn-clear-cache" @click=${this.clearAppCache}>
                         ${i18n.t('forgetData')}
                     </button>
                 </div>
@@ -455,7 +455,7 @@ export class AppRoot extends LitElement {
                            data-testid="diagnostics-modal"
                            ariaLabel="${i18n.t('diagnostics')}"
                            @modal-close=${() => this.showDiagnostics = false}>
-                        <h2 style="margin-top:0; display:flex; align-items:center; gap:8px;">${ICONS.cog}
+                        <h2 class="modal-title modal-inline-icon">${ICONS.cog}
                             ${i18n.t('diagnostics')}</h2>
                         <div class="diagnostics-panel">
                             <div>${i18n.t('appVersion')}: ${packageJson.version}</div>
@@ -467,8 +467,8 @@ export class AppRoot extends LitElement {
                             <div>${i18n.t('connection')}: ${navigator.onLine ? i18n.t('online') : i18n.t('offline')}
                             </div>
                         </div>
-                        <div style="display: flex; justify-content: center; margin-top: 15px;">
-                            <button class="btn" data-testid="btn-close-diagnostics" style="width:100%;" @click=${() => this.showDiagnostics = false}>
+                        <div class="modal-action-row modal-top-gap">
+                            <button class="btn btn-full" data-testid="btn-close-diagnostics" @click=${() => this.showDiagnostics = false}>
                                 ${i18n.t('close')}
                             </button>
                         </div>
@@ -479,35 +479,34 @@ export class AppRoot extends LitElement {
                        .closeOnBackdrop=${false}
                        ariaLabel="${i18n.t('verifyMode')}"
                        @modal-close=${this.closeVerify}>
-                <div class="dialog-content" style="text-align: center;">
+                <div class="dialog-content dialog-content-center">
                     ${this.verifyResult.status === 'pending_file' ? html`
-                        <div style="color:var(--primary); margin-bottom:15px; display:flex; justify-content:center;">
-                            <div style="padding:15px; background:#eff6ff; border-radius:50%;">${ICONS.search}</div>
+                        <div class="verify-icon-wrap">
+                            <div class="verify-icon-badge">${ICONS.search}</div>
                         </div>
                         <h2>${i18n.t('linkDetected')}</h2>
-                        <p class="sub">${i18n.t('linkDetectedMsg')} <strong>${this.verifyResult.id}</strong></p>
-                        <button class="btn btn-primary" data-testid="btn-start-verify" style="width: 100%;" @click=${() => this.startPendingVerification()}>
+                        <p class="sub verify-pending-text">${i18n.t('linkDetectedMsg')} <strong>${this.verifyResult.id}</strong></p>
+                        <button class="btn btn-primary verify-pending-btn" data-testid="btn-start-verify" @click=${() => this.startPendingVerification()}>
                             ${i18n.t('selectFileVerify')}
                         </button>
                     ` : html`
-                        <div class="info-panel" style="text-align:left; margin-bottom: 14px;">
-                            <h3 style="margin:0 0 8px 0; font-size:0.95rem;">${i18n.t('metadataCheckTitle')}</h3>
+                        <div class="verify-step-card info-panel">
+                            <h3 class="verify-step-title">${i18n.t('metadataCheckTitle')}</h3>
                             ${this.verifyResult.status === 'success' ? html`
-                                <h2 style="color:#166534; margin:0 0 8px 0;" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
-                                <p style="margin:0; color:var(--text-sub);">${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong></p>
-                                <div class="amanah-panel"
-                                     style="text-align:left; color:#b45309; background:#fffbeb; border-color:#fde68a; margin-top:10px;">
+                                <h2 class="verify-success-title" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
+                                <p class="verify-step-note">${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong></p>
+                                <div class="amanah-panel verify-disclaimer">
                                     ${i18n.t('recordFoundDisclaimer')}
                                 </div>
                             ` : html`
-                                <h2 style="color:#991b1b; margin:0 0 8px 0;" data-testid="verify-fail-title">${i18n.t('noRecordFound')}</h2>
-                                <p style="margin:0; color:var(--text-sub);">${i18n.t('noRecordMsg')}</p>
+                                <h2 class="verify-fail-title" data-testid="verify-fail-title">${i18n.t('noRecordFound')}</h2>
+                                <p class="verify-step-note">${i18n.t('noRecordMsg')}</p>
                             `}
                         </div>
 
-                        <div class="info-panel" style="text-align:left;">
-                            <h3 style="margin:0 0 8px 0; font-size:1rem; color:#111827;">${i18n.t('strictIntegrityTitle')}</h3>
-                            <p style="margin:0 0 10px 0; color:var(--text-sub); font-size:0.9rem;">${i18n.t('strictIntegrityHelp')}</p>
+                        <div class="verify-step-card info-panel">
+                            <h3 class="verify-step-title">${i18n.t('strictIntegrityTitle')}</h3>
+                            <p class="verify-step-note">${i18n.t('strictIntegrityHelp')}</p>
                             <div class="verify-hash-row">
                                 <input type="text" class="input-field" data-testid="input-verify-hash" .value="${this.verifyHashInput}"
                                        @input="${(e: any) => {
@@ -517,28 +516,28 @@ export class AppRoot extends LitElement {
                                 <button class="btn btn-primary" data-testid="btn-check-hash" @click="${this.checkHash}">${i18n.t('verifyBtn')}
                                 </button>
                             </div>
-                            <p style="margin:8px 0 0 0; font-size:0.8rem; color:var(--text-sub);">
+                            <p class="verify-hash-hint">
                                 ${i18n.t('hashFormatHint').replace('{count}', String(this.verifyFileHash?.length || 64))}
                             </p>
                             ${this.normalizedHashInput() ? html`
-                                <div class="info-panel" data-testid="hash-normalized" style="margin-top:8px; background:var(--bg-muted); font-family:monospace; font-size:0.75rem; color:var(--text-main); word-break:break-all;">
+                                <div class="info-panel hash-normalized-preview" data-testid="hash-normalized">
                                     ${this.groupedHashPreview(this.normalizedHashInput())}
                                 </div>
                             ` : ''}
                             ${this.integrityStatus === 'success' ? html`
-                                <div class="alert-box alert-success" data-testid="integrity-success" style="margin-top:12px;"
+                                <div class="alert-box alert-success alert-top-gap" data-testid="integrity-success"
                                      .innerHTML=${i18n.t('strictVerified')}></div>` : ''}
                             ${this.integrityStatus === 'fail' ? html`
-                                <div class="alert-box alert-error" data-testid="integrity-fail" style="margin-top:12px;"
+                                <div class="alert-box alert-error alert-top-gap" data-testid="integrity-fail"
                                      .innerHTML=${i18n.t('strictMismatch')}></div>` : ''}
                         </div>
 
                         ${this.chainStatus.status === 'success' ? html`
-                            <div class="alert-box alert-success" data-testid="chain-success" style="margin-top:12px;"
+                            <div class="alert-box alert-success alert-top-gap" data-testid="chain-success"
                                  .innerHTML=${i18n.t('chainValidated').replace('{count}', String(this.chainStatus.total || 0))}></div>
                         ` : ''}
                         ${this.chainStatus.status === 'fail' ? html`
-                            <div class="alert-box alert-error" data-testid="chain-fail" style="margin-top:12px;"
+                            <div class="alert-box alert-error alert-top-gap" data-testid="chain-fail"
                                  .innerHTML=${i18n.t('chainFailed').replace('{index}', String(this.chainStatus.failedSignerIndex || 0))}></div>
                         ` : ''}
                     `}
@@ -554,23 +553,23 @@ export class AppRoot extends LitElement {
                            data-testid="exit-confirm-modal"
                            ariaLabel="${i18n.t('exitConfirmTitle')}"
                            @modal-close=${() => this.showExitConfirm = false}>
-                        <div style="color:#ef4444; margin-bottom:15px; display:flex; justify-content:center;">
-                            <div style="padding:15px; background:#fee2e2; border-radius:50%;">${ICONS.alert}</div>
+                        <div class="exit-warning-wrap">
+                            <div class="exit-warning-badge">${ICONS.alert}</div>
                         </div>
-                        <h2 style="margin-top:0; color: var(--text-main);">
-                            ${i18n.t('exitConfirmTitle') || 'Unsaved Changes'}</h2>
-                        <p style="color:var(--text-sub); font-size:0.95rem; margin-bottom:20px;">
-                            ${i18n.t('exitConfirmText') || 'You have unsaved changes. Are you sure you want to go back? Your edits will be lost.'}
+                        <h2 class="modal-title">
+                            ${i18n.t('exitConfirmTitle')}</h2>
+                        <p class="modal-copy">
+                            ${i18n.t('exitConfirmText')}
                         </p>
-                        <div style="display:flex; gap:10px;">
-                            <button class="btn" data-testid="btn-cancel-exit" style="flex:1;" @click=${() => this.showExitConfirm = false}>
-                                ${i18n.t('cancel') || 'Cancel'}
+                        <div class="modal-split-actions">
+                            <button class="btn btn-flex" data-testid="btn-cancel-exit" @click=${() => this.showExitConfirm = false}>
+                                ${i18n.t('cancel')}
                             </button>
-                            <button class="btn btn-danger" data-testid="btn-confirm-exit" style="flex:1;" @click=${() => {
+                            <button class="btn btn-danger btn-flex" data-testid="btn-confirm-exit" @click=${() => {
                                 this.showExitConfirm = false;
                                 this.workspace.reset();
                                 this.mode = 'home';
-                            }}>${i18n.t('exitBtn') || 'Exit'}
+                            }}>${i18n.t('exitBtn')}
                             </button>
                         </div>
                 </owq-modal>

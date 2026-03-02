@@ -1,5 +1,6 @@
 import {css, html, LitElement} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
+import {styleMap} from 'lit/directives/style-map.js';
 import {pdfEngine} from '../lib/pdf-engine';
 import {fileService} from '../lib/file-service';
 import {i18n} from '../lib/i18n-service';
@@ -130,9 +131,9 @@ export class PdfWorkspace extends LitElement {
         const savedEmail = preferences.getUserEmail();
         this.customPrompt = {
             show: true,
-            title: i18n.t('identityPrompt') || 'Enter your email:',
+            title: i18n.t('identityPrompt'),
             value: savedEmail,
-            placeholder: i18n.t('emailPlaceholder') || 'email@example.com',
+            placeholder: i18n.t('emailPlaceholder'),
             isIdentity: true
         };
     }
@@ -142,7 +143,7 @@ export class PdfWorkspace extends LitElement {
         const val = this.customPrompt.value.trim();
         if (this.customPrompt.isIdentity && val) {
             preferences.setUserEmail(val);
-            const text = `${i18n.t('signedBy') || 'Signed by'}: ${val}`;
+            const text = `${i18n.t('signedBy')}: ${val}`;
             this.addAnnotation('identity', text, 0);
         } else if (!this.customPrompt.isIdentity && this.customPrompt.targetId && val) {
             this.snapshot();
@@ -157,8 +158,8 @@ export class PdfWorkspace extends LitElement {
 
     sendProofEmail() {
         if (!this.lastSavedId) return;
-        const subject = (i18n.t('emailSubject') || 'Signature Receipt: {id}').replace('{id}', this.lastSavedId);
-        let body = (i18n.t('emailBody') || '').replace('{id}', this.lastSavedId).replace('{hash}', this.lastSavedHash || 'N/A');
+        const subject = i18n.t('emailSubject').replace('{id}', this.lastSavedId);
+        let body = i18n.t('emailBody').replace('{id}', this.lastSavedId).replace('{hash}', this.lastSavedHash || 'N/A');
         if (this.lastSavedCode) {
             body += `\n\n${i18n.t('handoverPinLabel')}: ${this.lastSavedCode}`;
         }
@@ -172,7 +173,7 @@ export class PdfWorkspace extends LitElement {
                 ? `${this.lastSavedHash}\n${i18n.t('handoverPinLabel')}: ${this.lastSavedCode}`
                 : this.lastSavedHash;
             navigator.clipboard.writeText(value);
-            this.toast((i18n.t('hashPinCopied') as string) || 'Hash and PIN copied.');
+            this.toast(i18n.t('hashPinCopied'));
         }
     }
 
@@ -218,6 +219,29 @@ export class PdfWorkspace extends LitElement {
             align-items: center;
         }
 
+        .verified-badge-highlight {
+            background: var(--success);
+            color: var(--bg-surface);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            margin-left: 8px;
+        }
+
+        .icon-only-btn {
+            border: none;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+        }
+
+        .btn-label {
+            margin-left: 6px;
+        }
+
         .brand img {
             height: 32px;
             width: 32px;
@@ -227,7 +251,7 @@ export class PdfWorkspace extends LitElement {
         /* --- Toolbar System --- */
 
         .toolbar-top {
-            background: var(--bg-surface);
+            background: linear-gradient(180deg, var(--bg-surface) 0%, var(--workspace-toolbar-gradient-end) 100%);
             border-bottom: 1px solid var(--border);
             z-index: 90;
             display: flex;
@@ -236,11 +260,31 @@ export class PdfWorkspace extends LitElement {
 
         .toolbar-row {
             display: flex;
-            padding: 8px 12px;
+            padding: 10px 12px;
             gap: 8px;
             align-items: center;
             overflow-x: auto;
             scrollbar-width: none;
+        }
+
+        .toolbar-row.secondary-tools {
+            justify-content: space-between;
+            background: var(--bg-muted);
+        }
+
+        .toolbar-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .toolbar-btn-compact {
+            padding: 8px 12px;
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            background: var(--border);
+            margin: 4px 4px;
         }
 
         .toolbar-row::-webkit-scrollbar {
@@ -253,7 +297,7 @@ export class PdfWorkspace extends LitElement {
             border-top: 1px solid var(--border);
             padding: 8px 8px env(safe-area-inset-bottom);
             z-index: 200;
-            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+            box-shadow: var(--workspace-bottom-bar-shadow);
             justify-content: flex-start;
             overflow-x: auto;
             scrollbar-width: none;
@@ -291,6 +335,7 @@ export class PdfWorkspace extends LitElement {
             color: var(--text-sub) !important;
             min-width: 64px;
             transition: var(--transition-fast);
+            border-radius: var(--radius-sm);
         }
 
         .btn-tool svg {
@@ -308,6 +353,11 @@ export class PdfWorkspace extends LitElement {
         .btn-tool:active {
             color: var(--primary) !important;
             transform: scale(0.9);
+        }
+
+        .btn-tool:hover:not(:disabled) {
+            background: var(--overlay-white-85) !important;
+            color: var(--text-main) !important;
         }
 
         /* Viewport & Canvas */
@@ -342,8 +392,8 @@ export class PdfWorkspace extends LitElement {
 
         .thumb-panel {
             width: 80px;
-            background: #111827;
-            border-right: 1px solid #374151;
+            background: var(--workspace-sidebar-bg);
+            border-right: 1px solid var(--workspace-sidebar-border);
             overflow-y: auto;
             flex-shrink: 0;
             padding: 12px 8px;
@@ -387,7 +437,7 @@ export class PdfWorkspace extends LitElement {
             cursor: pointer;
             border: 2px solid transparent;
             border-radius: var(--radius-sm);
-            background: #fff;
+            background: var(--bg-surface);
             transition: all 0.2s;
             overflow: hidden;
             flex-shrink: 0;
@@ -396,9 +446,176 @@ export class PdfWorkspace extends LitElement {
         }
 
         .thumb-item.active {
-            border-color: var(--primary);
+            border-color: var(--workspace-thumb-active-border);
             transform: scale(1.05);
             box-shadow: var(--shadow-raised);
+        }
+
+        .thumb-loading {
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .thumb-loading .spinner {
+            width: 24px;
+            height: 24px;
+            border-width: 2px;
+            margin-bottom: 0;
+        }
+
+        .thumb-image {
+            width: 100%;
+            display: block;
+        }
+
+        .thumb-index {
+            font-size: 0.6rem;
+            color: var(--workspace-thumb-index);
+            text-align: center;
+            padding: 2px 0;
+        }
+
+        .thumb-has-annotations {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: 1px solid var(--workspace-thumb-dot-border);
+        }
+
+        .annotations-title {
+            color: var(--text-main);
+            margin: 0 0 12px 0;
+            font-size: 0.9rem;
+        }
+
+        .annotations-empty {
+            color: var(--text-sub);
+            font-size: 0.8rem;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .annotations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+        }
+
+        .annotation-row {
+            background: var(--bg-muted);
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+        }
+
+        .annotation-row.is-selected {
+            background: var(--primary);
+            color: var(--bg-surface);
+        }
+
+        .annotation-row-main {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow: hidden;
+        }
+
+        .annotation-row-icon {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .annotation-row-label {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .annotation-row-meta {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .annotation-page-pill {
+            background: var(--bg-surface);
+            color: var(--text-main);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.6rem;
+            border: 1px solid var(--border);
+        }
+
+        .workspace-top-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            background: var(--bg-surface);
+            padding: 8px 16px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-flat);
+            border: 1px solid var(--border);
+        }
+
+        .workspace-top-controls .btn {
+            border: none;
+        }
+
+        .pager-btn {
+            padding: 6px 12px;
+        }
+
+        .panel-toggle-btn {
+            padding: 6px;
+        }
+
+        .page-indicator {
+            font-weight: 800;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        .workspace-control-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border);
+            margin: 0 4px;
+        }
+
+        .guide-line-x {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: var(--primary);
+            z-index: 50;
+        }
+
+        .guide-line-y {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--primary);
+            z-index: 50;
         }
 
         /* Draggables */
@@ -414,14 +631,15 @@ export class PdfWorkspace extends LitElement {
 
         .draggable.selected {
             border-color: var(--primary);
-            background: rgba(37, 99, 235, 0.05);
+            background: var(--workspace-selection-overlay);
             z-index: 100;
-            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 0 2px var(--workspace-selection-outline);
         }
 
         .draggable.locked {
-            border-color: rgba(107, 114, 128, 0.4);
+            border-color: var(--workspace-locked-border);
             cursor: not-allowed;
+            opacity: 0.92;
         }
 
         .delete-btn {
@@ -431,7 +649,7 @@ export class PdfWorkspace extends LitElement {
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            background: white;
+            background: var(--bg-surface);
             color: var(--danger);
             border: 1px solid var(--border);
             display: flex;
@@ -459,7 +677,7 @@ export class PdfWorkspace extends LitElement {
             top: -56px;
             left: 50%;
             transform: translateX(-50%);
-            background: #111827;
+            background: var(--workspace-style-popup-bg);
             border-radius: 8px;
             padding: 6px;
             display: flex;
@@ -467,6 +685,80 @@ export class PdfWorkspace extends LitElement {
             z-index: 200;
             box-shadow: var(--shadow-floating);
             transition: top 0.2s;
+        }
+
+        .style-tool-btn {
+            background: transparent;
+            border: 1px solid var(--workspace-style-tool-border);
+            color: var(--workspace-style-tool-text);
+            width: 34px;
+            height: 34px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .style-tool-btn.is-active {
+            background: var(--primary);
+        }
+
+        .style-tool-btn-bold {
+            font-weight: bold;
+        }
+
+        .style-tool-select {
+            background: transparent;
+            border: 1px solid var(--workspace-style-tool-border);
+            color: var(--workspace-style-tool-text);
+            height: 34px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .style-tool-color {
+            background: transparent;
+            border: 1px solid var(--workspace-style-tool-border);
+            height: 34px;
+            width: 34px;
+            border-radius: 4px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .resize-handle {
+            position: absolute;
+            bottom: -8px;
+            right: -8px;
+            width: 16px;
+            height: 16px;
+            background: var(--primary);
+            border: 3px solid var(--bg-surface);
+            border-radius: 50%;
+            cursor: nwse-resize;
+            box-shadow: var(--shadow-raised);
+        }
+
+        .draggable-stamp {
+            width: 100%;
+            display: block;
+            pointer-events: none;
+        }
+
+        .hardware-warning-top-gap {
+            margin-top: 10px;
+        }
+
+        .prompt-input {
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+
+        .hardware-choice-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
         }
 
         /* RTL for style popup */
@@ -499,9 +791,9 @@ export class PdfWorkspace extends LitElement {
 
         .panel-toggle.active {
             background: var(--primary) !important;
-            color: #fff !important;
+            color: var(--bg-surface) !important;
             border-color: var(--primary) !important;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+            box-shadow: 0 0 0 3px var(--workspace-active-ring);
         }
 
         .panel-toggle.active svg {
@@ -510,7 +802,7 @@ export class PdfWorkspace extends LitElement {
 
         .btn.toggle.active {
             background: var(--primary) !important;
-            color: #fff !important;
+            color: var(--bg-surface) !important;
             border-color: var(--primary) !important;
         }
 
@@ -533,7 +825,7 @@ export class PdfWorkspace extends LitElement {
             top: 0;
             bottom: 0;
             width: 30px;
-            background: linear-gradient(to right, transparent, var(--bg-surface));
+            background: linear-gradient(to right, transparent, var(--workspace-toolbar-gradient-end));
             pointer-events: none;
             opacity: 0.8;
         }
@@ -858,16 +1150,16 @@ export class PdfWorkspace extends LitElement {
     }
 
     addTextAnnotation() {
-        const text = (i18n.t('enterText') as string) || 'Type text';
+        const text = i18n.t('enterText');
         this.addAnnotation('date', text, 0.5);
     }
 
     handleTextEdit(id: string, currentText: string | undefined) {
         this.customPrompt = {
             show: true,
-            title: i18n.t('editText') || 'Edit text:',
+            title: i18n.t('editText'),
             value: currentText || '',
-            placeholder: i18n.t('typeHerePlaceholder') || 'Type here...',
+            placeholder: i18n.t('typeHerePlaceholder'),
             isIdentity: false,
             targetId: id
         };
@@ -1193,7 +1485,7 @@ export class PdfWorkspace extends LitElement {
 
     async saveDocument(opts?: { silentWeb?: boolean; showToast?: boolean }) {
         if (!this.hasEdits) {
-            this.toast(i18n.t('noChanges') || 'No changes');
+            this.toast(i18n.t('noChanges'));
             return;
         }
 
@@ -1271,7 +1563,7 @@ export class PdfWorkspace extends LitElement {
         const input = e.target as HTMLInputElement;
         if (input.files && input.files[0]) {
             const reader = new FileReader();
-            reader.onerror = () => this.toast(i18n.t('errorReadingFile') || 'Failed to read file');
+            reader.onerror = () => this.toast(i18n.t('errorReadingFile'));
             reader.onload = (evt) => {
                 const img = new Image();
                 img.onerror = () => this.toast('Invalid image file');
@@ -1346,7 +1638,30 @@ export class PdfWorkspace extends LitElement {
         else if (this.hardwarePref === 'always') this.hardwarePref = 'never';
         else this.hardwarePref = 'prompt';
         preferences.setHardwarePref(this.hardwarePref);
-        this.toast(`${i18n.t('hardwareSign') || 'Hardware Sign'}: ${this.hardwarePref.toUpperCase()}`);
+        this.toast(`${i18n.t('hardwareSign')}: ${this.hardwarePref.toUpperCase()}`);
+    }
+
+    private guideLineStyle(guide: { axis: 'x' | 'y'; pos: number }) {
+        return guide.axis === 'x'
+            ? {left: `${guide.pos * 100}%`}
+            : {top: `${guide.pos * 100}%`};
+    }
+
+    private annotationStyle(ann: Annotation, isText: boolean) {
+        return {
+            left: `${ann.xPct * 100}%`,
+            top: `${ann.yPct * 100}%`,
+            width: isText ? 'auto' : (ann.widthPct ? `${ann.widthPct * 100}%` : 'auto'),
+        };
+    }
+
+    private textStyle(ann: Annotation) {
+        return {
+            fontSize: `${ann.fontSize || 12}px`,
+            fontWeight: ann.fontWeight || 'normal',
+            fontFamily: ann.fontFamily || 'Amiri',
+            color: ann.color || 'black',
+        };
     }
 
     private hardwareResolver: ((val: boolean | null) => void) | null = null;
@@ -1363,6 +1678,304 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
+    private renderHandoverModal() {
+        if (!this.showHandoverModal) return '';
+        return html`
+            <owq-modal .open=${this.showHandoverModal}
+                       data-testid="handover-modal"
+                       ariaLabelledby="handover-title"
+                       @modal-close=${() => this.closeHandoverModal(true)}>
+                <h3 id="handover-title" class="modal-title">${i18n.t('previousSigDetected')}</h3>
+                <p class="modal-copy">
+                    ${i18n.t('verifyPreviousSigPrompt')}</p>
+                <div class="alert-box alert-warning"><strong>${i18n.t('internalRefLabel')}:</strong>
+                    ${this.detectedRefId}
+                </div>
+                <input type="text" class="input-field modal-input-spaced"
+                       data-testid="input-handover-hash"
+                       aria-label="${i18n.t('handoverCodePlaceholder')}"
+                       autofocus
+                       .value="${this.handoverHashInput}" @input="${(e: any) => {
+                           this.handoverHashInput = e.target.value;
+                           this.handoverResult = 'idle';
+                       }}" placeholder="${i18n.t('handoverCodePlaceholder')}">
+                ${this.handoverResult === 'success' ? html`
+                    <div class="alert-box alert-success" data-testid="handover-success"
+                         .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
+                ${this.handoverResult === 'fail' ? html`
+                    <div class="alert-box alert-error" data-testid="handover-fail"
+                         .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
+                <p class="modal-warning-copy">
+                    ${i18n.t('handoverSkipRisk')}
+                </p>
+                <div class="modal-actions">
+                    <button class="btn btn-primary btn-block" data-testid="btn-verify-handover"
+                            @click=${this.checkHandover}>
+                        ${i18n.t('verifyBtn')}
+                    </button>
+                    <button class="btn btn-block" data-testid="btn-skip-handover"
+                            @click=${() => this.closeHandoverModal(true)}>
+                        ${i18n.t('btnSkip')}
+                    </button>
+                </div>
+            </owq-modal>
+        `;
+    }
+
+    private renderProofModal() {
+        if (!this.showProofModal) return '';
+        return html`
+            <owq-modal .open=${this.showProofModal}
+                       .center=${true}
+                       data-testid="proof-modal"
+                       ariaLabelledby="proof-title"
+                       @modal-close=${() => this.showProofModal = false}>
+                <div class="modal-icon-wrap">
+                    <div class="modal-icon-badge success">${ICONS.check}
+                    </div>
+                </div>
+                <h2 id="proof-title" class="modal-title">${i18n.t('savedMsg')}</h2>
+                <p class="modal-copy">
+                    ${i18n.t('proofSavedFileHelp')}</p>
+                <div class="modal-card-surface">
+                    <div class="modal-section-title">
+                        ${i18n.t('proofSavedFileTitle')}
+                    </div>
+                    <div class="modal-label">
+                        ${i18n.t('internalRefLabel')}
+                    </div>
+                    <div class="modal-value-mono id"
+                         data-testid="saved-doc-id">
+                        ${this.lastSavedId}
+                    </div>
+                    <div class="modal-section-title">
+                        ${i18n.t('proofShareHashTitle')}
+                    </div>
+                    <p class="modal-copy">
+                        ${i18n.t('proofShareHashHelp')}
+                    </p>
+                    <div class="modal-label inline-icon">
+                        ${ICONS.lock} ${i18n.t('hashLabel')}
+                    </div>
+                    <div class="modal-value-mono hash"
+                         data-testid="saved-doc-hash">
+                        ${this.lastSavedHash}
+                    </div>
+                    <div class="modal-label">
+                        ${i18n.t('handoverCodeLabel')}
+                    </div>
+                    <div class="modal-value-mono code"
+                         data-testid="saved-handover-code">
+                        ${this.lastSavedCode || '------'}
+                    </div>
+                    ${this.lastSaveHardwareFallback ? html`
+                        <div class="alert-box alert-warning hardware-warning-top-gap" data-testid="hardware-fallback-warning">
+                            ${i18n.t('hardwareProofUnavailable')}
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="modal-actions modal-actions-spaced">
+                    <button class="btn btn-primary btn-block" data-testid="btn-copy-hash"
+                            @click=${this.copyHash}>
+                        ${ICONS.copy} ${i18n.t('copyShort')}
+                    </button>
+                    <button class="btn btn-block" data-testid="btn-email-proof"
+                            @click=${this.sendProofEmail}>${ICONS.email}
+                        ${i18n.t('email')}
+                    </button>
+                </div>
+                <button class="btn btn-block" data-testid="btn-close-proof"
+                        @click=${() => this.showProofModal = false}>
+                    ${i18n.t('close')}
+                </button>
+            </owq-modal>
+        `;
+    }
+
+    private renderCustomPromptModal() {
+        if (!this.customPrompt.show) return '';
+        return html`
+            <owq-modal .open=${this.customPrompt.show}
+                       data-testid="custom-prompt"
+                       ariaLabelledby="prompt-title"
+                       @modal-close=${() => this.customPrompt.show = false}>
+                <h3 id="prompt-title" class="modal-title">${this.customPrompt.title}</h3>
+                <input type="text" class="input-field prompt-input" data-testid="input-custom-prompt"
+                       aria-label="${this.customPrompt.title}"
+                       autofocus
+                       .value=${this.customPrompt.value}
+                       placeholder=${this.customPrompt.placeholder}
+                       @input=${(e: any) => this.customPrompt.value = e.target.value}
+                       @keydown=${(e: KeyboardEvent) => {
+                           if (e.key === 'Enter') this.saveCustomPrompt();
+                           if (e.key === 'Escape') this.customPrompt.show = false;
+                       }}>
+                <div class="modal-actions">
+                    <button class="btn modal-btn-flex" data-testid="btn-cancel-prompt"
+                            @click=${() => this.customPrompt.show = false}>
+                        ${i18n.t('cancel')}
+                    </button>
+                    <button class="btn btn-primary modal-btn-flex" data-testid="btn-save-prompt"
+                            @click=${this.saveCustomPrompt}>
+                        ${i18n.t('done')}
+                    </button>
+                </div>
+            </owq-modal>
+        `;
+    }
+
+    private renderHardwarePromptModal() {
+        if (!this.showHardwarePrompt) return '';
+        return html`
+            <owq-modal .open=${this.showHardwarePrompt}
+                       data-testid="hardware-prompt-modal"
+                       ariaLabelledby="hw-prompt-title"
+                       @modal-close=${() => this.resolveHardwarePrompt(null)}>
+                <h3 id="hw-prompt-title" class="modal-title">${i18n.t('secureYourSignature')}</h3>
+                <p class="modal-copy">
+                    ${i18n.t('secureYourSignatureHelp')}
+                </p>
+
+                <label class="hardware-choice-label">
+                    <input type="checkbox" id="remember-hardware-pref" .checked=${this.rememberHardwareChoice}
+                           @change=${(e: any) => this.rememberHardwareChoice = e.target.checked}>
+                    ${i18n.t('rememberMyChoice')}
+                </label>
+
+                <div class="modal-actions">
+                    <button class="btn btn-primary modal-btn-full" data-testid="btn-hw-yes"
+                            autofocus
+                            @click=${() => this.resolveHardwarePrompt(true)}>
+                        ${i18n.t('yesSecureIt')}
+                    </button>
+                    <button class="btn modal-btn-flex" data-testid="btn-hw-no"
+                            @click=${() => this.resolveHardwarePrompt(false)}>
+                        ${i18n.t('noStandardSave')}
+                    </button>
+                    <button class="btn modal-btn-flex" data-testid="btn-hw-cancel"
+                            @click=${() => this.resolveHardwarePrompt(null)}>
+                        ${i18n.t('cancelSave')}
+                    </button>
+                </div>
+            </owq-modal>
+        `;
+    }
+
+    private toggleSidebar(target: 'thumbnails' | 'annotations') {
+        this.activeSidebar = this.activeSidebar === target ? null : target;
+        this.persistActiveSidebar();
+        if (target === 'thumbnails' && this.activeSidebar === 'thumbnails' && this.thumbnailURLs.length === 0) {
+            void this.generateThumbnails();
+        }
+    }
+
+    private renderAnnotationSidebarRow(ann: Annotation) {
+        return html`
+            <div class="annotation-row ${this.selectedIds.includes(ann.id) ? 'is-selected' : ''}"
+                 @click=${() => {
+                     if (this.currentPage !== ann.page + 1) this.gotoPage(ann.page + 1);
+                     this.selectedIds = [ann.id];
+                 }}>
+                <div class="annotation-row-main">
+                    <div class="annotation-row-icon">
+                        ${ann.type === 'signature' ? ICONS.sign : ann.type === 'stamp' ? ICONS.stamp : ICONS.text}
+                    </div>
+                    <div class="annotation-row-label">
+                        ${ann.type === 'date' || ann.type === 'identity' ? ann.data : (ann.type.charAt(0).toUpperCase() + ann.type.slice(1))}
+                    </div>
+                </div>
+                <div class="annotation-row-meta">
+                    <span class="annotation-page-pill">${i18n.t('pageLabel')} ${ann.page + 1}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    private renderWorkspaceSidebar() {
+        if (this.activeSidebar === 'thumbnails' && (this.thumbnailURLs.length > 0 || this.isGeneratingThumbs)) {
+            return html`
+                <div class="thumb-panel">
+                    ${this.isGeneratingThumbs ? html`
+                        <div class="thumb-loading">
+                            <div class="spinner"></div>
+                        </div>
+                    ` : ''}
+                    ${this.thumbnailURLs.map((url, i) => html`
+                        <div class="thumb-item ${this.currentPage === i + 1 ? 'active' : ''}"
+                             data-testid="thumb-page-${i + 1}"
+                             aria-label="${i18n.t('pageLabel')} ${i + 1}"
+                             @click=${() => {
+                                 this.currentPage = i + 1;
+                                 this.selectedIds = [];
+                                 void this.renderPage();
+                             }}>
+                            <img src="${url}" alt="${i18n.t('pageLabel')} ${i + 1}" class="thumb-image">
+                            <div class="thumb-index">${i + 1}</div>
+                            ${this.annotations.some(a => a.page === i) ? html`<div class="thumb-has-annotations"></div>` : ''}
+                        </div>
+                    `)}
+                </div>
+            `;
+        }
+
+        if (this.activeSidebar === 'annotations') {
+            return html`
+                <div class="thumb-panel annotations-panel">
+                    <h4 class="annotations-title">${i18n.t('annotations')}</h4>
+                    ${this.annotations.length === 0 ? html`<div class="annotations-empty">${i18n.t('noAnnotations')}</div>` : ''}
+                    <div class="annotations-list">${this.annotations.map((ann) => this.renderAnnotationSidebarRow(ann))}</div>
+                </div>
+            `;
+        }
+
+        return '';
+    }
+
+    private renderWorkspaceTopControls() {
+        return html`
+            <div class="workspace-top-controls">
+                <button data-testid="btn-prev-page" class="btn pager-btn"
+                        aria-label="${i18n.t('prevPage')}"
+                        @click=${() => this.changePage(-1)}
+                        ?disabled=${this.currentPage === 1}>‹
+                </button>
+                <span data-testid="page-indicator" aria-live="polite" class="page-indicator">${this.currentPage} ${i18n.t('of')} ${this.totalPages}</span>
+                <button data-testid="btn-next-page" class="btn pager-btn"
+                        aria-label="${i18n.t('nextPage')}"
+                        @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>›
+                </button>
+                <div class="workspace-control-divider"></div>
+                <button data-testid="btn-toggle-thumbs"
+                        class="btn toggle panel-toggle panel-toggle-btn ${this.activeSidebar === 'thumbnails' ? 'active' : ''}"
+                        aria-label="${i18n.t('toggleThumbs')}"
+                        aria-pressed="${this.activeSidebar === 'thumbnails'}"
+                        @click=${() => this.toggleSidebar('thumbnails')}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2.5">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                </button>
+                <button data-testid="btn-toggle-annotations"
+                        class="btn toggle panel-toggle panel-toggle-btn ${this.activeSidebar === 'annotations' ? 'active' : ''}"
+                        aria-label="${i18n.t('annotations')}"
+                        aria-pressed="${this.activeSidebar === 'annotations'}"
+                        @click=${() => this.toggleSidebar('annotations')}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="8" y1="6" x2="21" y2="6"></line>
+                        <line x1="8" y1="12" x2="21" y2="12"></line>
+                        <line x1="8" y1="18" x2="21" y2="18"></line>
+                        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        `;
+    }
+
     render() {
         const saveDisabled = !this.pdfName || !this.hasEdits;
         const shareDisabled = !this.pdfName || !this.hasEdits;
@@ -1370,9 +1983,8 @@ export class PdfWorkspace extends LitElement {
         return html`
             <header>
                 <div class="brand">
-                    <button id="btn-exit" data-testid="btn-exit" class="btn mirror-rtl"
+                    <button id="btn-exit" data-testid="btn-exit" class="btn mirror-rtl icon-only-btn"
                             aria-label="${i18n.t('exitBtn')}"
-                            style="border:none; padding:8px; display:flex; align-items:center; justify-content:center; width:44px; height:44px;"
                             @click=${this.requestExit}>
                         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
                              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1383,11 +1995,10 @@ export class PdfWorkspace extends LitElement {
 
                     <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}" @error=${this.handleImageError}/>
                     <span class="brand-title">${i18n.t('appTitle')}</span>
-                    ${this.isVerified ? html`<span class="badge verified-badge"
-                                                   style="background:var(--success); color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:8px;">${i18n.t('verifiedBadge')}</span>` : ''}
+                    ${this.isVerified ? html`<span class="badge verified-badge verified-badge-highlight">${i18n.t('verifiedBadge')}</span>` : ''}
                 </div>
                 <select id="select-lang" data-testid="select-lang" class="lang-select"
-                        aria-label="${i18n.t('language') || 'Language'}" @change=${this.handleLangChange}>
+                        aria-label="${i18n.t('language')}" @change=${this.handleLangChange}>
                     ${LANGUAGES.map(l => html`
                         <option value="${l.code}" ?selected=${i18n.lang === l.code}>${l.label}</option>
                     `)}
@@ -1398,68 +2009,66 @@ export class PdfWorkspace extends LitElement {
                 <div class="toolbar-row primary-tools">
                     <button data-testid="btn-add-sig" class="btn" aria-label="${i18n.t('addSig')}"
                             @click=${this.openSignModal}>
-                        ${ICONS.sign}<span class="btn-label" style="margin-left:6px;">${i18n.t('addSig')}</span>
+                        ${ICONS.sign}<span class="btn-label">${i18n.t('addSig')}</span>
                     </button>
                     <button data-testid="btn-add-date" class="btn" aria-label="${i18n.t('addDate')}"
                             @click=${this.addDateStamp}>
-                        ${ICONS.date}<span class="btn-label" style="margin-left:6px;">${i18n.t('addDate')}</span>
+                        ${ICONS.date}<span class="btn-label">${i18n.t('addDate')}</span>
                     </button>
                     <button data-testid="btn-toggle-advanced" class="btn"
                             aria-label="${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}"
                             @click=${this.toggleUIMode}>
-                        ${ICONS.cog}<span class="btn-label" style="margin-left:6px;">${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
+                        ${ICONS.cog}<span class="btn-label">${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
                     </button>
                     ${!this.isBasicMode ? html`
                         <button data-testid="btn-add-initials" class="btn" aria-label="${i18n.t('addInitials')}"
                                 @click=${this.openInitialsModal}>
-                            ${ICONS.text}<span class="btn-label" style="margin-left:6px;">${i18n.t('addInitials')}</span>
+                            ${ICONS.text}<span class="btn-label">${i18n.t('addInitials')}</span>
                         </button>
                         <button data-testid="btn-add-text" class="btn" aria-label="${i18n.t('addText')}"
                                 @click=${this.addTextAnnotation}>
-                            ${ICONS.text}<span class="btn-label" style="margin-left:6px;">${i18n.t('addText')}</span>
+                            ${ICONS.text}<span class="btn-label">${i18n.t('addText')}</span>
                         </button>
                         <button data-testid="btn-add-identity" class="btn"
-                                aria-label="${i18n.t('addIdentity') || 'Identity'}" @click=${this.addIdentity}>
-                            ${ICONS.identity}<span class="btn-label"
-                                                   style="margin-left:6px;">${i18n.t('addIdentity') || 'Identity'}</span>
+                                aria-label="${i18n.t('addIdentity')}" @click=${this.addIdentity}>
+                            ${ICONS.identity}<span class="btn-label">${i18n.t('addIdentity')}</span>
                         </button>
                         <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
                                 @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
-                            ${ICONS.stamp}<span class="btn-label" style="margin-left:6px;">${i18n.t('addStamp')}</span>
+                            ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
                         </button>
                         <button data-testid="btn-hw-pref" class="btn" aria-label="Hardware Sign Preference"
                                 @click=${this.toggleHardwarePref}>
-                            ${this.getHardwareIcon()}<span class="btn-label" style="margin-left:6px;">${i18n.t('hardwareSign') || 'Hardware Sign'}: ${this.hardwarePref.toUpperCase()}</span>
+                            ${this.getHardwareIcon()}<span class="btn-label">${i18n.t('hardwareSign')}: ${this.hardwarePref.toUpperCase()}</span>
                         </button>
                     ` : ''}
                 </div>
 
-                <div class="toolbar-row" style="justify-content: space-between; background: var(--bg-muted);">
-                    <div style="display:flex; gap:8px;">
-                        <button data-testid="btn-undo" class="btn" style="padding: 8px 12px;"
+                <div class="toolbar-row secondary-tools">
+                    <div class="toolbar-group">
+                        <button data-testid="btn-undo" class="btn toolbar-btn-compact"
                                 aria-label="${i18n.t('undo')}" @click=${this.undo}
                                 ?disabled=${this.history.length === 0}
                                 title="${i18n.t('undo')}">${ICONS.undo}
                         </button>
-                        <button data-testid="btn-redo" class="btn" style="padding: 8px 12px;"
+                        <button data-testid="btn-redo" class="btn toolbar-btn-compact"
                                 aria-label="${i18n.t('redo')}" @click=${this.redo} ?disabled=${this.future.length === 0}
                                 title="${i18n.t('redo')}">${ICONS.redo}
                         </button>
-                        <div style="width:1px; background:var(--border); margin:4px 4px;"></div>
-                        <button data-testid="btn-zoom-out" class="btn" style="padding: 8px 12px;"
+                        <div class="toolbar-divider"></div>
+                        <button data-testid="btn-zoom-out" class="btn toolbar-btn-compact"
                                 aria-label="${i18n.t('zoomOut')}" title="${i18n.t('zoomOut')}"
                                 @click=${() => this.zoom(-0.2)}>－
                         </button>
-                        <button data-testid="btn-zoom-in" class="btn" style="padding: 8px 12px;"
+                        <button data-testid="btn-zoom-in" class="btn toolbar-btn-compact"
                                 aria-label="${i18n.t('zoomIn')}" title="${i18n.t('zoomIn')}"
                                 @click=${() => this.zoom(0.2)}>＋
                         </button>
                     </div>
 
-                    <div style="display:flex; gap:8px;">
+                    <div class="toolbar-group">
                         ${!this.isBasicMode ? html`
-                            <button data-testid="btn-toggle-footer" class="btn toggle ${this.includeFooter ? 'active' : ''}"
-                                    style="padding: 8px 12px;"
+                            <button data-testid="btn-toggle-footer" class="btn toggle toolbar-btn-compact ${this.includeFooter ? 'active' : ''}"
                                     aria-label="${i18n.t('addPageFooter')}"
                                     @click=${() => {
                                         this.includeFooter = !this.includeFooter;
@@ -1469,8 +2078,7 @@ export class PdfWorkspace extends LitElement {
                             </button>
                         ` : ''}
                         ${(!this.isBasicMode || this.includeAudit) ? html`
-                            <button data-testid="btn-toggle-audit" class="btn toggle ${this.includeAudit ? 'active' : ''}"
-                                    style="padding: 8px 12px;"
+                            <button data-testid="btn-toggle-audit" class="btn toggle toolbar-btn-compact ${this.includeAudit ? 'active' : ''}"
                                     aria-label="${i18n.t('addAuditPage')}"
                                     @click=${() => {
                                         this.includeAudit = !this.includeAudit;
@@ -1479,11 +2087,11 @@ export class PdfWorkspace extends LitElement {
                                 ${ICONS.audit}
                             </button>
                         ` : ''}
-                        <button data-testid="btn-share" class="btn" style="padding: 8px 12px;"
+                        <button data-testid="btn-share" class="btn toolbar-btn-compact"
                                 aria-label="${i18n.t('share')}" @click=${this.shareLatest} ?disabled=${shareDisabled}>
                             ${ICONS.share}
                         </button>
-                        <button data-testid="btn-save" class="btn btn-primary" style="padding: 8px 12px;"
+                        <button data-testid="btn-save" class="btn btn-primary toolbar-btn-compact"
                                 aria-label="${i18n.t('done')}"
                                 @click=${() => this.saveDocument()}
                                 ?disabled=${saveDisabled}>
@@ -1510,7 +2118,7 @@ export class PdfWorkspace extends LitElement {
                 ${(this.hasHardwareSupport && !this.isBasicMode) ? html`
                     <button data-testid="m-btn-hw-pref" class="btn btn-tool" aria-label="Hardware Sign Preference"
                             @click=${this.toggleHardwarePref}>
-                        ${this.getHardwareIcon()} <span>${i18n.t('hardwareSign') || 'Hardware Sign'}: ${this.hardwarePref.toUpperCase()}</span>
+                        ${this.getHardwareIcon()} <span>${i18n.t('hardwareSign')}: ${this.hardwarePref.toUpperCase()}</span>
                     </button>
                 ` : ''}
                 ${!this.isBasicMode ? html`
@@ -1523,8 +2131,8 @@ export class PdfWorkspace extends LitElement {
                         ${ICONS.text} <span>${i18n.t('addText')}</span>
                     </button>
                     <button data-testid="m-btn-add-identity" class="btn btn-tool"
-                            aria-label="${i18n.t('addIdentity') || 'Identity'}" @click=${this.addIdentity}>
-                        ${ICONS.identity} <span>${i18n.t('addIdentity') || 'Identity'}</span>
+                            aria-label="${i18n.t('addIdentity')}" @click=${this.addIdentity}>
+                        ${ICONS.identity} <span>${i18n.t('addIdentity')}</span>
                     </button>
                     <button data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
                             @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
@@ -1534,125 +2142,16 @@ export class PdfWorkspace extends LitElement {
             </div>
 
             <div class="workspace-area">
-                ${this.activeSidebar === 'thumbnails' && (this.thumbnailURLs.length > 0 || this.isGeneratingThumbs) ? html`
-                    <div class="thumb-panel">
-                        ${this.isGeneratingThumbs ? html`
-                            <div style="display:flex; justify-content:center; padding:20px;">
-                                <div class="spinner" style="width:24px; height:24px; border-width:2px;"></div>
-                            </div>
-                        ` : ''}
-                        ${this.thumbnailURLs.map((url, i) => html`
-                            <div class="thumb-item ${this.currentPage === i + 1 ? 'active' : ''}"
-                                 data-testid="thumb-page-${i + 1}"
-                                 aria-label="${i18n.t('pageLabel')} ${i + 1}"
-                                 @click=${() => {
-                                     this.currentPage = i + 1;
-                                     this.selectedIds = [];
-                                     void this.renderPage();
-                                 }}>
-                                <img src="${url}" alt="${i18n.t('pageLabel')} ${i + 1}" style="width:100%; display:block;">
-                                <div style="font-size:0.6rem; color:#9ca3af; text-align:center; padding:2px 0;">
-                                    ${i + 1}
-                                </div>
-                                ${this.annotations.some(a => a.page === i) ? html`
-                                    <div style="position:absolute; top:2px; right:2px; width:8px; height:8px; border-radius:50%; background:var(--primary); border:1px solid #111827;"></div>
-                                ` : ''}
-                            </div>
-                        `)}
-                    </div>
-                ` : this.activeSidebar === 'annotations' ? html`
-                    <div class="thumb-panel annotations-panel">
-                        <h4 style="color: var(--text-main); margin-top: 0; margin-bottom: 12px; font-size: 0.9rem;">${i18n.t('annotations')}</h4>
-                        ${this.annotations.length === 0 ? html`
-                            <div style="color: var(--text-sub); font-size: 0.8rem; text-align: center; margin-top: 20px;">
-                                ${i18n.t('noAnnotations')}
-                            </div>
-                        ` : ''}
-                        <div style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto;">
-                            ${this.annotations.map((ann) => html`
-                                <div style="background: ${this.selectedIds.includes(ann.id) ? 'var(--primary)' : 'var(--bg-muted)'}; padding: 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: ${this.selectedIds.includes(ann.id) ? 'white' : 'var(--text-main)'}; border: 1px solid var(--border);"
-                                     @click=${() => {
-                                         if (this.currentPage !== ann.page + 1) {
-                                             this.gotoPage(ann.page + 1);
-                                         }
-                                         this.selectedIds = [ann.id];
-                                     }}>
-                                    <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-                                        <div style="width: 16px; height: 16px; flex-shrink: 0; display:flex; align-items:center; justify-content:center;">
-                                            ${ann.type === 'signature' ? ICONS.sign : ann.type === 'stamp' ? ICONS.stamp : ICONS.text}
-                                        </div>
-                                        <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                            ${ann.type === 'date' || ann.type === 'identity' ? ann.data : (ann.type.charAt(0).toUpperCase() + ann.type.slice(1))}
-                                        </div>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                                        <span style="background: var(--bg-surface); color: var(--text-main); padding: 2px 6px; border-radius: 10px; font-size: 0.6rem; border: 1px solid var(--border);">${i18n.t('pageLabel')} ${ann.page + 1}</span>
-                                    </div>
-                                </div>
-                            `)}
-                        </div>
-                    </div>
-                ` : ''}
+                ${this.renderWorkspaceSidebar()}
 
                 <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
-                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px; background:white; padding:8px 16px; border-radius:var(--radius-lg); box-shadow:var(--shadow-flat); border:1px solid var(--border);">
-                        <button data-testid="btn-prev-page" class="btn"
-                                aria-label="${i18n.t('prevPage') || 'Previous Page'}"
-                                style="padding:6px 12px; border:none;" @click=${() => this.changePage(-1)}
-                                ?disabled=${this.currentPage === 1}>‹
-                        </button>
-                        <span data-testid="page-indicator" aria-live="polite"
-                              style="font-weight:800; font-size:0.9rem; color:var(--text-main);">${this.currentPage} ${i18n.t('of') || '/'} ${this.totalPages}</span>
-                        <button data-testid="btn-next-page" class="btn"
-                                aria-label="${i18n.t('nextPage') || 'Next Page'}" style="padding:6px 12px; border:none;"
-                                @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>›
-                        </button>
-                        <div style="width:1px; height:20px; background:var(--border); margin:0 4px;"></div>
-                        <button data-testid="btn-toggle-thumbs"
-                                class="btn toggle panel-toggle ${this.activeSidebar === 'thumbnails' ? 'active' : ''}"
-                                aria-label="${i18n.t('toggleThumbs') || 'Toggle Thumbnails'}"
-                                aria-pressed="${this.activeSidebar === 'thumbnails'}"
-                                style="padding:6px; border:none;"
-                                @click=${() => {
-                                    this.activeSidebar = this.activeSidebar === 'thumbnails' ? null : 'thumbnails';
-                                    this.persistActiveSidebar();
-                                    if (this.activeSidebar === 'thumbnails' && this.thumbnailURLs.length === 0) {
-                                        void this.generateThumbnails();
-                                    }
-                                }}>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2.5">
-                                <rect x="3" y="3" width="7" height="7"/>
-                                <rect x="14" y="3" width="7" height="7"/>
-                                <rect x="3" y="14" width="7" height="7"/>
-                                <rect x="14" y="14" width="7" height="7"/>
-                            </svg>
-                        </button>
-                        <button data-testid="btn-toggle-annotations"
-                                class="btn toggle panel-toggle ${this.activeSidebar === 'annotations' ? 'active' : ''}"
-                                aria-label="${(i18n.t as any)('annotations') || 'Toggle Annotations'}"
-                                aria-pressed="${this.activeSidebar === 'annotations'}"
-                                style="padding:6px; border:none;"
-                                @click=${() => {
-                                    this.activeSidebar = this.activeSidebar === 'annotations' ? null : 'annotations';
-                                    this.persistActiveSidebar();
-                                }}>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="8" y1="6" x2="21" y2="6"></line>
-                                <line x1="8" y1="12" x2="21" y2="12"></line>
-                                <line x1="8" y1="18" x2="21" y2="18"></line>
-                                <line x1="3" y1="6" x2="3.01" y2="6"></line>
-                                <line x1="3" y1="12" x2="3.01" y2="12"></line>
-                                <line x1="3" y1="18" x2="3.01" y2="18"></line>
-                            </svg>
-                        </button>
-                    </div>
+                    ${this.renderWorkspaceTopControls()}
 
                     <div class="page-container" data-testid="page-container">
                         ${this.guideLines.map(guide => guide.axis === 'x' ? html`
-                            <div style="position:absolute; left:${guide.pos * 100}%; top:0; bottom:0; width:1px; background:var(--primary); z-index:50;"></div>
+                            <div class="guide-line-x" style=${styleMap(this.guideLineStyle(guide))}></div>
                         ` : html`
-                            <div style="position:absolute; top:${guide.pos * 100}%; left:0; right:0; height:1px; background:var(--primary); z-index:50;"></div>
+                            <div class="guide-line-y" style=${styleMap(this.guideLineStyle(guide))}></div>
                         `)}
                         <canvas id="pdf-canvas"></canvas>
                         ${this.annotations.filter(ann => ann.page === this.currentPage - 1).map(ann => {
@@ -1664,13 +2163,13 @@ export class PdfWorkspace extends LitElement {
                                      data-testid="annotation-${ann.id}"
                                      data-locked="${isLocked ? 'true' : 'false'}"
                                      role="group"
-                                     aria-label="${ann.type} ${i18n.t('annotation') || 'annotation'}"
-                                     style="left:${ann.xPct * 100}%; top:${ann.yPct * 100}%; width:${isText ? 'auto' : (ann.widthPct ? ann.widthPct * 100 + '%' : 'auto')}; ${isLocked ? 'opacity:0.92; cursor:not-allowed;' : ''}"
+                                     aria-label="${ann.type} ${i18n.t('annotation')}"
+                                     style=${styleMap(this.annotationStyle(ann, isText))}
                                      @mousedown=${(e: any) => !isLocked && this.startDrag(e, ann.id)}
                                      @touchstart=${(e: any) => !isLocked && this.startDrag(e, ann.id)}>
                                     <button data-testid="btn-delete-ann" class="delete-btn"
-                                            aria-label="${i18n.t('delete') || 'Delete'}"
-                                            style="display:${isSelected && !isLocked ? 'flex' : 'none'};"
+                                            aria-label="${i18n.t('delete')}"
+                                            ?hidden=${!(isSelected && !isLocked)}
                                             @mousedown=${(e: Event) => {
                                                 e.stopPropagation();
                                                 this.deleteAnnotation(ann.id);
@@ -1682,10 +2181,10 @@ export class PdfWorkspace extends LitElement {
                                     </button>
                                     ${isSelected && isText && !isLocked ? html`
                                         <div class="style-popup" data-testid="style-popup" role="toolbar"
-                                             aria-label="${i18n.t('styleToolbar') || 'Style Toolbar'}">
+                                             aria-label="${i18n.t('styleToolbar')}">
                                             <button data-testid="btn-edit-text"
-                                                    aria-label="${i18n.t('editText') || 'Edit text'}"
-                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    aria-label="${i18n.t('editText')}"
+                                                    class="style-tool-btn"
                                                     @click=${(e: Event) => {
                                                         e.stopPropagation();
                                                         this.handleTextEdit(ann.id, ann.data);
@@ -1693,7 +2192,7 @@ export class PdfWorkspace extends LitElement {
                                             </button>
                                             <select data-testid="select-font"
                                                     aria-label="${i18n.t('fontFamily')}"
-                                                    style="background:transparent; border:1px solid #374151; color:#fff; height:34px; border-radius:4px; cursor:pointer;"
+                                                    class="style-tool-select"
                                                     @click=${(e: Event) => e.stopPropagation()}
                                                     @change=${(e: Event) => {
                                                         e.stopPropagation();
@@ -1706,39 +2205,39 @@ export class PdfWorkspace extends LitElement {
                                             <input type="color" data-testid="input-color"
                                                    aria-label="${i18n.t('textColor')}"
                                                    value="${ann.color || '#000000'}"
-                                                   style="background:transparent; border:1px solid #374151; height:34px; width:34px; border-radius:4px; cursor:pointer; padding: 0;"
+                                                   class="style-tool-color"
                                                    @click=${(e: Event) => e.stopPropagation()}
                                                    @input=${(e: Event) => {
                                                        e.stopPropagation();
                                                        this.updateStyle(ann.id, {color: (e.target as HTMLInputElement).value});
                                                    }}>
                                             <button data-testid="btn-toggle-bold"
-                                                    aria-label="${i18n.t('bold') || 'Bold'}"
-                                                    style="background:${ann.fontWeight === 'bold' ? 'var(--primary)' : 'transparent'}; color:#fff; border:1px solid #374151; width:34px; height:34px; border-radius:4px; font-weight:bold; cursor:pointer;"
+                                                    aria-label="${i18n.t('bold')}"
+                                                    class="style-tool-btn style-tool-btn-bold ${ann.fontWeight === 'bold' ? 'is-active' : ''}"
                                                     @click=${(e: Event) => {
                                                         e.stopPropagation();
                                                         this.updateStyle(ann.id, {fontWeight: ann.fontWeight === 'bold' ? 'normal' : 'bold'});
                                                     }}>B
                                             </button>
                                             <button data-testid="btn-font-down"
-                                                    aria-label="${i18n.t('decreaseFont') || 'Decrease font'}"
-                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    aria-label="${i18n.t('decreaseFont')}"
+                                                    class="style-tool-btn"
                                                     @click=${(e: Event) => {
                                                         e.stopPropagation();
                                                         this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
                                                     }}>A-
                                             </button>
                                             <button data-testid="btn-font-up"
-                                                    aria-label="${i18n.t('increaseFont') || 'Increase font'}"
-                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    aria-label="${i18n.t('increaseFont')}"
+                                                    class="style-tool-btn"
                                                     @click=${(e: Event) => {
                                                         e.stopPropagation();
                                                         this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
                                                     }}>A+
                                             </button>
                                             <button data-testid="btn-apply-all"
-                                                    aria-label="${i18n.t('applyAll') || 'Apply to all pages'}"
-                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    aria-label="${i18n.t('applyAll')}"
+                                                    class="style-tool-btn"
                                                     @click=${(e: Event) => {
                                                         e.stopPropagation();
                                                         this.applyToAllPages(ann.id);
@@ -1747,10 +2246,10 @@ export class PdfWorkspace extends LitElement {
                                         </div>
                                     ` : isSelected && !isText && !isLocked ? html`
                                         <div class="style-popup" data-testid="style-popup" role="toolbar"
-                                             aria-label="${i18n.t('styleToolbar') || 'Style Toolbar'}">
+                                             aria-label="${i18n.t('styleToolbar')}">
                                             <button data-testid="btn-apply-all"
-                                                    aria-label="${i18n.t('applyAll') || 'Apply to all pages'}"
-                                                    style="background:transparent; border:1px solid #374151; color:#fff; width:34px; height:34px; border-radius:4px; cursor:pointer;"
+                                                    aria-label="${i18n.t('applyAll')}"
+                                                    class="style-tool-btn"
                                                     @click=${(e: Event) => {
                                                         e.stopPropagation();
                                                         this.applyToAllPages(ann.id);
@@ -1759,15 +2258,15 @@ export class PdfWorkspace extends LitElement {
                                         </div>
                                     ` : ''}
                                     ${!isText ? html`
-                                        <div class="resize-handle" aria-label="${i18n.t('resize') || 'Resize'}"
-                                             style="position:absolute; bottom:-8px; right:-8px; width:16px; height:16px; background:var(--primary); border:3px solid white; border-radius:50%; cursor:nwse-resize; display:${isSelected && !isLocked ? 'block' : 'none'}; box-shadow:var(--shadow-raised);"
+                                        <div class="resize-handle" aria-label="${i18n.t('resize')}"
+                                             ?hidden=${!(isSelected && !isLocked)}
                                              @mousedown=${(e: any) => this.startResize(e, ann.id)}
                                              @touchstart=${(e: any) => this.startResize(e, ann.id)}></div>
                                         <img src="${ann.data}" alt="${ann.type} annotation"
-                                             style="width:100%; display:block; pointer-events:none;"/>
+                                             class="draggable-stamp"/>
                                     ` : html`
                                         <span class="text-content"
-                                              style="font-size:${ann.fontSize || 12}px; font-weight:${ann.fontWeight || 'normal'}; font-family:${ann.fontFamily || 'Amiri'}; color:${ann.color || 'black'};"
+                                              style=${styleMap(this.textStyle(ann))}
                                               @dblclick=${(e: Event) => {
                                                   e.stopPropagation();
                                                   this.handleTextEdit(ann.id, ann.data);
@@ -1780,177 +2279,10 @@ export class PdfWorkspace extends LitElement {
                 </div>
             </div>
 
-            ${this.showHandoverModal ? html`
-                <owq-modal .open=${this.showHandoverModal}
-                           data-testid="handover-modal"
-                           ariaLabelledby="handover-title"
-                           @modal-close=${() => this.closeHandoverModal(true)}>
-                    <h3 id="handover-title" style="margin-top:0;">${i18n.t('previousSigDetected')}</h3>
-                    <p style="font-size:0.9rem; color:var(--text-sub); margin-bottom:15px;">
-                        ${i18n.t('verifyPreviousSigPrompt')}</p>
-                    <div class="alert-box alert-warning"><strong>${i18n.t('internalRefLabel')}:</strong>
-                        ${this.detectedRefId}
-                    </div>
-                    <input type="text" class="input-field" style="margin-bottom:15px;"
-                           data-testid="input-handover-hash"
-                           aria-label="${i18n.t('handoverCodePlaceholder')}"
-                           autofocus
-                           .value="${this.handoverHashInput}" @input="${(e: any) => {
-                        this.handoverHashInput = e.target.value;
-                        this.handoverResult = 'idle';
-                    }}" placeholder="${i18n.t('handoverCodePlaceholder')}">
-                    ${this.handoverResult === 'success' ? html`
-                        <div class="alert-box alert-success" data-testid="handover-success"
-                             .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
-                    ${this.handoverResult === 'fail' ? html`
-                        <div class="alert-box alert-error" data-testid="handover-fail"
-                             .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
-                    <p style="margin:0 0 12px 0; color:#9a3412; font-size:0.82rem; text-align:left;">
-                        ${i18n.t('handoverSkipRisk')}
-                    </p>
-                    <div class="modal-actions">
-                        <button class="btn btn-primary btn-block" data-testid="btn-verify-handover"
-                                @click=${this.checkHandover}>
-                            ${i18n.t('verifyBtn')}
-                        </button>
-                        <button class="btn btn-block" data-testid="btn-skip-handover"
-                                @click=${() => this.closeHandoverModal(true)}>
-                            ${i18n.t('btnSkip')}
-                        </button>
-                    </div>
-                </owq-modal>
-            ` : ''}
-
-            ${this.showProofModal ? html`
-                <owq-modal .open=${this.showProofModal}
-                           .center=${true}
-                           data-testid="proof-modal"
-                           ariaLabelledby="proof-title"
-                           @modal-close=${() => this.showProofModal = false}>
-                        <div style="color:var(--success); margin-bottom:15px; display:flex; justify-content:center;">
-                            <div style="padding:15px; background:var(--success-bg); border-radius:50%;">${ICONS.check}
-                            </div>
-                        </div>
-                        <h2 id="proof-title" style="color:#166534; margin-top:0;">${i18n.t('savedMsg')}</h2>
-                        <p style="color:var(--text-sub); font-size:0.95rem; margin-bottom:20px;">
-                            ${i18n.t('proofSavedFileHelp')}</p>
-                        <div style="background:var(--bg-app); padding:15px; margin:15px 0; border-radius:8px; border:1px solid var(--border); text-align:left;">
-                            <div style="font-size:0.85rem; color:var(--text-main); font-weight:700; margin-bottom:10px;">
-                                ${i18n.t('proofSavedFileTitle')}
-                            </div>
-                            <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600;">
-                                ${i18n.t('internalRefLabel')}
-                            </div>
-                            <div style="font-family:monospace; font-size:1.1rem; color:var(--text-main); margin-bottom:15px;"
-                                 data-testid="saved-doc-id">
-                                ${this.lastSavedId}
-                            </div>
-                            <div style="font-size:0.85rem; color:var(--text-main); font-weight:700; margin:8px 0 6px 0;">
-                                ${i18n.t('proofShareHashTitle')}
-                            </div>
-                            <p style="margin:0 0 10px 0; color:var(--text-sub); font-size:0.82rem;">
-                                ${i18n.t('proofShareHashHelp')}
-                            </p>
-                            <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600; display:flex; align-items:center; gap:4px;">
-                                ${ICONS.lock} ${i18n.t('hashLabel')}
-                            </div>
-                            <div style="font-family:monospace; font-size:0.75rem; color:var(--text-main); word-break:break-all; background:var(--border); padding:8px; border-radius:6px; margin-top:4px;"
-                                 data-testid="saved-doc-hash">
-                                ${this.lastSavedHash}
-                            </div>
-                            <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600; margin-top:10px;">
-                                ${i18n.t('handoverCodeLabel')}
-                            </div>
-                            <div style="font-family:monospace; font-size:1.2rem; letter-spacing:0.2rem; color:var(--text-main); background:var(--bg-surface); padding:8px; border-radius:6px; margin-top:4px;"
-                                 data-testid="saved-handover-code">
-                                ${this.lastSavedCode || '------'}
-                            </div>
-                            ${this.lastSaveHardwareFallback ? html`
-                                <div class="alert-box alert-warning" data-testid="hardware-fallback-warning" style="margin-top:10px;">
-                                    ${i18n.t('hardwareProofUnavailable')}
-                                </div>
-                            ` : ''}
-                        </div>
-                        <div class="modal-actions" style="margin-bottom:12px;">
-                            <button class="btn btn-primary btn-block" data-testid="btn-copy-hash"
-                                    @click=${this.copyHash}>
-                                ${ICONS.copy} ${i18n.t('copyShort')}
-                            </button>
-                            <button class="btn btn-block" data-testid="btn-email-proof"
-                                    @click=${this.sendProofEmail}>${ICONS.email}
-                                ${i18n.t('email')}
-                            </button>
-                        </div>
-                        <button class="btn btn-block" data-testid="btn-close-proof"
-                                @click=${() => this.showProofModal = false}>
-                            ${i18n.t('close')}
-                        </button>
-                </owq-modal>
-            ` : ''}
-
-            ${this.customPrompt.show ? html`
-                <owq-modal .open=${this.customPrompt.show}
-                           data-testid="custom-prompt"
-                           ariaLabelledby="prompt-title"
-                           @modal-close=${() => this.customPrompt.show = false}>
-                        <h3 id="prompt-title" style="margin-top:0;">${this.customPrompt.title}</h3>
-                        <input type="text" class="input-field" data-testid="input-custom-prompt"
-                               style="margin-bottom: 20px; font-size: 1rem;"
-                               aria-label="${this.customPrompt.title}"
-                               autofocus
-                               .value=${this.customPrompt.value}
-                               placeholder=${this.customPrompt.placeholder}
-                               @input=${(e: any) => this.customPrompt.value = e.target.value}
-                               @keydown=${(e: KeyboardEvent) => {
-                                   if (e.key === 'Enter') this.saveCustomPrompt();
-                                   if (e.key === 'Escape') this.customPrompt.show = false;
-                               }}>
-                        <div class="modal-actions">
-                            <button class="btn" data-testid="btn-cancel-prompt" style="flex:1;"
-                                    @click=${() => this.customPrompt.show = false}>
-                                ${i18n.t('cancel') || 'Cancel'}
-                            </button>
-                            <button class="btn btn-primary" data-testid="btn-save-prompt" style="flex:1;"
-                                    @click=${this.saveCustomPrompt}>
-                                ${i18n.t('done') || 'Save'}
-                            </button>
-                        </div>
-                </owq-modal>
-            ` : ''}
-
-            ${this.showHardwarePrompt ? html`
-                <owq-modal .open=${this.showHardwarePrompt}
-                           data-testid="hardware-prompt-modal"
-                           ariaLabelledby="hw-prompt-title"
-                           @modal-close=${() => this.resolveHardwarePrompt(null)}>
-                        <h3 id="hw-prompt-title" style="margin-top:0;">${i18n.t('secureYourSignature') || 'Secure your signature?'}</h3>
-                        <p style="font-size:0.95rem; color:var(--text-sub); margin-bottom:20px;">
-                            ${i18n.t('secureYourSignatureHelp') || 'Add an invisible, mathematically verifiable hardware lock using FaceID, TouchID, or a Security Key.'}
-                        </p>
-                        
-                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:20px; cursor:pointer; font-size:0.9rem;">
-                            <input type="checkbox" id="remember-hardware-pref" .checked=${this.rememberHardwareChoice} 
-                                   @change=${(e: any) => this.rememberHardwareChoice = e.target.checked}>
-                            ${i18n.t('rememberMyChoice') || "Remember my choice (Don't ask again)"}
-                        </label>
-
-                        <div class="modal-actions">
-                            <button class="btn btn-primary" data-testid="btn-hw-yes" style="flex:1 1 100%;"
-                                    autofocus
-                                    @click=${() => this.resolveHardwarePrompt(true)}>
-                                ${i18n.t('yesSecureIt') || 'Yes, Secure It'}
-                            </button>
-                            <button class="btn" data-testid="btn-hw-no" style="flex:1;"
-                                    @click=${() => this.resolveHardwarePrompt(false)}>
-                                ${i18n.t('noStandardSave') || 'No, Standard Save'}
-                            </button>
-                            <button class="btn" data-testid="btn-hw-cancel" style="flex:1;"
-                                    @click=${() => this.resolveHardwarePrompt(null)}>
-                                ${i18n.t('cancelSave') || 'Cancel'}
-                            </button>
-                        </div>
-                </owq-modal>
-            ` : ''}
+            ${this.renderHandoverModal()}
+            ${this.renderProofModal()}
+            ${this.renderCustomPromptModal()}
+            ${this.renderHardwarePromptModal()}
         `;
     }
 }
