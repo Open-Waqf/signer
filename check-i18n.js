@@ -9,24 +9,35 @@ const SRC_PATH = path.join(__dirname, 'src');
 
 console.log('🔍 Scanning for unused translations...');
 
-// 1. Extract Keys from src/lib/locales.ts
+// 1. Extract keys only from resources.en in locales.ts
 const localesContent = fs.readFileSync(LOCALES_PATH, 'utf-8');
 
 const definedKeys = new Set();
+const enStart = localesContent.indexOf('en: {');
+if (enStart === -1) {
+    throw new Error('Could not find resources.en block in locales.ts');
+}
+const openBrace = localesContent.indexOf('{', enStart);
+let depth = 0;
+let endIndex = -1;
+for (let i = openBrace; i < localesContent.length; i++) {
+    const ch = localesContent[i];
+    if (ch === '{') depth++;
+    if (ch === '}') depth--;
+    if (depth === 0) {
+        endIndex = i;
+        break;
+    }
+}
+if (endIndex === -1) {
+    throw new Error('Could not parse end of resources.en block in locales.ts');
+}
 
-// 🟢 FIX: Improved Regex
-// Instead of trying to find the "en" block (which breaks on nested braces),
-// we look for any line that starts with a key definition.
-// Matches:   myKey: "value"   OR   'myKey': 'value'
-// It ignores the "en:" and "ar:" labels because they usually don't have quotes around the value part immediately.
+const enContent = localesContent.slice(openBrace + 1, endIndex);
 const keyRegex = /^\s*["']?([a-zA-Z0-9_]+)["']?:\s*['"`]/gm;
-
 let match;
-while ((match = keyRegex.exec(localesContent)) !== null) {
-    const key = match[1];
-    // Ignore top-level language keys like 'en', 'ar', 'fr'
-    if (['en', 'ar', 'fr', 'es'].includes(key)) continue;
-    definedKeys.add(key);
+while ((match = keyRegex.exec(enContent)) !== null) {
+    definedKeys.add(match[1]);
 }
 
 console.log(`✅ Found ${definedKeys.size} defined keys in locales.ts`);
@@ -46,13 +57,19 @@ function scanDir(directory) {
         } else if (file.endsWith('.ts')) {
             const content = fs.readFileSync(fullPath, 'utf-8');
 
-            // 🟢 FIX: Handle both single and double quotes in i18n.t()
-            // Matches: i18n.t('key')  OR  i18n.t("key")
-            const usageRegex = /i18n\.t\(\s*['"`](.*?)['"`]\s*\)/g;
+            // Match direct calls in app code and service-internal calls.
+            const usageRegex = /(i18n|this)\.t\(\s*['"`](.*?)['"`]\s*\)/g;
 
             let usageMatch;
             while ((usageMatch = usageRegex.exec(content)) !== null) {
-                usedKeys.add(usageMatch[1]);
+                usedKeys.add(usageMatch[2]);
+            }
+
+            // Match known dynamic key carriers (e.g. signature color label keys).
+            const dynamicKeyRegex = /labelKey:\s*['"`](.*?)['"`]/g;
+            let dynamicMatch;
+            while ((dynamicMatch = dynamicKeyRegex.exec(content)) !== null) {
+                usedKeys.add(dynamicMatch[1]);
             }
         }
     }
