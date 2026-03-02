@@ -14,6 +14,14 @@ import {ICONS} from './lib/icons';
 import {StatusBar, Style} from '@capacitor/status-bar';
 import {IncomingFileController} from './features/intake/incoming-file-controller';
 import {VerifyController} from './features/verify/verify-controller';
+import {
+    initialChainStatus,
+    initialVerifyResult,
+    pendingVerifyResult,
+    type VerifyChainStatus,
+    type VerifyResult,
+    verifyOutcomeState
+} from './features/verify/verify-state';
 import {groupedHashPreview} from './domain/hash';
 import {preferences} from './lib/preferences';
 import {isNativeOrSmallViewport, isNativePlatform} from './lib/runtime-platform';
@@ -25,13 +33,13 @@ export class AppRoot extends LitElement {
     @state() toastMsg: string | null = null;
     @state() updateAvailable = false;
     @state() verifyMode = false;
-    @state() verifyResult: { status: 'success' | 'fail' | 'pending_file' | null, id?: string } = {status: null};
+    @state() verifyResult: VerifyResult = initialVerifyResult();
     @state() expectedVerifyId: string | null = null;
     @state() verifyHashInput = '';
     @state() verifyFileHash = '';
     @state() showVerifyModal = false;
     @state() integrityStatus: 'idle' | 'success' | 'fail' = 'idle';
-    @state() chainStatus: { status: 'idle' | 'success' | 'fail', failedSignerIndex?: number, total?: number } = {status: 'idle'};
+    @state() chainStatus: VerifyChainStatus = initialChainStatus();
 
     @state() showDiagnostics = false;
     private logoTapCount = 0;
@@ -40,6 +48,8 @@ export class AppRoot extends LitElement {
     @state() showPrivacyModal = false;
 
     private updateSW: ((reload: boolean) => void) | undefined;
+    private backButtonListener: Promise<{ remove: () => Promise<void> }> | null = null;
+    private readonly onLangChanged = () => this.requestUpdate();
 
     @query('pdf-workspace') workspace: any;
     private readonly verifyController = new VerifyController();
@@ -83,7 +93,7 @@ export class AppRoot extends LitElement {
         if (id) {
             this.verifyMode = true;
             this.expectedVerifyId = id;
-            this.verifyResult = {status: 'pending_file', id: id};
+            this.verifyResult = pendingVerifyResult(id);
             this.showVerifyModal = true;
         }
     }
@@ -94,39 +104,25 @@ export class AppRoot extends LitElement {
             StatusBar.setStyle({style: Style.Light}).catch(console.error);
             StatusBar.setBackgroundColor({color: '#ffffff'}).catch(console.error);
         }
-        window.addEventListener('lang-changed', () => this.requestUpdate());
+        window.addEventListener('lang-changed', this.onLangChanged);
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', this.incomingFileController.serviceWorkerMessageHandler);
         }
         this.setupPWA();
         this.incomingFileController.setupIncomingNativeFileRouting();
 
-        App.addListener('backButton', () => {
-            if (this.showPrivacyModal) {
-                this.closePrivacy();
-                return;
-            }
-            if (this.showVerifyModal) {
-                this.closeVerify();
-                return;
-            }
-            const sigModal = document.querySelector('signature-modal');
-            if (sigModal) {
-                sigModal.remove();
-                return;
-            }
-            if (this.mode === 'workspace') {
-                this.handleExitWorkspace();
-                return;
-            }
-            App.exitApp();
-        });
+        this.backButtonListener = App.addListener('backButton', () => this.handleBackButton());
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        window.removeEventListener('lang-changed', this.onLangChanged);
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.removeEventListener('message', this.incomingFileController.serviceWorkerMessageHandler);
+        }
+        if (this.backButtonListener) {
+            this.backButtonListener.then(listener => listener.remove()).catch(console.error);
+            this.backButtonListener = null;
         }
     }
 
@@ -151,22 +147,58 @@ export class AppRoot extends LitElement {
         }, 3000);
     }
 
-    async handleVerify(file: File) {
-        this.isLoading = true;
+    private setLoading(isLoading: boolean) {
+        this.isLoading = isLoading;
         this.requestUpdate();
+    }
+
+    private resetVerifyState() {
+        this.verifyResult = initialVerifyResult();
+        this.expectedVerifyId = null;
+        this.integrityStatus = 'idle';
+        this.chainStatus = initialChainStatus();
+    }
+
+    private exitToHome() {
+        this.workspace.reset();
+        this.mode = 'home';
+    }
+
+    private closeSignatureModalIfOpen() {
+        const sigModal = document.querySelector('signature-modal');
+        if (!sigModal) return false;
+        sigModal.remove();
+        return true;
+    }
+
+    private handleBackButton() {
+        if (this.showPrivacyModal) {
+            this.closePrivacy();
+            return;
+        }
+        if (this.showVerifyModal) {
+            this.closeVerify();
+            return;
+        }
+        if (this.closeSignatureModalIfOpen()) {
+            return;
+        }
+        if (this.mode === 'workspace') {
+            this.handleExitWorkspace();
+            return;
+        }
+        App.exitApp();
+    }
+
+    async handleVerify(file: File) {
+        this.setLoading(true);
 
         try {
             const outcome = await this.verifyController.verifyFile(file, this.expectedVerifyId);
-            this.isLoading = false;
-            this.verifyFileHash = outcome.verifyFileHash;
-            this.verifyResult = outcome.verifyResult;
-            this.expectedVerifyId = outcome.expectedVerifyId;
-            this.verifyHashInput = '';
-            this.integrityStatus = 'idle';
-            this.chainStatus = outcome.chainStatus;
-            this.showVerifyModal = true;
+            this.setLoading(false);
+            Object.assign(this, verifyOutcomeState(outcome));
         } catch (e) {
-            this.isLoading = false;
+            this.setLoading(false);
             this.showToast(i18n.t('errorReadingFile'));
         }
     }
@@ -185,10 +217,7 @@ export class AppRoot extends LitElement {
 
     closeVerify() {
         this.showVerifyModal = false;
-        this.verifyResult = {status: null};
-        this.expectedVerifyId = null;
-        this.integrityStatus = 'idle';
-        this.chainStatus = {status: 'idle'};
+        this.resetVerifyState();
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 
@@ -203,8 +232,7 @@ export class AppRoot extends LitElement {
             if (!confirm(i18n.t('fileTooBigMsg').replace('{size}', sizeInMB.toFixed(1)))) return;
         }
 
-        this.isLoading = true;
-        this.requestUpdate();
+        this.setLoading(true);
         await new Promise(r => setTimeout(r, 50));
 
         try {
@@ -215,12 +243,12 @@ export class AppRoot extends LitElement {
             this.showToast(i18n.t('errorLoading'));
             this.mode = 'home';
         } finally {
-            this.isLoading = false;
+            this.setLoading(false);
         }
     }
 
     async loadSamplePdf() {
-        this.isLoading = true;
+        this.setLoading(true);
         try {
             const pdfDoc = await PDFDocument.create();
             const page = pdfDoc.addPage([595.28, 841.89]);
@@ -246,7 +274,7 @@ export class AppRoot extends LitElement {
         } catch (e) {
             this.showToast(i18n.t('errorSamplePdf'));
         } finally {
-            this.isLoading = false;
+            this.setLoading(false);
         }
     }
 
@@ -298,32 +326,75 @@ export class AppRoot extends LitElement {
         if (this.workspace && this.workspace.isDirty) {
             this.showExitConfirm = true;
         } else {
-            this.workspace.reset();
-            this.mode = 'home';
+            this.exitToHome();
         }
     }
 
-    render() {
+    private renderLoaderOverlay() {
+        if (!this.isLoading) return '';
         return html`
-            ${this.isLoading ? html`
-                <div class="loader-overlay">
-                    <div class="spinner"></div>
-                    <div>${i18n.t('loadingDoc')}</div>
+            <div class="loader-overlay">
+                <div class="spinner"></div>
+                <div>${i18n.t('loadingDoc')}</div>
+            </div>
+        `;
+    }
+
+    private renderUpdateToast() {
+        if (!this.updateAvailable) return '';
+        return html`
+            <div class="toast toast-interactive show">
+                <span class="update-banner-label">${ICONS.alert} ${i18n.t('updateAvailable')}</span>
+                <button class="btn btn-primary update-banner-btn"
+                        @click=${() => this.updateSW && this.updateSW(true)}>
+                    ${i18n.t('reload')}
+                </button>
+            </div>
+        `;
+    }
+
+    private renderModeToggle() {
+        return html`
+            <div class="mode-toggle">
+                <button id="btn-sign-mode" data-testid="btn-sign-mode" class="${!this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = false}>
+                    <span class="mode-label">${ICONS.sign} ${i18n.t('signMode')}</span>
+                </button>
+                <button id="btn-verify-mode" data-testid="btn-verify-mode" class="${this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = true}>
+                    <span class="mode-label">${ICONS.search} ${i18n.t('verifyMode')}</span>
+                </button>
+            </div>
+        `;
+    }
+
+    private renderHomeFeatures() {
+        if (this.verifyMode) return '';
+        return html`
+            <div class="features-section">
+                <h3 class="features-title">
+                    ${i18n.t('howItWorks')}</h3>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">${ICONS.sign}</div>
+                        <h4>${i18n.t('step1Title')}</h4>
+                        <p>${i18n.t('step1Desc')}</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">${ICONS.lock}</div>
+                        <h4>${i18n.t('step2Title')}</h4>
+                        <p>${i18n.t('step2Desc')}</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">${ICONS.shield}</div>
+                        <h4>${i18n.t('step3Title')}</h4>
+                        <p>${i18n.t('step3Desc')}</p>
+                    </div>
                 </div>
-            ` : ''}
+            </div>
+        `;
+    }
 
-            <div class="toast ${this.toastMsg ? 'show' : ''}">${this.toastMsg}</div>
-
-            ${this.updateAvailable ? html`
-                <div class="toast show">
-                    <span class="update-banner-label">${ICONS.alert} ${i18n.t('updateAvailable')}</span>
-                    <button class="btn btn-primary update-banner-btn"
-                            @click=${() => this.updateSW && this.updateSW(true)}>
-                        ${i18n.t('reload')}
-                    </button>
-                </div>
-            ` : ''}
-
+    private renderHomeScreen() {
+        return html`
             <div class="drop-zone ${this.mode === 'workspace' ? 'hidden' : ''}"
                  @dragover=${(e: DragEvent) => e.preventDefault()} @drop=${this.handleDrop}>
                 <div class="mode-container">
@@ -341,14 +412,7 @@ export class AppRoot extends LitElement {
                         <h1>${i18n.t('appTitle')}</h1>
                         <p class="sub hero-subtitle">v${packageJson.version} • ${i18n.t('tagline')}</p>
 
-                        <div class="mode-toggle">
-                            <button id="btn-sign-mode" data-testid="btn-sign-mode" class="${!this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = false}>
-                                <span class="mode-label">${ICONS.sign} ${i18n.t('signMode')}</span>
-                            </button>
-                            <button id="btn-verify-mode" data-testid="btn-verify-mode" class="${this.verifyMode ? 'active' : ''}" @click=${() => this.verifyMode = true}>
-                                <span class="mode-label">${ICONS.search} ${i18n.t('verifyMode')}</span>
-                            </button>
-                        </div>
+                        ${this.renderModeToggle()}
 
                         <div id="drop-area" data-testid="drop-area" class="drop-area-visual" @click=${this.openFile}>
                             <button class="btn btn-primary" data-testid="btn-select-file">
@@ -383,42 +447,27 @@ export class AppRoot extends LitElement {
                         </button>
                     </div>
 
-                    ${!this.verifyMode ? html`
-                        <div class="features-section">
-                            <h3 class="features-title">
-                                ${i18n.t('howItWorks')}</h3>
-                            <div class="features-grid">
-                                <div class="feature-card">
-                                    <div class="feature-icon">${ICONS.sign}</div>
-                                    <h4>${i18n.t('step1Title')}</h4>
-                                    <p>${i18n.t('step1Desc')}</p>
-                                </div>
-                                <div class="feature-card">
-                                    <div class="feature-icon">${ICONS.lock}</div>
-                                    <h4>${i18n.t('step2Title')}</h4>
-                                    <p>${i18n.t('step2Desc')}</p>
-                                </div>
-                                <div class="feature-card">
-                                    <div class="feature-icon">${ICONS.shield}</div>
-                                    <h4>${i18n.t('step3Title')}</h4>
-                                    <p>${i18n.t('step3Desc')}</p>
-                                </div>
-                            </div>
-                        </div>
-                    ` : ''}
+                    ${this.renderHomeFeatures()}
                     <div class="home-bottom-spacer"></div>
                 </div>
             </div>
+        `;
+    }
 
+    private renderWorkspace() {
+        return html`
             <pdf-workspace class="${this.mode === 'home' ? 'hidden' : ''}"
                            @toast=${(e: CustomEvent) => this.showToast(e.detail)}
                            @set-loading=${(e: CustomEvent) => {
-                               this.isLoading = e.detail;
-                               this.requestUpdate();
+                               this.setLoading(e.detail);
                            }}
                            @exit-workspace=${this.handleExitWorkspace}>
             </pdf-workspace>
+        `;
+    }
 
+    private renderPrivacyModal() {
+        return html`
             <owq-modal .open=${this.showPrivacyModal}
                        .closeOnBackdrop=${false}
                        ariaLabel="${i18n.t('privacyTitle')}"
@@ -449,131 +498,176 @@ export class AppRoot extends LitElement {
                     <button class="btn" data-testid="btn-close-privacy" @click=${() => this.closePrivacy()}>${i18n.t('close')}</button>
                 </div>
             </owq-modal>
+        `;
+    }
 
-            ${this.showDiagnostics ? html`
-                <owq-modal .open=${this.showDiagnostics}
-                           data-testid="diagnostics-modal"
-                           ariaLabel="${i18n.t('diagnostics')}"
-                           @modal-close=${() => this.showDiagnostics = false}>
-                        <h2 class="modal-title modal-inline-icon">${ICONS.cog}
-                            ${i18n.t('diagnostics')}</h2>
-                        <div class="diagnostics-panel">
-                            <div>${i18n.t('appVersion')}: ${packageJson.version}</div>
-                            <div>${i18n.t('platform')}:
-                                ${isNativePlatform() ? i18n.t('platformNative') : i18n.t('platformWeb')}
-                            </div>
-                            <div>${i18n.t('userAgent')}: ${navigator.userAgent}</div>
-                            <div>${i18n.t('windowSize')}: ${window.innerWidth}x${window.innerHeight}</div>
-                            <div>${i18n.t('connection')}: ${navigator.onLine ? i18n.t('online') : i18n.t('offline')}
-                            </div>
+    private renderDiagnosticsModal() {
+        if (!this.showDiagnostics) return '';
+        return html`
+            <owq-modal .open=${this.showDiagnostics}
+                       data-testid="diagnostics-modal"
+                       ariaLabel="${i18n.t('diagnostics')}"
+                       @modal-close=${() => this.showDiagnostics = false}>
+                    <h2 class="modal-title modal-inline-icon">${ICONS.cog}
+                        ${i18n.t('diagnostics')}</h2>
+                    <div class="diagnostics-panel">
+                        <div>${i18n.t('appVersion')}: ${packageJson.version}</div>
+                        <div>${i18n.t('platform')}:
+                            ${isNativePlatform() ? i18n.t('platformNative') : i18n.t('platformWeb')}
                         </div>
-                        <div class="modal-action-row modal-top-gap">
-                            <button class="btn btn-full" data-testid="btn-close-diagnostics" @click=${() => this.showDiagnostics = false}>
-                                ${i18n.t('close')}
-                            </button>
+                        <div>${i18n.t('userAgent')}: ${navigator.userAgent}</div>
+                        <div>${i18n.t('windowSize')}: ${window.innerWidth}x${window.innerHeight}</div>
+                        <div>${i18n.t('connection')}: ${navigator.onLine ? i18n.t('online') : i18n.t('offline')}
                         </div>
-                </owq-modal>
+                    </div>
+                    <div class="modal-actions center modal-top-gap">
+                        <button class="btn btn-full" data-testid="btn-close-diagnostics" @click=${() => this.showDiagnostics = false}>
+                            ${i18n.t('close')}
+                        </button>
+                    </div>
+            </owq-modal>
+        `;
+    }
+
+    private renderVerifyResultCard() {
+        return html`
+            <div class="verify-step-card info-panel">
+                <h3 class="verify-step-title">${i18n.t('metadataCheckTitle')}</h3>
+                ${this.verifyResult.status === 'success' ? html`
+                    <h2 class="verify-success-title" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
+                    <p class="verify-step-note">${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong></p>
+                    <div class="amanah-panel verify-disclaimer">
+                        ${i18n.t('recordFoundDisclaimer')}
+                    </div>
+                ` : html`
+                    <h2 class="verify-fail-title" data-testid="verify-fail-title">${i18n.t('noRecordFound')}</h2>
+                    <p class="verify-step-note">${i18n.t('noRecordMsg')}</p>
+                `}
+            </div>
+        `;
+    }
+
+    private renderHashCheckCard() {
+        return html`
+            <div class="verify-step-card info-panel">
+                <h3 class="verify-step-title">${i18n.t('strictIntegrityTitle')}</h3>
+                <p class="verify-step-note">${i18n.t('strictIntegrityHelp')}</p>
+                <div class="verify-hash-row">
+                    <input type="text" class="input-field" data-testid="input-verify-hash" .value="${this.verifyHashInput}"
+                           @input="${(e: any) => {
+                               this.verifyHashInput = e.target.value;
+                               this.integrityStatus = 'idle';
+                           }}" placeholder="${i18n.t('pasteHashPlaceholder')}">
+                    <button class="btn btn-primary" data-testid="btn-check-hash" @click="${this.checkHash}">${i18n.t('verifyBtn')}
+                    </button>
+                </div>
+                <p class="verify-hash-hint">
+                    ${i18n.t('hashFormatHint').replace('{count}', String(this.verifyFileHash?.length || 64))}
+                </p>
+                ${this.normalizedHashInput() ? html`
+                    <div class="info-panel hash-normalized-preview" data-testid="hash-normalized">
+                        ${this.groupedHashPreview(this.normalizedHashInput())}
+                    </div>
+                ` : ''}
+                ${this.integrityStatus === 'success' ? html`
+                    <div class="alert-box alert-success alert-top-gap" data-testid="integrity-success"
+                         .innerHTML=${i18n.t('strictVerified')}></div>` : ''}
+                ${this.integrityStatus === 'fail' ? html`
+                    <div class="alert-box alert-error alert-top-gap" data-testid="integrity-fail"
+                         .innerHTML=${i18n.t('strictMismatch')}></div>` : ''}
+            </div>
+        `;
+    }
+
+    private renderVerifyPendingBody() {
+        return html`
+            <div class="verify-icon-wrap">
+                <div class="verify-icon-badge">${ICONS.search}</div>
+            </div>
+            <h2>${i18n.t('linkDetected')}</h2>
+            <p class="sub verify-pending-text">${i18n.t('linkDetectedMsg')} <strong>${this.verifyResult.id}</strong></p>
+            <button class="btn btn-primary verify-pending-btn" data-testid="btn-start-verify" @click=${() => this.startPendingVerification()}>
+                ${i18n.t('selectFileVerify')}
+            </button>
+        `;
+    }
+
+    private renderVerifyDetailsBody() {
+        return html`
+            ${this.renderVerifyResultCard()}
+            ${this.renderHashCheckCard()}
+
+            ${this.chainStatus.status === 'success' ? html`
+                <div class="alert-box alert-success alert-top-gap" data-testid="chain-success"
+                     .innerHTML=${i18n.t('chainValidated').replace('{count}', String(this.chainStatus.total || 0))}></div>
             ` : ''}
+            ${this.chainStatus.status === 'fail' ? html`
+                <div class="alert-box alert-error alert-top-gap" data-testid="chain-fail"
+                     .innerHTML=${i18n.t('chainFailed').replace('{index}', String(this.chainStatus.failedSignerIndex || 0))}></div>
+            ` : ''}
+        `;
+    }
 
+    private renderVerifyModal() {
+        return html`
             <owq-modal .open=${this.showVerifyModal}
                        .closeOnBackdrop=${false}
                        ariaLabel="${i18n.t('verifyMode')}"
                        @modal-close=${this.closeVerify}>
                 <div class="dialog-content dialog-content-center">
-                    ${this.verifyResult.status === 'pending_file' ? html`
-                        <div class="verify-icon-wrap">
-                            <div class="verify-icon-badge">${ICONS.search}</div>
-                        </div>
-                        <h2>${i18n.t('linkDetected')}</h2>
-                        <p class="sub verify-pending-text">${i18n.t('linkDetectedMsg')} <strong>${this.verifyResult.id}</strong></p>
-                        <button class="btn btn-primary verify-pending-btn" data-testid="btn-start-verify" @click=${() => this.startPendingVerification()}>
-                            ${i18n.t('selectFileVerify')}
-                        </button>
-                    ` : html`
-                        <div class="verify-step-card info-panel">
-                            <h3 class="verify-step-title">${i18n.t('metadataCheckTitle')}</h3>
-                            ${this.verifyResult.status === 'success' ? html`
-                                <h2 class="verify-success-title" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
-                                <p class="verify-step-note">${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong></p>
-                                <div class="amanah-panel verify-disclaimer">
-                                    ${i18n.t('recordFoundDisclaimer')}
-                                </div>
-                            ` : html`
-                                <h2 class="verify-fail-title" data-testid="verify-fail-title">${i18n.t('noRecordFound')}</h2>
-                                <p class="verify-step-note">${i18n.t('noRecordMsg')}</p>
-                            `}
-                        </div>
-
-                        <div class="verify-step-card info-panel">
-                            <h3 class="verify-step-title">${i18n.t('strictIntegrityTitle')}</h3>
-                            <p class="verify-step-note">${i18n.t('strictIntegrityHelp')}</p>
-                            <div class="verify-hash-row">
-                                <input type="text" class="input-field" data-testid="input-verify-hash" .value="${this.verifyHashInput}"
-                                       @input="${(e: any) => {
-                                           this.verifyHashInput = e.target.value;
-                                           this.integrityStatus = 'idle';
-                                       }}" placeholder="${i18n.t('pasteHashPlaceholder')}">
-                                <button class="btn btn-primary" data-testid="btn-check-hash" @click="${this.checkHash}">${i18n.t('verifyBtn')}
-                                </button>
-                            </div>
-                            <p class="verify-hash-hint">
-                                ${i18n.t('hashFormatHint').replace('{count}', String(this.verifyFileHash?.length || 64))}
-                            </p>
-                            ${this.normalizedHashInput() ? html`
-                                <div class="info-panel hash-normalized-preview" data-testid="hash-normalized">
-                                    ${this.groupedHashPreview(this.normalizedHashInput())}
-                                </div>
-                            ` : ''}
-                            ${this.integrityStatus === 'success' ? html`
-                                <div class="alert-box alert-success alert-top-gap" data-testid="integrity-success"
-                                     .innerHTML=${i18n.t('strictVerified')}></div>` : ''}
-                            ${this.integrityStatus === 'fail' ? html`
-                                <div class="alert-box alert-error alert-top-gap" data-testid="integrity-fail"
-                                     .innerHTML=${i18n.t('strictMismatch')}></div>` : ''}
-                        </div>
-
-                        ${this.chainStatus.status === 'success' ? html`
-                            <div class="alert-box alert-success alert-top-gap" data-testid="chain-success"
-                                 .innerHTML=${i18n.t('chainValidated').replace('{count}', String(this.chainStatus.total || 0))}></div>
-                        ` : ''}
-                        ${this.chainStatus.status === 'fail' ? html`
-                            <div class="alert-box alert-error alert-top-gap" data-testid="chain-fail"
-                                 .innerHTML=${i18n.t('chainFailed').replace('{index}', String(this.chainStatus.failedSignerIndex || 0))}></div>
-                        ` : ''}
-                    `}
+                    ${this.verifyResult.status === 'pending_file' ? this.renderVerifyPendingBody() : this.renderVerifyDetailsBody()}
                 </div>
                 <div class="dialog-footer">
                     <button class="btn" data-testid="btn-close-verify" @click=${() => this.closeVerify()}>${i18n.t('close')}</button>
                 </div>
             </owq-modal>
+        `;
+    }
 
-            ${this.showExitConfirm ? html`
-                <owq-modal .open=${this.showExitConfirm}
-                           .center=${true}
-                           data-testid="exit-confirm-modal"
-                           ariaLabel="${i18n.t('exitConfirmTitle')}"
-                           @modal-close=${() => this.showExitConfirm = false}>
-                        <div class="exit-warning-wrap">
-                            <div class="exit-warning-badge">${ICONS.alert}</div>
-                        </div>
-                        <h2 class="modal-title">
-                            ${i18n.t('exitConfirmTitle')}</h2>
-                        <p class="modal-copy">
-                            ${i18n.t('exitConfirmText')}
-                        </p>
-                        <div class="modal-split-actions">
-                            <button class="btn btn-flex" data-testid="btn-cancel-exit" @click=${() => this.showExitConfirm = false}>
-                                ${i18n.t('cancel')}
-                            </button>
-                            <button class="btn btn-danger btn-flex" data-testid="btn-confirm-exit" @click=${() => {
-                                this.showExitConfirm = false;
-                                this.workspace.reset();
-                                this.mode = 'home';
-                            }}>${i18n.t('exitBtn')}
-                            </button>
-                        </div>
-                </owq-modal>
-            ` : ''}
+    private renderExitConfirmModal() {
+        if (!this.showExitConfirm) return '';
+        return html`
+            <owq-modal .open=${this.showExitConfirm}
+                       .center=${true}
+                       data-testid="exit-confirm-modal"
+                       ariaLabel="${i18n.t('exitConfirmTitle')}"
+                       @modal-close=${() => this.showExitConfirm = false}>
+                    <div class="exit-warning-wrap">
+                        <div class="exit-warning-badge">${ICONS.alert}</div>
+                    </div>
+                    <h2 class="modal-title">
+                        ${i18n.t('exitConfirmTitle')}</h2>
+                    <p class="modal-copy">
+                        ${i18n.t('exitConfirmText')}
+                    </p>
+                    <div class="modal-actions">
+                        <button class="btn modal-btn-flex" data-testid="btn-cancel-exit" @click=${() => this.showExitConfirm = false}>
+                            ${i18n.t('cancel')}
+                        </button>
+                        <button class="btn btn-danger modal-btn-flex" data-testid="btn-confirm-exit" @click=${() => {
+                            this.showExitConfirm = false;
+                            this.exitToHome();
+                        }}>${i18n.t('exitBtn')}
+                        </button>
+                    </div>
+            </owq-modal>
+        `;
+    }
+
+    render() {
+        return html`
+            ${this.renderLoaderOverlay()}
+
+            <div class="toast toast-passive ${this.toastMsg ? 'show' : ''}">${this.toastMsg}</div>
+
+            ${this.renderUpdateToast()}
+
+            ${this.renderHomeScreen()}
+            ${this.renderWorkspace()}
+            ${this.renderPrivacyModal()}
+            ${this.renderDiagnosticsModal()}
+            ${this.renderVerifyModal()}
+            ${this.renderExitConfirmModal()}
         `;
     }
 }

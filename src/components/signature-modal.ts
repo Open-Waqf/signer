@@ -56,16 +56,17 @@ export class SignatureModal extends LitElement {
     private _windowMouseUpHandler: (() => void) | null = null;
     private _windowTouchEndHandler: (() => void) | null = null;
     private _windowTouchCancelHandler: (() => void) | null = null;
+    private _keyDownHandler: ((e: KeyboardEvent) => void) | null = null;
 
     @state() private originalData: string | null = null;
     @state() private isDirty = false;
 
-    static styles = [sharedStyles, css`
+        static styles = [sharedStyles, css`
         canvas {
-            border: 2px dashed #ccc;
+            border: 2px dashed var(--border, #e5e7eb);
             border-radius: 8px;
             touch-action: none;
-            background: #fafafa;
+            background: color-mix(in srgb, var(--bg-surface, #ffffff), #000 2%);
             width: 100%;
             height: auto;
             min-height: 180px;
@@ -111,8 +112,8 @@ export class SignatureModal extends LitElement {
         }
 
         .color-swatch.selected {
-            border-color: #444;
-            box-shadow: 0 0 0 2px #fff, 0 0 0 4px #444;
+            border-color: var(--text-sub-strong, #4b5563);
+            box-shadow: 0 0 0 2px var(--bg-surface, #fff), 0 0 0 4px var(--text-sub-strong, #4b5563);
         }
 
         .presets-section {
@@ -121,7 +122,7 @@ export class SignatureModal extends LitElement {
 
         .presets-label {
             font-size: 0.75rem;
-            color: #6b7280;
+            color: var(--text-sub, #6b7280);
             margin-bottom: 8px;
             text-align: start;
         }
@@ -135,9 +136,9 @@ export class SignatureModal extends LitElement {
         .preset-item {
             position: relative;
             cursor: pointer;
-            border: 2px solid #e5e7eb;
+            border: 2px solid var(--border, #e5e7eb);
             border-radius: 6px;
-            background: #fff;
+            background: var(--bg-surface, #fff);
             padding: 0;
             width: 80px;
             height: 48px;
@@ -164,7 +165,7 @@ export class SignatureModal extends LitElement {
             height: 20px;
             border-radius: 50%;
             background: rgba(220, 38, 38, 0.9);
-            color: #fff;
+            color: var(--bg-surface, #fff);
             border: none;
             cursor: pointer;
             font-size: 10px;
@@ -183,13 +184,13 @@ export class SignatureModal extends LitElement {
 
         .preset-name {
             font-size: 0.6rem;
-            color: #6b7280;
+            color: var(--text-sub, #6b7280);
             text-align: center;
             position: absolute;
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(255,255,255,0.8);
+            background: color-mix(in srgb, var(--bg-surface, #fff), transparent 20%);
             padding: 1px 0;
             white-space: nowrap;
             overflow: hidden;
@@ -198,7 +199,7 @@ export class SignatureModal extends LitElement {
 
         .no-presets {
             font-size: 0.75rem;
-            color: #9ca3af;
+            color: var(--workspace-thumb-index, #9ca3af);
             text-align: start;
             font-style: italic;
         }
@@ -262,7 +263,7 @@ export class SignatureModal extends LitElement {
         this.loadSaved();
 
         // Focus trap
-        this.shadowRoot?.addEventListener('keydown', ((e: KeyboardEvent) => {
+        this._keyDownHandler = (e: KeyboardEvent) => {
             if (e.key === 'Tab') {
                 const focusables = this.shadowRoot!.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
                 const first = focusables[0] as HTMLElement;
@@ -283,7 +284,8 @@ export class SignatureModal extends LitElement {
             if (e.key === 'Escape') {
                 this.remove();
             }
-        }) as EventListener);
+        };
+        this.shadowRoot?.addEventListener('keydown', this._keyDownHandler as EventListener);
     }
 
     updated(changed: Map<string, unknown>) {
@@ -309,6 +311,7 @@ export class SignatureModal extends LitElement {
         if (this._windowMouseUpHandler) window.removeEventListener('mouseup', this._windowMouseUpHandler);
         if (this._windowTouchEndHandler) window.removeEventListener('touchend', this._windowTouchEndHandler);
         if (this._windowTouchCancelHandler) window.removeEventListener('touchcancel', this._windowTouchCancelHandler);
+        if (this._keyDownHandler) this.shadowRoot?.removeEventListener('keydown', this._keyDownHandler as EventListener);
     }
 
     loadSaved() {
@@ -317,7 +320,7 @@ export class SignatureModal extends LitElement {
         const legacyKey = `signer_${this.mode}`;
         const legacy = localStorage.getItem(legacyKey);
         if (legacy && presets.length === 0) {
-            const defaultName = this.mode === 'signature' ? 'Signature 1' : 'Initials 1';
+            const defaultName = `${this.mode === 'signature' ? i18n.t('presetBaseSignature') : i18n.t('presetBaseInitials')} 1`;
             presets = [{id: Date.now().toString(), name: defaultName, dataURL: legacy}];
             persistPresets(this.mode, presets);
         }
@@ -479,7 +482,7 @@ export class SignatureModal extends LitElement {
     private saveAsPreset() {
         HapticService.selection();
         if (this.presets.length >= MAX_PRESETS) return;
-        const defaultName = `${this.mode === 'signature' ? 'Signature' : 'Initials'} ${this.presets.length + 1}`;
+        const defaultName = `${this.mode === 'signature' ? i18n.t('presetBaseSignature') : i18n.t('presetBaseInitials')} ${this.presets.length + 1}`;
         this.saveNameValue = defaultName;
         this.showSaveNameRow = true;
     }
@@ -539,7 +542,7 @@ export class SignatureModal extends LitElement {
             <owq-modal .open=${true}
                        .center=${true}
                        @modal-close=${() => this.remove()}>
-                    <h3 style="margin-top:0;">
+                    <h3 class="modal-title">
                         ${this.mode === 'initials' ? i18n.t('addInitials') : i18n.t('addSig')}</h3>
 
                     <div class="presets-section">

@@ -806,16 +806,6 @@ export class PdfWorkspace extends LitElement {
             border-color: var(--primary) !important;
         }
 
-        .modal-actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .modal-actions .btn {
-            flex: 1 1 140px;
-        }
-
         /* Toolbar scroll indicator gradient */
 
         .toolbar-row::after {
@@ -1490,7 +1480,6 @@ export class PdfWorkspace extends LitElement {
         }
 
         const hasVisualSig = this.annotations.some(a => a.type !== 'biometric');
-        console.log('Save logic:', {hasHardwareSupport: this.hasHardwareSupport, hasVisualSig, pref: this.hardwarePref, isBasic: this.isBasicMode});
 
         const decision = await resolveHardwareUsage({
             hasHardwareSupport: this.hasHardwareSupport,
@@ -1498,7 +1487,6 @@ export class PdfWorkspace extends LitElement {
             hardwarePref: this.hardwarePref,
             isBasicMode: this.isBasicMode,
             requestPromptDecision: async () => {
-                console.log('Showing hardware prompt modal...');
                 this.showHardwarePrompt = true;
                 return new Promise<boolean | null>((resolve) => {
                     this.hardwareResolver = resolve;

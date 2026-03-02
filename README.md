@@ -138,6 +138,10 @@ Anyone receiving a signed document can verify it:
 * **Refactor Docs:** See `docs/architecture/` for app shell, workspace, and PDF pipeline boundaries.
 * **Internal PDF Services:** Hashing, metadata, audit-page rendering, and chain verification are split into focused modules
   under `src/lib/pdf/`.
+* **Modal System:** All dialogs are standardized on `owq-modal` plus shared modal utility classes in
+  `src/styles/shared-styles.ts` for consistent layout, focus behavior, and RTL-safe styling.
+* **Verification State Flow:** App-shell verification transitions are centralized under `src/features/verify/` (`verify-controller`
+  and `verify-state`) to keep UI rendering and state transitions decoupled.
 
 ---
 

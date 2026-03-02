@@ -212,6 +212,20 @@ export const sharedStyles = css`
         margin-bottom: 12px;
     }
 
+    .modal-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .modal-actions .btn {
+        flex: 1 1 140px;
+    }
+
+    .modal-actions.center {
+        justify-content: center;
+    }
+
     .modal-btn-flex {
         flex: 1;
     }

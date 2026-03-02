@@ -538,11 +538,11 @@ app-root {
 }
 
 .privacy-heading {
-    color: #065f46;
+    color: var(--success-text);
 }
 
 .privacy-model-text {
-    color: #047857;
+    color: var(--success);
 }
 
 .btn-full {
@@ -553,13 +553,22 @@ app-root {
     margin-top: 15px;
 }
 
-.modal-action-row {
+.modal-actions {
     display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.modal-actions .btn {
+    flex: 1 1 140px;
+}
+
+.modal-actions.center {
     justify-content: center;
 }
 
-.modal-top-gap {
-    margin-top: 15px;
+.modal-btn-flex {
+    flex: 1;
 }
 
 .verify-hash-row {
@@ -581,7 +590,7 @@ app-root {
 
 .verify-icon-badge {
     padding: 15px;
-    background: #eef5ff;
+    background: color-mix(in srgb, var(--primary), #fff 90%);
     border-radius: 999px;
     box-shadow: inset 0 0 0 1px rgba(30, 64, 175, 0.1);
 }
@@ -598,7 +607,7 @@ app-root {
     margin: 0 0 8px 0;
     font-size: 0.95rem;
     letter-spacing: 0.01em;
-    color: #334155;
+    color: var(--text-sub-strong);
 }
 
 .verify-step-note {
@@ -607,20 +616,20 @@ app-root {
 }
 
 .verify-success-title {
-    color: #166534;
+    color: var(--success-text);
     margin: 0 0 8px 0;
 }
 
 .verify-fail-title {
-    color: #991b1b;
+    color: var(--danger-text);
     margin: 0 0 8px 0;
 }
 
 .verify-disclaimer {
     text-align: left;
-    color: #b45309;
-    background: #fffbeb;
-    border-color: #fde68a;
+    color: var(--warning-text);
+    background: var(--warning-bg);
+    border-color: color-mix(in srgb, var(--warning), #fff 55%);
     margin-top: 10px;
 }
 
@@ -652,7 +661,7 @@ app-root {
 }
 
 .exit-warning-wrap {
-    color: #ef4444;
+    color: var(--danger);
     margin-bottom: 15px;
     display: flex;
     justify-content: center;
@@ -660,17 +669,12 @@ app-root {
 
 .exit-warning-badge {
     padding: 15px;
-    background: #fee2e2;
+    background: var(--danger-bg);
     border-radius: 50%;
 }
 
-.modal-split-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.btn-flex {
-    flex: 1;
+.modal-top-gap {
+    margin-top: 15px;
 }
 
 @media (max-width: 480px) {
@@ -712,7 +716,7 @@ app-root {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(255, 255, 255, 0.85);
+    background: var(--overlay-white-85);
     z-index: 200000; /* Higher than modal-overlay (99999) */
     display: flex;
     flex-direction: column;
@@ -766,6 +770,14 @@ app-root {
     box-shadow: var(--shadow-floating);
 }
 
+.toast-passive {
+    pointer-events: none;
+}
+
+.toast-interactive {
+    pointer-events: auto;
+}
+
 .toast.show {
     visibility: visible;
     opacity: 1;
@@ -774,7 +786,7 @@ app-root {
 
 /* Status Panels */
 .info-panel {
-    background: #f8f4ec;
+    background: var(--workspace-toolbar-gradient-end);
     padding: 16px;
     border-radius: var(--radius-md);
     margin-top: 16px;
@@ -788,7 +800,7 @@ app-root {
     border-left: 4px solid var(--success);
     background: var(--success-bg);
     border-radius: var(--radius-sm);
-    color: #065f46;
+    color: var(--success-text);
 }
 
 .diagnostics-panel {
@@ -835,5 +847,5 @@ app-root {
 }
 
 .lang-select:hover {
-    border-color: #d1d5db;
+    border-color: var(--border-strong);
 }
