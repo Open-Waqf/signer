@@ -136,6 +136,8 @@ Anyone receiving a signed document can verify it:
 * **PDF Engine:** `pdf-lib` (modification) & `pdfjs-dist` (rendering).
 * **Cryptography:** Native `crypto.subtle` API for SHA-256 and `crypto.randomUUID()` for identifiers.
 * **Refactor Docs:** See `docs/architecture/` for app shell, workspace, and PDF pipeline boundaries.
+* **Internal PDF Services:** Hashing, metadata, audit-page rendering, and chain verification are split into focused modules
+  under `src/lib/pdf/`.
 
 ---
 

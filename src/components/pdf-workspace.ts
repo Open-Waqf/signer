@@ -1,6 +1,5 @@
 import {css, html, LitElement} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
-import {Capacitor} from '@capacitor/core';
 import {pdfEngine} from '../lib/pdf-engine';
 import {fileService} from '../lib/file-service';
 import {i18n} from '../lib/i18n-service';
@@ -24,6 +23,7 @@ import {redoHistory, takeSnapshot, undoHistory} from '../features/workspace/hist
 import {runHandoverCheck} from '../features/workspace/handover-workflow';
 import {computeDragMove, computeResizeWidthPct} from '../features/workspace/interaction-controller';
 import {executeSave, finalizeSave, resolveHardwareUsage, shareLatestDocument} from '../features/workspace/save-workflow';
+import {isNativePlatform} from '../lib/runtime-platform';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
@@ -1236,9 +1236,14 @@ export class PdfWorkspace extends LitElement {
                         this.hardwarePref = 'never';
                         preferences.setHardwarePref('never');
                     },
-                    isNativePlatform: () => Capacitor.isNativePlatform(),
+                    isNativePlatform,
                     toast: (msg) => this.toast(msg),
-                    t: (key) => i18n.t(key),
+                    messages: {
+                        hardwareProofUnavailable: i18n.t('hardwareProofUnavailable'),
+                        exportingFile: i18n.t('exportingFile'),
+                        savedMsg: i18n.t('savedMsg'),
+                        noChanges: i18n.t('noChanges'),
+                    },
                     hapticSuccess: () => HapticService.success(),
                     setLoading: (loading) => this.dispatchEvent(new CustomEvent('set-loading', {detail: loading, bubbles: true, composed: true})),
                 },
@@ -1276,9 +1281,14 @@ export class PdfWorkspace extends LitElement {
                     this.hardwarePref = 'never';
                     preferences.setHardwarePref('never');
                 },
-                isNativePlatform: () => Capacitor.isNativePlatform(),
+                isNativePlatform,
                 toast: (msg) => this.toast(msg),
-                t: (key) => i18n.t(key),
+                messages: {
+                    hardwareProofUnavailable: i18n.t('hardwareProofUnavailable'),
+                    exportingFile: i18n.t('exportingFile'),
+                    savedMsg: i18n.t('savedMsg'),
+                    noChanges: i18n.t('noChanges'),
+                },
                 hapticSuccess: () => HapticService.success(),
                 setLoading: (loading) => this.dispatchEvent(new CustomEvent('set-loading', {detail: loading, bubbles: true, composed: true})),
             },
@@ -1339,9 +1349,14 @@ export class PdfWorkspace extends LitElement {
                     this.hardwarePref = 'never';
                     preferences.setHardwarePref('never');
                 },
-                isNativePlatform: () => Capacitor.isNativePlatform(),
+                isNativePlatform,
                 toast: (msg) => this.toast(msg),
-                t: (key) => i18n.t(key),
+                messages: {
+                    hardwareProofUnavailable: i18n.t('hardwareProofUnavailable'),
+                    exportingFile: i18n.t('exportingFile'),
+                    savedMsg: i18n.t('savedMsg'),
+                    noChanges: i18n.t('noChanges'),
+                },
                 hapticSuccess: () => HapticService.success(),
                 setLoading: (loading) => this.dispatchEvent(new CustomEvent('set-loading', {detail: loading, bubbles: true, composed: true})),
             },
@@ -1350,7 +1365,7 @@ export class PdfWorkspace extends LitElement {
             lastSavedBytes: this.lastSavedBytes,
             lastSaved: this.lastSaved,
             saveIfNeeded: async () => {
-                await this.saveDocument({silentWeb: !Capacitor.isNativePlatform(), showToast: false});
+                await this.saveDocument({silentWeb: !isNativePlatform(), showToast: false});
             },
         });
     }

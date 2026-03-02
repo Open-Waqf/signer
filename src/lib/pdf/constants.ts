@@ -1,0 +1,3 @@
+export const CHAIN_META_PREFIX = 'OWQ_CHAIN:';
+export const AUDIT_MARKER_PREFIX = 'OWQ_AUDIT_PAGE_V1:';
+

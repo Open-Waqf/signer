@@ -30,7 +30,12 @@ export type SaveFlowDeps = {
     setHardwarePrefNever: () => void;
     isNativePlatform: () => boolean;
     toast: (msg: string) => void;
-    t: (key: string) => string;
+    messages: {
+        hardwareProofUnavailable: string;
+        exportingFile: string;
+        savedMsg: string;
+        noChanges: string;
+    };
     hapticSuccess: () => void;
     setLoading: (loading: boolean) => void;
 };
@@ -91,7 +96,7 @@ export async function executeSave(input: {
         if (!input.useHardware || !message.includes('Hardware proof unavailable')) throw e;
 
         input.deps.setHardwarePrefNever();
-        input.deps.toast(input.deps.t('hardwareProofUnavailable') || 'Hardware proof unavailable on this browser. Saved as visual-only.');
+        input.deps.toast(input.deps.messages.hardwareProofUnavailable || 'Hardware proof unavailable on this browser. Saved as visual-only.');
         const result = await input.deps.saveProfessional(
             input.annotations,
             input.pdfName,
@@ -128,14 +133,14 @@ export async function finalizeSave(input: {
         saved = await input.deps.savePdf(filename, savedBytes);
         if (input.deps.isNativePlatform() && input.showToast) {
             setTimeout(() => {
-                input.deps.toast(input.deps.t('exportingFile'));
+                input.deps.toast(input.deps.messages.exportingFile);
                 void input.deps.sharePdf(saved, savedBytes);
             }, 200);
         }
     }
 
     input.deps.hapticSuccess();
-    if (input.showToast) input.deps.toast(input.deps.t('savedMsg'));
+    if (input.showToast) input.deps.toast(input.deps.messages.savedMsg);
     return {saved, savedBytes};
 }
 
@@ -148,7 +153,7 @@ export async function shareLatestDocument(input: {
     saveIfNeeded: () => Promise<void>;
 }): Promise<void> {
     if (!input.hasEdits) {
-        input.deps.toast(input.deps.t('noChanges'));
+        input.deps.toast(input.deps.messages.noChanges);
         return;
     }
     if (input.isDirty || !input.lastSavedBytes || !input.lastSaved) {
@@ -158,4 +163,3 @@ export async function shareLatestDocument(input: {
         await input.deps.sharePdf(input.lastSaved, input.lastSavedBytes);
     }
 }
-

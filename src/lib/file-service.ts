@@ -1,7 +1,7 @@
-import {Capacitor} from '@capacitor/core';
 import {Directory, Filesystem} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {i18n} from './i18n-service'; // 👈 Restored Import
+import {isNativePlatform} from './runtime-platform';
 
 export interface SavedFile {
     uri: string;
@@ -38,7 +38,7 @@ export class FileService {
      * SAVES FILE EFFICIENTLY (No Memory Bomb)
      */
     async savePdf(filename: string, data: Uint8Array): Promise<SavedFile> {
-        if (Capacitor.isNativePlatform()) {
+        if (isNativePlatform()) {
             return this.saveFileNative(filename, data);
         } else {
             return this.saveFileBrowser(filename, data);
@@ -125,7 +125,7 @@ export class FileService {
      */
     async sharePdf(file: { filename: string; uri?: string }, dataIfWeb?: Uint8Array) {
         // 1. NATIVE APP STRATEGY
-        if (Capacitor.isNativePlatform()) {
+        if (isNativePlatform()) {
             if (!file.uri) throw new Error('No file uri to share');
 
             await Share.share({

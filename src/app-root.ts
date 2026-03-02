@@ -5,7 +5,6 @@ import {fileService} from './lib/file-service';
 import {i18n} from './lib/i18n-service';
 import packageJson from '../package.json';
 import './components/pdf-workspace';
-import {Capacitor} from '@capacitor/core';
 import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
 import {LANGUAGES} from './i18n/locales';
@@ -16,6 +15,7 @@ import {IncomingFileController} from './features/intake/incoming-file-controller
 import {VerifyController} from './features/verify/verify-controller';
 import {groupedHashPreview} from './domain/hash';
 import {preferences} from './lib/preferences';
+import {isNativeOrSmallViewport, isNativePlatform} from './lib/runtime-platform';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -115,7 +115,7 @@ export class AppRoot extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
-        if (Capacitor.isNativePlatform()) {
+        if (isNativePlatform()) {
             StatusBar.setStyle({style: Style.Light}).catch(console.error);
             StatusBar.setBackgroundColor({color: '#ffffff'}).catch(console.error);
         }
@@ -152,7 +152,7 @@ export class AppRoot extends LitElement {
     }
 
     setupPWA() {
-        if (!Capacitor.isNativePlatform()) {
+        if (!isNativePlatform()) {
             const updateSW = registerSW({
                 onNeedRefresh: () => {
                     this.updateSW = updateSW;
@@ -221,8 +221,7 @@ export class AppRoot extends LitElement {
 
     async handleFile(data: Uint8Array, name: string) {
         const sizeInMB = data.byteLength / (1024 * 1024);
-        const isMobile = Capacitor.isNativePlatform() || window.innerWidth < 768;
-        if (sizeInMB > (isMobile ? 25 : 50)) {
+        if (sizeInMB > (isNativeOrSmallViewport() ? 25 : 50)) {
             if (!confirm(i18n.t('fileTooBigMsg').replace('{size}', sizeInMB.toFixed(1)))) return;
         }
 
@@ -487,7 +486,7 @@ export class AppRoot extends LitElement {
                         <div class="diagnostics-panel">
                             <div>${i18n.t('appVersion')}: ${packageJson.version}</div>
                             <div>${i18n.t('platform')}:
-                                ${Capacitor.isNativePlatform() ? i18n.t('platformNative') : i18n.t('platformWeb')}
+                                ${isNativePlatform() ? i18n.t('platformNative') : i18n.t('platformWeb')}
                             </div>
                             <div>${i18n.t('userAgent')}: ${navigator.userAgent}</div>
                             <div>${i18n.t('windowSize')}: ${window.innerWidth}x${window.innerHeight}</div>

@@ -12,6 +12,8 @@
   - `features/workspace/history-store.ts`
   - `features/workspace/annotation-store.ts`
   - `features/workspace/handover-workflow.ts`
+  - `features/workspace/save-workflow.ts`
+  - `features/workspace/interaction-controller.ts`
 
 ## Contract
 - Emits unchanged events: `toast`, `set-loading`, `exit-workspace`.
