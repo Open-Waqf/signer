@@ -4,6 +4,7 @@ import {i18n} from '../lib/i18n-service';
 import {sharedStyles} from '../styles/shared-styles';
 import {TranslationKey} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
+import './owq-modal';
 
 const INK_COLORS: Array<{ value: string; labelKey: TranslationKey }> = [
     {value: '#1a1a2e', labelKey: 'inkDark'},
@@ -535,8 +536,9 @@ export class SignatureModal extends LitElement {
 
     render() {
         return html`
-            <div class="modal-overlay" @click=${() => this.remove()}>
-                <div class="modal-card center" @click=${(e: Event) => e.stopPropagation()}>
+            <owq-modal .open=${true}
+                       .center=${true}
+                       @modal-close=${() => this.remove()}>
                     <h3 style="margin-top:0;">
                         ${this.mode === 'initials' ? i18n.t('addInitials') : i18n.t('addSig')}</h3>
 
@@ -617,8 +619,7 @@ export class SignatureModal extends LitElement {
                         <button class="btn btn-danger" data-testid="btn-clear-sig" @click=${() => this.clear()}>${i18n.t('clear')}</button>
                         <button class="btn btn-primary" data-testid="btn-save-sig" @click=${() => this.save()}>${i18n.t('done')}</button>
                     </div>
-                </div>
-            </div>
+            </owq-modal>
         `;
     }
 }

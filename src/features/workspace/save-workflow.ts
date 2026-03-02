@@ -8,7 +8,7 @@ export type SaveDocResult = {
     signatures: SignaturePayload[];
 };
 
-export type SaveFlowDeps = {
+export type ExecuteSaveDeps = {
     saveProfessional: (
         annotations: Annotation[],
         filename: string,
@@ -24,20 +24,32 @@ export type SaveFlowDeps = {
             hardwareFallbackUsed?: boolean;
         }
     ) => Promise<SaveDocResult>;
-    savePdf: (filename: string, data: Uint8Array) => Promise<{ filename: string; uri?: string }>;
-    sharePdf: (file: { filename: string; uri?: string }, dataIfWeb?: Uint8Array) => Promise<void>;
     getSavedEmail: () => string;
     setHardwarePrefNever: () => void;
-    isNativePlatform: () => boolean;
     toast: (msg: string) => void;
     messages: {
         hardwareProofUnavailable: string;
+    };
+};
+
+export type FinalizeSaveDeps = {
+    savePdf: (filename: string, data: Uint8Array) => Promise<{ filename: string; uri?: string }>;
+    sharePdf: (file: { filename: string; uri?: string }, dataIfWeb?: Uint8Array) => Promise<void>;
+    isNativePlatform: () => boolean;
+    toast: (msg: string) => void;
+    messages: {
         exportingFile: string;
         savedMsg: string;
-        noChanges: string;
     };
     hapticSuccess: () => void;
-    setLoading: (loading: boolean) => void;
+};
+
+export type ShareLatestDeps = {
+    sharePdf: (file: { filename: string; uri?: string }, dataIfWeb?: Uint8Array) => Promise<void>;
+    toast: (msg: string) => void;
+    messages: {
+        noChanges: string;
+    };
 };
 
 export async function resolveHardwareUsage(input: {
@@ -63,7 +75,7 @@ export async function resolveHardwareUsage(input: {
 }
 
 export async function executeSave(input: {
-    deps: SaveFlowDeps;
+    deps: ExecuteSaveDeps;
     annotations: Annotation[];
     pdfName: string;
     includeAudit: boolean;
@@ -117,7 +129,7 @@ export async function executeSave(input: {
 }
 
 export async function finalizeSave(input: {
-    deps: SaveFlowDeps;
+    deps: FinalizeSaveDeps;
     result: SaveDocResult;
     outputFilename: string;
     silentWeb: boolean;
@@ -145,7 +157,7 @@ export async function finalizeSave(input: {
 }
 
 export async function shareLatestDocument(input: {
-    deps: SaveFlowDeps;
+    deps: ShareLatestDeps;
     hasEdits: boolean;
     isDirty: boolean;
     lastSavedBytes: Uint8Array | null;

@@ -5,6 +5,7 @@ import {fileService} from '../lib/file-service';
 import {i18n} from '../lib/i18n-service';
 import {Annotation, AnnotationType, SignaturePayload} from '../types';
 import './signature-modal';
+import './owq-modal';
 import {ICONS} from '../lib/icons';
 import {sharedStyles} from '../styles/shared-styles';
 import {LANGUAGES} from '../i18n/locales';
@@ -94,7 +95,6 @@ export class PdfWorkspace extends LitElement {
         isIdentity: boolean,
         targetId?: string
     } = {show: false, title: '', value: '', placeholder: '', isIdentity: false};
-    private trappedContainers = new WeakSet<HTMLElement>();
 
     private get hasEdits(): boolean {
         return this.annotations.length > 0 || this.includeAudit;
@@ -116,30 +116,6 @@ export class PdfWorkspace extends LitElement {
         }
         this.showHandoverModal = false;
         this.handoverResult = 'idle';
-    }
-
-    private setupFocusTrap(container: HTMLElement) {
-        if (this.trappedContainers.has(container)) return;
-        container.addEventListener('keydown', (e: KeyboardEvent) => {
-            if (e.key === 'Tab') {
-                const focusables = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-                const first = focusables[0] as HTMLElement;
-                const last = focusables[focusables.length - 1] as HTMLElement;
-
-                if (e.shiftKey) {
-                    if (this.shadowRoot!.activeElement === first) {
-                        last.focus();
-                        e.preventDefault();
-                    }
-                } else {
-                    if (this.shadowRoot!.activeElement === last) {
-                        first.focus();
-                        e.preventDefault();
-                    }
-                }
-            }
-        });
-        this.trappedContainers.add(container);
     }
 
     private generateId(): string {
@@ -729,14 +705,6 @@ export class PdfWorkspace extends LitElement {
             this.handoverHashInput = '';
             this.handoverResult = 'idle';
             this.showHandoverModal = true;
-            // Focus trap after render
-            setTimeout(() => {
-                const modal = this.shadowRoot?.querySelector('[data-testid="handover-modal"]') as HTMLElement;
-                if (modal) {
-                    this.setupFocusTrap(modal);
-                    modal.querySelector('input')?.focus();
-                }
-            }, 50);
         } else {
             this.includeAudit = false;
             this.detectedRefId = '';
@@ -830,20 +798,6 @@ export class PdfWorkspace extends LitElement {
         if (changed.has('annotations') && this.activeSidebar === 'annotations' && this.annotations.length === 0) {
             this.activeSidebar = 'thumbnails';
             this.persistActiveSidebar();
-        }
-        if (changed.has('showProofModal') && this.showProofModal) {
-            const modal = this.shadowRoot?.querySelector('[data-testid="proof-modal"]') as HTMLElement;
-            if (modal) {
-                this.setupFocusTrap(modal);
-                modal.querySelector('button')?.focus();
-            }
-        }
-        if (changed.has('customPrompt') && this.customPrompt.show) {
-            const modal = this.shadowRoot?.querySelector('[data-testid="custom-prompt"]') as HTMLElement;
-            if (modal) {
-                this.setupFocusTrap(modal);
-                modal.querySelector('input')?.focus();
-            }
         }
     }
 
@@ -1175,6 +1129,45 @@ export class PdfWorkspace extends LitElement {
         this.dispatchEvent(new CustomEvent('toast', {detail: msg, bubbles: true, composed: true}));
     }
 
+    private getExecuteSaveDeps() {
+        return {
+            saveProfessional: (...args: any[]) => (pdfEngine.saveProfessional as any)(...args),
+            getSavedEmail: () => preferences.getUserEmail('User'),
+            setHardwarePrefNever: () => {
+                this.hardwarePref = 'never';
+                preferences.setHardwarePref('never');
+            },
+            toast: (msg: string) => this.toast(msg),
+            messages: {
+                hardwareProofUnavailable: i18n.t('hardwareProofUnavailable'),
+            },
+        };
+    }
+
+    private getFinalizeSaveDeps() {
+        return {
+            savePdf: (filename: string, data: Uint8Array) => fileService.savePdf(filename, data),
+            sharePdf: (file: { filename: string; uri?: string }, bytes?: Uint8Array) => fileService.sharePdf(file, bytes),
+            isNativePlatform,
+            toast: (msg: string) => this.toast(msg),
+            messages: {
+                exportingFile: i18n.t('exportingFile'),
+                savedMsg: i18n.t('savedMsg'),
+            },
+            hapticSuccess: () => HapticService.success(),
+        };
+    }
+
+    private getShareLatestDeps() {
+        return {
+            sharePdf: (file: { filename: string; uri?: string }, bytes?: Uint8Array) => fileService.sharePdf(file, bytes),
+            toast: (msg: string) => this.toast(msg),
+            messages: {
+                noChanges: i18n.t('noChanges'),
+            },
+        };
+    }
+
     public reset() {
         pdfEngine.destroy();
         this.annotations = [];
@@ -1227,26 +1220,7 @@ export class PdfWorkspace extends LitElement {
 
         try {
             const executed = await executeSave({
-                deps: {
-                    saveProfessional: (...args: any[]) => (pdfEngine.saveProfessional as any)(...args),
-                    savePdf: (filename, data) => fileService.savePdf(filename, data),
-                    sharePdf: (file, bytes) => fileService.sharePdf(file, bytes),
-                    getSavedEmail: () => preferences.getUserEmail('User'),
-                    setHardwarePrefNever: () => {
-                        this.hardwarePref = 'never';
-                        preferences.setHardwarePref('never');
-                    },
-                    isNativePlatform,
-                    toast: (msg) => this.toast(msg),
-                    messages: {
-                        hardwareProofUnavailable: i18n.t('hardwareProofUnavailable'),
-                        exportingFile: i18n.t('exportingFile'),
-                        savedMsg: i18n.t('savedMsg'),
-                        noChanges: i18n.t('noChanges'),
-                    },
-                    hapticSuccess: () => HapticService.success(),
-                    setLoading: (loading) => this.dispatchEvent(new CustomEvent('set-loading', {detail: loading, bubbles: true, composed: true})),
-                },
+                deps: this.getExecuteSaveDeps(),
                 annotations: this.annotations,
                 pdfName: this.pdfName,
                 includeAudit: this.includeAudit,
@@ -1272,26 +1246,7 @@ export class PdfWorkspace extends LitElement {
         const silentWeb = !!opts?.silentWeb;
         const showToast = opts?.showToast ?? true;
         const finalized = await finalizeSave({
-            deps: {
-                saveProfessional: (...args: any[]) => (pdfEngine.saveProfessional as any)(...args),
-                savePdf: (filename, data) => fileService.savePdf(filename, data),
-                sharePdf: (file, bytes) => fileService.sharePdf(file, bytes),
-                getSavedEmail: () => preferences.getUserEmail('User'),
-                setHardwarePrefNever: () => {
-                    this.hardwarePref = 'never';
-                    preferences.setHardwarePref('never');
-                },
-                isNativePlatform,
-                toast: (msg) => this.toast(msg),
-                messages: {
-                    hardwareProofUnavailable: i18n.t('hardwareProofUnavailable'),
-                    exportingFile: i18n.t('exportingFile'),
-                    savedMsg: i18n.t('savedMsg'),
-                    noChanges: i18n.t('noChanges'),
-                },
-                hapticSuccess: () => HapticService.success(),
-                setLoading: (loading) => this.dispatchEvent(new CustomEvent('set-loading', {detail: loading, bubbles: true, composed: true})),
-            },
+            deps: this.getFinalizeSaveDeps(),
             result,
             outputFilename: this.outputFilename,
             silentWeb,
@@ -1340,26 +1295,7 @@ export class PdfWorkspace extends LitElement {
 
     async shareLatest() {
         await shareLatestDocument({
-            deps: {
-                saveProfessional: (...args: any[]) => (pdfEngine.saveProfessional as any)(...args),
-                savePdf: (filename, data) => fileService.savePdf(filename, data),
-                sharePdf: (file, bytes) => fileService.sharePdf(file, bytes),
-                getSavedEmail: () => preferences.getUserEmail('User'),
-                setHardwarePrefNever: () => {
-                    this.hardwarePref = 'never';
-                    preferences.setHardwarePref('never');
-                },
-                isNativePlatform,
-                toast: (msg) => this.toast(msg),
-                messages: {
-                    hardwareProofUnavailable: i18n.t('hardwareProofUnavailable'),
-                    exportingFile: i18n.t('exportingFile'),
-                    savedMsg: i18n.t('savedMsg'),
-                    noChanges: i18n.t('noChanges'),
-                },
-                hapticSuccess: () => HapticService.success(),
-                setLoading: (loading) => this.dispatchEvent(new CustomEvent('set-loading', {detail: loading, bubbles: true, composed: true})),
-            },
+            deps: this.getShareLatestDeps(),
             hasEdits: this.hasEdits,
             isDirty: this.isDirty,
             lastSavedBytes: this.lastSavedBytes,
@@ -1845,49 +1781,52 @@ export class PdfWorkspace extends LitElement {
             </div>
 
             ${this.showHandoverModal ? html`
-                <div class="modal-overlay" @click=${() => this.closeHandoverModal(true)}>
-                    <div class="modal-card" data-testid="handover-modal" role="dialog" aria-modal="true"
-                         aria-labelledby="handover-title" @click=${(e: Event) => e.stopPropagation()}>
-                        <h3 id="handover-title" style="margin-top:0;">${i18n.t('previousSigDetected')}</h3>
-                        <p style="font-size:0.9rem; color:var(--text-sub); margin-bottom:15px;">
-                            ${i18n.t('verifyPreviousSigPrompt')}</p>
-                        <div class="alert-box alert-warning"><strong>${i18n.t('internalRefLabel')}:</strong>
-                            ${this.detectedRefId}
-                        </div>
-                        <input type="text" class="input-field" style="margin-bottom:15px;"
-                               data-testid="input-handover-hash"
-                               aria-label="${i18n.t('handoverCodePlaceholder')}"
-                               .value="${this.handoverHashInput}" @input="${(e: any) => {
-                            this.handoverHashInput = e.target.value;
-                            this.handoverResult = 'idle';
-                        }}" placeholder="${i18n.t('handoverCodePlaceholder')}">
-                        ${this.handoverResult === 'success' ? html`
-                            <div class="alert-box alert-success" data-testid="handover-success"
-                                 .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
-                        ${this.handoverResult === 'fail' ? html`
-                            <div class="alert-box alert-error" data-testid="handover-fail"
-                                 .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
-                        <p style="margin:0 0 12px 0; color:#9a3412; font-size:0.82rem; text-align:left;">
-                            ${i18n.t('handoverSkipRisk')}
-                        </p>
-                        <div class="modal-actions">
-                            <button class="btn btn-primary btn-block" data-testid="btn-verify-handover"
-                                    @click=${this.checkHandover}>
-                                ${i18n.t('verifyBtn')}
-                            </button>
-                            <button class="btn btn-block" data-testid="btn-skip-handover"
-                                    @click=${() => this.closeHandoverModal(true)}>
-                                ${i18n.t('btnSkip')}
-                            </button>
-                        </div>
+                <owq-modal .open=${this.showHandoverModal}
+                           data-testid="handover-modal"
+                           ariaLabelledby="handover-title"
+                           @modal-close=${() => this.closeHandoverModal(true)}>
+                    <h3 id="handover-title" style="margin-top:0;">${i18n.t('previousSigDetected')}</h3>
+                    <p style="font-size:0.9rem; color:var(--text-sub); margin-bottom:15px;">
+                        ${i18n.t('verifyPreviousSigPrompt')}</p>
+                    <div class="alert-box alert-warning"><strong>${i18n.t('internalRefLabel')}:</strong>
+                        ${this.detectedRefId}
                     </div>
-                </div>
+                    <input type="text" class="input-field" style="margin-bottom:15px;"
+                           data-testid="input-handover-hash"
+                           aria-label="${i18n.t('handoverCodePlaceholder')}"
+                           autofocus
+                           .value="${this.handoverHashInput}" @input="${(e: any) => {
+                        this.handoverHashInput = e.target.value;
+                        this.handoverResult = 'idle';
+                    }}" placeholder="${i18n.t('handoverCodePlaceholder')}">
+                    ${this.handoverResult === 'success' ? html`
+                        <div class="alert-box alert-success" data-testid="handover-success"
+                             .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
+                    ${this.handoverResult === 'fail' ? html`
+                        <div class="alert-box alert-error" data-testid="handover-fail"
+                             .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
+                    <p style="margin:0 0 12px 0; color:#9a3412; font-size:0.82rem; text-align:left;">
+                        ${i18n.t('handoverSkipRisk')}
+                    </p>
+                    <div class="modal-actions">
+                        <button class="btn btn-primary btn-block" data-testid="btn-verify-handover"
+                                @click=${this.checkHandover}>
+                            ${i18n.t('verifyBtn')}
+                        </button>
+                        <button class="btn btn-block" data-testid="btn-skip-handover"
+                                @click=${() => this.closeHandoverModal(true)}>
+                            ${i18n.t('btnSkip')}
+                        </button>
+                    </div>
+                </owq-modal>
             ` : ''}
 
             ${this.showProofModal ? html`
-                <div class="modal-overlay" @click=${() => this.showProofModal = false}>
-                    <div class="modal-card center" data-testid="proof-modal" role="dialog" aria-modal="true"
-                         aria-labelledby="proof-title" @click=${(e: Event) => e.stopPropagation()}>
+                <owq-modal .open=${this.showProofModal}
+                           .center=${true}
+                           data-testid="proof-modal"
+                           ariaLabelledby="proof-title"
+                           @modal-close=${() => this.showProofModal = false}>
                         <div style="color:var(--success); margin-bottom:15px; display:flex; justify-content:center;">
                             <div style="padding:15px; background:var(--success-bg); border-radius:50%;">${ICONS.check}
                             </div>
@@ -1946,18 +1885,19 @@ export class PdfWorkspace extends LitElement {
                                 @click=${() => this.showProofModal = false}>
                             ${i18n.t('close')}
                         </button>
-                    </div>
-                </div>
+                </owq-modal>
             ` : ''}
 
             ${this.customPrompt.show ? html`
-                <div class="modal-overlay" @click=${() => this.customPrompt.show = false}>
-                    <div class="modal-card" data-testid="custom-prompt" role="dialog" aria-modal="true"
-                         aria-labelledby="prompt-title" @click=${(e: Event) => e.stopPropagation()}>
+                <owq-modal .open=${this.customPrompt.show}
+                           data-testid="custom-prompt"
+                           ariaLabelledby="prompt-title"
+                           @modal-close=${() => this.customPrompt.show = false}>
                         <h3 id="prompt-title" style="margin-top:0;">${this.customPrompt.title}</h3>
                         <input type="text" class="input-field" data-testid="input-custom-prompt"
                                style="margin-bottom: 20px; font-size: 1rem;"
                                aria-label="${this.customPrompt.title}"
+                               autofocus
                                .value=${this.customPrompt.value}
                                placeholder=${this.customPrompt.placeholder}
                                @input=${(e: any) => this.customPrompt.value = e.target.value}
@@ -1975,14 +1915,14 @@ export class PdfWorkspace extends LitElement {
                                 ${i18n.t('done') || 'Save'}
                             </button>
                         </div>
-                    </div>
-                </div>
+                </owq-modal>
             ` : ''}
 
             ${this.showHardwarePrompt ? html`
-                <div class="modal-overlay" @click=${() => this.resolveHardwarePrompt(null)}>
-                    <div class="modal-card" data-testid="hardware-prompt-modal" role="dialog" aria-modal="true"
-                         aria-labelledby="hw-prompt-title" @click=${(e: Event) => e.stopPropagation()}>
+                <owq-modal .open=${this.showHardwarePrompt}
+                           data-testid="hardware-prompt-modal"
+                           ariaLabelledby="hw-prompt-title"
+                           @modal-close=${() => this.resolveHardwarePrompt(null)}>
                         <h3 id="hw-prompt-title" style="margin-top:0;">${i18n.t('secureYourSignature') || 'Secure your signature?'}</h3>
                         <p style="font-size:0.95rem; color:var(--text-sub); margin-bottom:20px;">
                             ${i18n.t('secureYourSignatureHelp') || 'Add an invisible, mathematically verifiable hardware lock using FaceID, TouchID, or a Security Key.'}
@@ -1996,6 +1936,7 @@ export class PdfWorkspace extends LitElement {
 
                         <div class="modal-actions">
                             <button class="btn btn-primary" data-testid="btn-hw-yes" style="flex:1 1 100%;"
+                                    autofocus
                                     @click=${() => this.resolveHardwarePrompt(true)}>
                                 ${i18n.t('yesSecureIt') || 'Yes, Secure It'}
                             </button>
@@ -2008,8 +1949,7 @@ export class PdfWorkspace extends LitElement {
                                 ${i18n.t('cancelSave') || 'Cancel'}
                             </button>
                         </div>
-                    </div>
-                </div>
+                </owq-modal>
             ` : ''}
         `;
     }

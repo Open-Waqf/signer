@@ -5,6 +5,7 @@ import {fileService} from './lib/file-service';
 import {i18n} from './lib/i18n-service';
 import packageJson from '../package.json';
 import './components/pdf-workspace';
+import './components/owq-modal';
 import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
 import {LANGUAGES} from './i18n/locales';
@@ -28,7 +29,7 @@ export class AppRoot extends LitElement {
     @state() expectedVerifyId: string | null = null;
     @state() verifyHashInput = '';
     @state() verifyFileHash = '';
-    @query('dialog#verify-dialog') verifyDialog!: HTMLDialogElement;
+    @state() showVerifyModal = false;
     @state() integrityStatus: 'idle' | 'success' | 'fail' = 'idle';
     @state() chainStatus: { status: 'idle' | 'success' | 'fail', failedSignerIndex?: number, total?: number } = {status: 'idle'};
 
@@ -36,12 +37,11 @@ export class AppRoot extends LitElement {
     private logoTapCount = 0;
     private logoTapTimeout: any = null;
     @state() showExitConfirm = false;
+    @state() showPrivacyModal = false;
 
     private updateSW: ((reload: boolean) => void) | undefined;
 
     @query('pdf-workspace') workspace: any;
-    @query('dialog#privacy-dialog') privacyDialog!: HTMLDialogElement;
-    private trappedContainers = new WeakSet<HTMLElement>();
     private readonly verifyController = new VerifyController();
     private readonly incomingFileController = new IncomingFileController({
         onSharedFile: async (data, name) => {
@@ -53,30 +53,6 @@ export class AppRoot extends LitElement {
 
     createRenderRoot() {
         return this;
-    }
-
-    private setupFocusTrap(container: HTMLElement) {
-        if (this.trappedContainers.has(container)) return;
-        container.addEventListener('keydown', (e: KeyboardEvent) => {
-            if (e.key === 'Tab') {
-                const focusables = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-                const first = focusables[0] as HTMLElement;
-                const last = focusables[focusables.length - 1] as HTMLElement;
-
-                if (e.shiftKey) {
-                    if (document.activeElement === first) {
-                        (last as HTMLElement).focus();
-                        e.preventDefault();
-                    }
-                } else {
-                    if (document.activeElement === last) {
-                        (first as HTMLElement).focus();
-                        e.preventDefault();
-                    }
-                }
-            }
-        });
-        this.trappedContainers.add(container);
     }
 
     handleSecretTap = (e: Event) => {
@@ -108,8 +84,7 @@ export class AppRoot extends LitElement {
             this.verifyMode = true;
             this.expectedVerifyId = id;
             this.verifyResult = {status: 'pending_file', id: id};
-            await this.updateComplete;
-            if (this.verifyDialog) this.verifyDialog.showModal();
+            this.showVerifyModal = true;
         }
     }
 
@@ -127,8 +102,12 @@ export class AppRoot extends LitElement {
         this.incomingFileController.setupIncomingNativeFileRouting();
 
         App.addListener('backButton', () => {
-            if (this.privacyDialog && this.privacyDialog.open) {
+            if (this.showPrivacyModal) {
                 this.closePrivacy();
+                return;
+            }
+            if (this.showVerifyModal) {
+                this.closeVerify();
                 return;
             }
             const sigModal = document.querySelector('signature-modal');
@@ -185,8 +164,7 @@ export class AppRoot extends LitElement {
             this.verifyHashInput = '';
             this.integrityStatus = 'idle';
             this.chainStatus = outcome.chainStatus;
-
-            if (this.verifyDialog && !this.verifyDialog.open) this.verifyDialog.showModal();
+            this.showVerifyModal = true;
         } catch (e) {
             this.isLoading = false;
             this.showToast(i18n.t('errorReadingFile') || 'Error reading file');
@@ -206,7 +184,7 @@ export class AppRoot extends LitElement {
     }
 
     closeVerify() {
-        if (this.verifyDialog) this.verifyDialog.close();
+        this.showVerifyModal = false;
         this.verifyResult = {status: null};
         this.expectedVerifyId = null;
         this.integrityStatus = 'idle';
@@ -215,7 +193,7 @@ export class AppRoot extends LitElement {
     }
 
     async startPendingVerification() {
-        if (this.verifyDialog) this.verifyDialog.close();
+        this.showVerifyModal = false;
         await this.openFile();
     }
 
@@ -302,14 +280,11 @@ export class AppRoot extends LitElement {
     }
 
     showPrivacy() {
-        if (this.privacyDialog) {
-            this.setupFocusTrap(this.privacyDialog);
-            this.privacyDialog.showModal();
-        }
+        this.showPrivacyModal = true;
     }
 
     closePrivacy() {
-        if (this.privacyDialog) this.privacyDialog.close();
+        this.showPrivacyModal = false;
     }
 
     clearAppCache() {
@@ -322,11 +297,6 @@ export class AppRoot extends LitElement {
     handleExitWorkspace() {
         if (this.workspace && this.workspace.isDirty) {
             this.showExitConfirm = true;
-            // Focus trap for the exit confirm modal card
-            setTimeout(() => {
-                const modal = document.querySelector('[data-testid="exit-confirm-modal"]') as HTMLElement;
-                if (modal) this.setupFocusTrap(modal);
-            }, 50);
         } else {
             this.workspace.reset();
             this.mode = 'home';
@@ -449,9 +419,12 @@ export class AppRoot extends LitElement {
                            @exit-workspace=${this.handleExitWorkspace}>
             </pdf-workspace>
 
-            <dialog id="privacy-dialog" aria-modal="true" aria-label="${i18n.t('privacyTitle')}">
+            <owq-modal .open=${this.showPrivacyModal}
+                       .closeOnBackdrop=${false}
+                       ariaLabel="${i18n.t('privacyTitle')}"
+                       @modal-close=${this.closePrivacy}>
                 <div class="dialog-content">
-                    <h2>${i18n.t('privacyTitle')}</h2>
+                    <h2 id="privacy-title">${i18n.t('privacyTitle')}</h2>
                     <p style="font-size: 0.95rem; color: var(--text-sub);">${i18n.t('privacyContent')}</p>
 
                     <div class="amanah-panel">
@@ -475,12 +448,13 @@ export class AppRoot extends LitElement {
                 <div class="dialog-footer">
                     <button class="btn" data-testid="btn-close-privacy" @click=${() => this.closePrivacy()}>${i18n.t('close')}</button>
                 </div>
-            </dialog>
+            </owq-modal>
 
             ${this.showDiagnostics ? html`
-                <div class="modal-overlay" @click=${() => this.showDiagnostics = false}>
-                    <div class="modal-card" data-testid="diagnostics-modal" style="max-width: 420px; border-radius: 16px;"
-                         @click=${(e: Event) => e.stopPropagation()}>
+                <owq-modal .open=${this.showDiagnostics}
+                           data-testid="diagnostics-modal"
+                           ariaLabel="${i18n.t('diagnostics')}"
+                           @modal-close=${() => this.showDiagnostics = false}>
                         <h2 style="margin-top:0; display:flex; align-items:center; gap:8px;">${ICONS.cog}
                             ${i18n.t('diagnostics')}</h2>
                         <div class="diagnostics-panel">
@@ -498,11 +472,13 @@ export class AppRoot extends LitElement {
                                 ${i18n.t('close')}
                             </button>
                         </div>
-                    </div>
-                </div>
+                </owq-modal>
             ` : ''}
 
-            <dialog id="verify-dialog" @cancel=${() => this.closeVerify()} aria-modal="true" aria-label="${i18n.t('verifyMode')}">
+            <owq-modal .open=${this.showVerifyModal}
+                       .closeOnBackdrop=${false}
+                       ariaLabel="${i18n.t('verifyMode')}"
+                       @modal-close=${this.closeVerify}>
                 <div class="dialog-content" style="text-align: center;">
                     ${this.verifyResult.status === 'pending_file' ? html`
                         <div style="color:var(--primary); margin-bottom:15px; display:flex; justify-content:center;">
@@ -570,13 +546,14 @@ export class AppRoot extends LitElement {
                 <div class="dialog-footer">
                     <button class="btn" data-testid="btn-close-verify" @click=${() => this.closeVerify()}>${i18n.t('close')}</button>
                 </div>
-            </dialog>
+            </owq-modal>
 
             ${this.showExitConfirm ? html`
-                <div class="modal-overlay" @click=${() => this.showExitConfirm = false}>
-                    <div class="modal-card center" role="dialog" aria-modal="true" data-testid="exit-confirm-modal"
-                         aria-label="${i18n.t('exitConfirmTitle')}"
-                         @click=${(e: Event) => e.stopPropagation()}>
+                <owq-modal .open=${this.showExitConfirm}
+                           .center=${true}
+                           data-testid="exit-confirm-modal"
+                           ariaLabel="${i18n.t('exitConfirmTitle')}"
+                           @modal-close=${() => this.showExitConfirm = false}>
                         <div style="color:#ef4444; margin-bottom:15px; display:flex; justify-content:center;">
                             <div style="padding:15px; background:#fee2e2; border-radius:50%;">${ICONS.alert}</div>
                         </div>
@@ -596,8 +573,7 @@ export class AppRoot extends LitElement {
                             }}>${i18n.t('exitBtn') || 'Exit'}
                             </button>
                         </div>
-                    </div>
-                </div>
+                </owq-modal>
             ` : ''}
         `;
     }

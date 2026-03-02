@@ -83,28 +83,28 @@ export const sharedStyles = css`
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.4);
+        background: var(--owq-modal-backdrop, rgba(0, 0, 0, 0.4));
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 99999;
-        backdrop-filter: blur(4px);
-        padding: 12px;
+        z-index: var(--owq-modal-z, 99999);
+        backdrop-filter: blur(var(--owq-modal-blur, 4px));
+        padding: var(--owq-modal-padding, 12px);
         box-sizing: border-box;
     }
 
     .modal-card {
         background: var(--bg-surface, #ffffff);
-        padding: clamp(16px, 3.5vw, 24px);
-        border-radius: var(--radius-lg, 16px);
+        padding: var(--owq-modal-content-padding, clamp(16px, 3.5vw, 24px));
+        border-radius: var(--owq-modal-radius, var(--radius-lg, 16px));
         box-shadow: var(--shadow-floating);
         width: 100%;
-        max-width: 420px;
-        max-height: min(92dvh, 760px);
+        max-width: var(--owq-modal-max-width, 420px);
+        max-height: var(--owq-modal-max-height, min(92dvh, 760px));
         overflow-y: auto;
         text-align: left;
         box-sizing: border-box;
-        animation: modalScale 0.2s ease-out;
+        animation: modalScale var(--owq-modal-animation-duration, 0.2s) ease-out;
     }
 
     @keyframes modalScale {
@@ -144,11 +144,11 @@ export const sharedStyles = css`
 
     @media (max-width: 480px) {
         .modal-overlay {
-            padding: 8px;
+            padding: var(--owq-modal-padding-mobile, 8px);
         }
 
         .modal-card {
-            border-radius: 12px;
+            border-radius: var(--owq-modal-radius-mobile, 12px);
         }
     }
 `;
