@@ -9,16 +9,15 @@ export default defineConfig({
     },
     plugins: [
         VitePWA({
+            strategies: 'injectManifest',
+            srcDir: 'src',
+            filename: 'sw.ts',
             injectRegister: null,
             registerType: 'prompt',
             includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
-            workbox: {
-                cleanupOutdatedCaches: true,
-                skipWaiting: false,
-                clientsClaim: false,
+            injectManifest: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,json,woff2,wasm,bcmap,pfb,ttf,mjs}'],
                 maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
-                navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/],
             },
             manifest: {
                 name: 'Open Waqf Signer',
@@ -29,6 +28,20 @@ export default defineConfig({
                 background_color: '#ffffff',
                 display: 'standalone',
                 orientation: 'portrait',
+                share_target: {
+                    action: '/?share-target',
+                    method: 'POST',
+                    enctype: 'multipart/form-data',
+                    params: {
+                        title: 'title',
+                        files: [
+                            {
+                                name: 'file',
+                                accept: ['application/pdf', '.pdf']
+                            }
+                        ]
+                    }
+                },
                 icons: [
                     {
                         src: 'icons/icon-192.webp',

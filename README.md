@@ -59,6 +59,8 @@ device's RAM.
 
 * **Offline First (PWA):** Installs as a native app on Android, iOS, Windows, and Mac. Fully functional without an
   internet connection.
+* **Native "Open With" / Share-In:** PDFs can be opened directly into Signer from Android file managers/apps (APK) and
+  from installed Android/Windows PWAs through OS share targets.
 * **Multilingual:** Native support for **English**, **Arabic (RTL)**, and **French** with dynamic UI mirroring.
 
 ---

@@ -13,9 +13,14 @@ import {pdfEngine} from './lib/pdf-engine';
 import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import {ICONS} from './lib/icons';
 import {StatusBar, Style} from '@capacitor/status-bar';
+import {Filesystem} from '@capacitor/filesystem';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
+    private static readonly SHARE_CACHE_NAME = 'owq-share-target';
+    private static readonly SHARE_CACHE_KEY = '/__owq_shared_pdf__';
+    private static readonly SHARED_PDF_QUERY = 'shared-pdf';
+
     @state() mode: 'home' | 'workspace' = 'home';
     @state() isLoading = false;
     @state() toastMsg: string | null = null;
@@ -39,6 +44,11 @@ export class AppRoot extends LitElement {
     @query('pdf-workspace') workspace: any;
     @query('dialog#privacy-dialog') privacyDialog!: HTMLDialogElement;
     private trappedContainers = new WeakSet<HTMLElement>();
+    private swMessageHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'OWQ_SHARED_PDF_READY') {
+            void this.consumeSharedPdfFromCache();
+        }
+    };
 
     createRenderRoot() {
         return this;
@@ -86,6 +96,15 @@ export class AppRoot extends LitElement {
     async firstUpdated(_changedProperties: PropertyValues) {
         super.firstUpdated(_changedProperties);
         const params = new URLSearchParams(window.location.search);
+        if (params.has(AppRoot.SHARED_PDF_QUERY) || params.has('share-target')) {
+            await this.consumeSharedPdfFromCache();
+            params.delete(AppRoot.SHARED_PDF_QUERY);
+            params.delete('share-target');
+            const nextSearch = params.toString();
+            const nextUrl = nextSearch ? `${window.location.pathname}?${nextSearch}` : window.location.pathname;
+            window.history.replaceState({}, document.title, nextUrl);
+        }
+
         const id = params.get('id');
 
         if (id) {
@@ -104,7 +123,11 @@ export class AppRoot extends LitElement {
             StatusBar.setBackgroundColor({color: '#ffffff'}).catch(console.error);
         }
         window.addEventListener('lang-changed', () => this.requestUpdate());
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', this.swMessageHandler);
+        }
         this.setupPWA();
+        this.setupIncomingNativeFileRouting();
 
         App.addListener('backButton', () => {
             if (this.privacyDialog && this.privacyDialog.open) {
@@ -122,6 +145,108 @@ export class AppRoot extends LitElement {
             }
             App.exitApp();
         });
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.removeEventListener('message', this.swMessageHandler);
+        }
+    }
+
+    private setupIncomingNativeFileRouting() {
+        if (!Capacitor.isNativePlatform()) return;
+
+        App.addListener('appUrlOpen', ({url}) => {
+            if (!url) return;
+            void this.handleIncomingNativePdfUrl(url);
+        });
+
+        App.getLaunchUrl().then((launch) => {
+            if (!launch?.url) return;
+            void this.handleIncomingNativePdfUrl(launch.url);
+        }).catch(console.error);
+    }
+
+    private isIncomingPdfUrl(url: string) {
+        const lower = url.toLowerCase();
+        return lower.startsWith('content://') || lower.startsWith('file://') || lower.endsWith('.pdf') || lower.includes('.pdf?');
+    }
+
+    private async handleIncomingNativePdfUrl(url: string) {
+        if (!this.isIncomingPdfUrl(url)) return;
+
+        try {
+            const data = await this.readNativePdfBytes(url);
+            const name = this.extractIncomingFileName(url);
+            this.verifyMode = false;
+            await this.handleFile(data, name);
+        } catch (error) {
+            console.error('Failed to open shared file URL:', error);
+            this.showToast(i18n.t('sharedOpenFailed'));
+        }
+    }
+
+    private async readNativePdfBytes(url: string): Promise<Uint8Array> {
+        const decoded = decodeURIComponent(url);
+        const stripped = decoded.startsWith('file://') ? decoded.replace('file://', '') : decoded;
+        const candidates = Array.from(new Set([url, decoded, stripped]));
+        let lastError: unknown = null;
+
+        for (const path of candidates) {
+            try {
+                const {data} = await Filesystem.readFile({path});
+                if (typeof data !== 'string') {
+                    return new Uint8Array(await (data as Blob).arrayBuffer());
+                }
+                return this.base64ToUint8Array(data);
+            } catch (error) {
+                lastError = error;
+            }
+        }
+
+        throw lastError ?? new Error('Unable to read shared file bytes');
+    }
+
+    private base64ToUint8Array(base64: string): Uint8Array {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    private extractIncomingFileName(url: string): string {
+        const cleanUrl = url.split('?')[0];
+        const lastSegment = cleanUrl.split('/').pop();
+        if (!lastSegment) return 'Shared_Document.pdf';
+        try {
+            const decoded = decodeURIComponent(lastSegment);
+            return decoded.toLowerCase().endsWith('.pdf') ? decoded : 'Shared_Document.pdf';
+        } catch (_error) {
+            return 'Shared_Document.pdf';
+        }
+    }
+
+    private async consumeSharedPdfFromCache() {
+        if (!('caches' in window)) return;
+
+        try {
+            const cache = await caches.open(AppRoot.SHARE_CACHE_NAME);
+            const response = await cache.match(AppRoot.SHARE_CACHE_KEY);
+            if (!response) return;
+
+            await cache.delete(AppRoot.SHARE_CACHE_KEY);
+            const fileNameHeader = response.headers.get('x-owq-file-name');
+            const fileName = fileNameHeader ? decodeURIComponent(fileNameHeader) : 'Shared_Document.pdf';
+            const data = new Uint8Array(await response.arrayBuffer());
+            this.verifyMode = false;
+            await this.handleFile(data, fileName);
+        } catch (error) {
+            console.error('Failed to load shared target PDF:', error);
+            this.showToast(i18n.t('sharedOpenFailed'));
+        }
     }
 
     setupPWA() {

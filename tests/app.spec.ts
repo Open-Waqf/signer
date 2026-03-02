@@ -72,6 +72,32 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.getByTestId('diagnostics-modal')).not.toBeVisible();
     });
 
+    test('4. Workflow: Share Target cache handoff opens PDF', async ({page}) => {
+        const pdfBuffer = await generateTestPDF();
+        const pdfBase64 = pdfBuffer.toString('base64');
+
+        await page.goto('/');
+        await page.evaluate(async ({base64}) => {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+            const cache = await caches.open('owq-share-target');
+            await cache.put(
+                '/__owq_shared_pdf__',
+                new Response(bytes, {
+                    headers: {
+                        'content-type': 'application/pdf',
+                        'x-owq-file-name': encodeURIComponent('shared_test.pdf')
+                    }
+                })
+            );
+        }, {base64: pdfBase64});
+
+        await page.goto('/?shared-pdf=1');
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+    });
+
     test('4. Workflow: Full Signing Loop with Annotation controls', async ({page}) => {
         const pdfBuffer = await generateTestPDF();
         await page.goto('/');

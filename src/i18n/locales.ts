@@ -85,6 +85,7 @@ export const resources = {
         invalidDocTitle: "⚠️ CAUTION",
         invalidDocMsg: "No Digital ID found.\n\nThis document may not have been signed by Open Signer, or it has been modified externally.",
         errorReadingFile: "Error reading file.",
+        sharedOpenFailed: "Failed to open shared PDF.",
 
         addIdentity: "+ Identity",
         identityPrompt: "Enter your email address to claim this signature:",
@@ -306,6 +307,7 @@ export const resources = {
         invalidDocTitle: "⚠️ تنبيه",
         invalidDocMsg: "لم يتم العثور على معرف رقمي.\n\nقد يكون هذا المستند غير موقع بواسطة الموقّع المفتوح، أو تم تعديله خارجيًا.",
         errorReadingFile: "خطأ في قراءة الملف.",
+        sharedOpenFailed: "تعذر فتح ملف PDF المُشارك.",
         addIdentity: "+ الهوية",
         identityPrompt: "أدخل بريدك الإلكتروني لتوثيق هذا التوقيع:",
         signedBy: "موقع رقمياً بواسطة",
@@ -521,6 +523,7 @@ export const resources = {
         invalidDocTitle: "⚠️ ATTENTION",
         invalidDocMsg: "Aucun ID numérique trouvé.\n\nCe document n'a peut-être pas été signé par Open Signer ou a été modifié.",
         errorReadingFile: "Erreur de lecture du fichier.",
+        sharedOpenFailed: "Impossible d'ouvrir le PDF partagé.",
         addIdentity: "+ Identité",
         identityPrompt: "Entrez votre email pour certifier cette signature :",
         signedBy: "Signé numériquement par",
