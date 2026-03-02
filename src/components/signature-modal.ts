@@ -48,9 +48,13 @@ export class SignatureModal extends LitElement {
     private _touchStartHandler: ((e: TouchEvent) => void) | null = null;
     private _touchMoveHandler: ((e: TouchEvent) => void) | null = null;
     private _touchEndHandler: (() => void) | null = null;
+    private _touchCancelHandler: (() => void) | null = null;
     private _mouseDownHandler: ((e: MouseEvent) => void) | null = null;
     private _mouseMoveHandler: ((e: MouseEvent) => void) | null = null;
     private _mouseUpHandler: (() => void) | null = null;
+    private _windowMouseUpHandler: (() => void) | null = null;
+    private _windowTouchEndHandler: (() => void) | null = null;
+    private _windowTouchCancelHandler: (() => void) | null = null;
 
     @state() private originalData: string | null = null;
     @state() private isDirty = false;
@@ -77,9 +81,10 @@ export class SignatureModal extends LitElement {
         }
 
         .actions {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 10px;
-            justify-content: flex-end;
+            justify-content: stretch;
         }
 
         .color-strip {
@@ -206,8 +211,36 @@ export class SignatureModal extends LitElement {
         .save-name-row {
             display: flex;
             gap: 8px;
-            align-items: center;
+            align-items: stretch;
+            flex-wrap: wrap;
             margin-bottom: 14px;
+        }
+
+        .save-name-row .input-field {
+            flex: 1 1 100%;
+            margin: 0;
+        }
+
+        .save-name-row .btn {
+            flex: 1 1 calc(50% - 4px);
+        }
+
+        .save-preset-row .btn {
+            width: 100%;
+        }
+
+        .actions .btn {
+            width: 100%;
+        }
+
+        @media (max-width: 480px) {
+            .actions {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .actions .btn-primary {
+                grid-column: 1 / -1;
+            }
         }
 
     `];
@@ -267,10 +300,14 @@ export class SignatureModal extends LitElement {
             if (this._touchStartHandler) this.canvas.removeEventListener('touchstart', this._touchStartHandler);
             if (this._touchMoveHandler) this.canvas.removeEventListener('touchmove', this._touchMoveHandler);
             if (this._touchEndHandler) this.canvas.removeEventListener('touchend', this._touchEndHandler);
+            if (this._touchCancelHandler) this.canvas.removeEventListener('touchcancel', this._touchCancelHandler);
             if (this._mouseDownHandler) this.canvas.removeEventListener('mousedown', this._mouseDownHandler);
             if (this._mouseMoveHandler) this.canvas.removeEventListener('mousemove', this._mouseMoveHandler);
             if (this._mouseUpHandler) this.canvas.removeEventListener('mouseup', this._mouseUpHandler);
         }
+        if (this._windowMouseUpHandler) window.removeEventListener('mouseup', this._windowMouseUpHandler);
+        if (this._windowTouchEndHandler) window.removeEventListener('touchend', this._windowTouchEndHandler);
+        if (this._windowTouchCancelHandler) window.removeEventListener('touchcancel', this._windowTouchCancelHandler);
     }
 
     loadSaved() {
@@ -334,16 +371,24 @@ export class SignatureModal extends LitElement {
             this.draw(e.touches[0]);
         };
         this._touchEndHandler = () => this.stop();
+        this._touchCancelHandler = () => this.stop();
         this._mouseDownHandler = (e: MouseEvent) => this.start(e);
         this._mouseMoveHandler = (e: MouseEvent) => this.draw(e);
         this._mouseUpHandler = () => this.stop();
+        this._windowMouseUpHandler = () => this.stop();
+        this._windowTouchEndHandler = () => this.stop();
+        this._windowTouchCancelHandler = () => this.stop();
 
         this.canvas.addEventListener('touchstart', this._touchStartHandler, {passive: false});
         this.canvas.addEventListener('touchmove', this._touchMoveHandler, {passive: false});
         this.canvas.addEventListener('touchend', this._touchEndHandler);
+        this.canvas.addEventListener('touchcancel', this._touchCancelHandler);
         this.canvas.addEventListener('mousedown', this._mouseDownHandler);
         this.canvas.addEventListener('mousemove', this._mouseMoveHandler);
         this.canvas.addEventListener('mouseup', this._mouseUpHandler);
+        window.addEventListener('mouseup', this._windowMouseUpHandler);
+        window.addEventListener('touchend', this._windowTouchEndHandler);
+        window.addEventListener('touchcancel', this._windowTouchCancelHandler);
     }
 
     start(e: { clientX: number, clientY: number }) {
@@ -490,8 +535,8 @@ export class SignatureModal extends LitElement {
 
     render() {
         return html`
-            <div class="modal-overlay">
-                <div class="modal-card center">
+            <div class="modal-overlay" @click=${() => this.remove()}>
+                <div class="modal-card center" @click=${(e: Event) => e.stopPropagation()}>
                     <h3 style="margin-top:0;">
                         ${this.mode === 'initials' ? i18n.t('addInitials') : i18n.t('addSig')}</h3>
 
@@ -550,7 +595,7 @@ export class SignatureModal extends LitElement {
                                 >
                                 <button class="btn btn-primary btn-sm" data-testid="btn-confirm-preset"
                                         @click=${() => this.confirmSavePreset()}>
-                                    ${i18n.t('savePreset')}
+                                    ${i18n.t('savePresetShort')}
                                 </button>
                                 <button class="btn btn-sm"
                                         @click=${() => { this.showSaveNameRow = false; }}>
@@ -561,7 +606,7 @@ export class SignatureModal extends LitElement {
                             <div class="save-preset-row">
                                 <button class="btn btn-sm" data-testid="btn-save-preset"
                                         @click=${() => this.saveAsPreset()}>
-                                    + ${i18n.t('savePreset')}
+                                    + ${i18n.t('savePresetShort')}
                                 </button>
                             </div>
                         `}

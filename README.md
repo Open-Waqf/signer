@@ -46,6 +46,8 @@ device's RAM.
   viewport collision detection to prevent UI clipping.
 * **Natural Ink & Custom Prompts:** Smooth signature drawing with saved presets and native-feeling custom modal prompts
   for text/identity inputs.
+* **Beginner-Friendly Editing:** Workspace opens in **Basic Mode** (signature/date/save first), with **More Tools** to
+  reveal advanced controls.
 * **History:** Full Undo/Redo support (`Ctrl+Z`, `Ctrl+Y`).
 
 ### 🌍 Universal Access
@@ -112,6 +114,7 @@ Anyone receiving a signed document can verify it:
 3. Drop the signed PDF into the app.
 4. The app confirms **"Metadata Found"**.
 5. Paste the **Security Hash** provided by the sender.
+    * Metadata confirms provenance only.
     * ✅ **"Integrity Verified":** The document is 100% authentic.
     * ❌ **"Integrity Failure":** The document has been altered (even by 1 pixel).
 

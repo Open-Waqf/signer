@@ -76,6 +76,11 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const workspace = page.locator('pdf-workspace');
         await expect(workspace).toBeVisible();
 
+        // Basic mode by default: advanced tools hidden until expanded
+        await expect(page.getByTestId('btn-add-text')).toHaveCount(0);
+        await page.getByTestId('btn-toggle-advanced').click();
+        await expect(page.getByTestId('btn-add-text')).toBeVisible();
+
         // Add Date
         await page.getByTestId('btn-add-date').click();
         const annotation = page.locator('[data-testid^="annotation-"]').first();
@@ -159,7 +164,11 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(pageIndicator).toHaveText(/1\s*(?:\/|of)\s*\d+/);
 
         // Toggle Thumbnails
-        await page.getByTestId('btn-toggle-thumbs').click();
+        const toggleBtn = page.getByTestId('btn-toggle-thumbs');
+        const isActive = await toggleBtn.evaluate((el) => el.classList.contains('active'));
+        if (!isActive) {
+            await toggleBtn.click();
+        }
         const thumbPanel = page.locator('.thumb-panel');
         await expect(thumbPanel).toBeVisible();
 
@@ -169,9 +178,15 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
             await expect(pageIndicator).toHaveText(/2\s*(?:\/|of)\s*\d+/);
         }
 
-        // Toggle Thumbnails off
-        await page.getByTestId('btn-toggle-thumbs').click();
-        await expect(thumbPanel).not.toBeVisible();
+        // Clicking selected thumbnail toggle collapses panel
+        await toggleBtn.click();
+        await expect(toggleBtn).not.toHaveClass(/active/);
+        await expect(thumbPanel).toHaveCount(0);
+
+        // Clicking again re-opens and re-selects
+        await toggleBtn.click();
+        await expect(toggleBtn).toHaveClass(/active/);
+        await expect(thumbPanel).toBeVisible();
 
         // Undo/Redo Test
         await page.getByTestId('btn-add-date').click();
@@ -201,11 +216,13 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
 
         // Verification success
         await expect(page.getByTestId('verify-success-title')).toBeVisible();
+        await expect(page.getByText(/Step 2|الخطوة 2|Étape 2/)).toBeVisible();
 
         // Hash check (fail)
         await page.getByTestId('input-verify-hash').fill('wrong_hash');
         await page.getByTestId('btn-check-hash').click();
         await expect(page.getByTestId('integrity-fail')).toBeVisible();
+        await expect(page.getByTestId('hash-normalized')).toBeVisible();
 
         await page.getByTestId('btn-close-verify').click();
     });
@@ -213,6 +230,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
     test('8. Accessibility: Keyboard Shortcuts', async ({page}) => {
         await page.goto('/');
         await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-toggle-advanced').click();
 
         // Add annotation
         await page.getByTestId('btn-add-text').click();
@@ -235,7 +253,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('btn-select-file').click();
         const fileChooser = await fileChooserPromise;
         
-        const pdfBuffer = await generateTestPDF(1);
+        const pdfBuffer = await generateTestPDF();
         await fileChooser.setFiles({
             name: 'batch_test.pdf',
             mimeType: 'application/pdf',

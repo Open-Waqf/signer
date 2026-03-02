@@ -57,9 +57,16 @@ export class PdfWorkspace extends LitElement {
 
     @state() guideLines: { axis: 'x' | 'y', pos: number }[] = [];
 
-    @state() showThumbnails = localStorage.getItem('signer_show_thumbs') === 'true';
+    @state() activeSidebar: 'thumbnails' | 'annotations' | null =
+        (() => {
+            const saved = localStorage.getItem('signer_active_sidebar');
+            if (saved === 'annotations') return 'annotations';
+            if (saved === 'none') return null;
+            return 'thumbnails';
+        })();
     @state() thumbnailURLs: string[] = [];
     @state() isGeneratingThumbs = false;
+    @state() uiMode: 'basic' | 'advanced' = (localStorage.getItem('signer_ui_mode') as 'basic' | 'advanced') || 'basic';
 
     @state() customPrompt: {
         show: boolean,
@@ -69,12 +76,31 @@ export class PdfWorkspace extends LitElement {
         isIdentity: boolean,
         targetId?: string
     } = {show: false, title: '', value: '', placeholder: '', isIdentity: false};
+    private trappedContainers = new WeakSet<HTMLElement>();
 
     private get hasEdits(): boolean {
         return this.annotations.length > 0 || this.includeAudit;
     }
 
+    private get isBasicMode(): boolean {
+        return this.uiMode === 'basic';
+    }
+
+    private persistActiveSidebar() {
+        localStorage.setItem('signer_active_sidebar', this.activeSidebar ?? 'none');
+    }
+
+    private closeHandoverModal(markSkipped = false) {
+        if (markSkipped && this.detectedRefId) {
+            this.validationMsg = `Previous signature verification skipped (Ref ${this.detectedRefId})`;
+            this.isVerified = false;
+        }
+        this.showHandoverModal = false;
+        this.handoverResult = 'idle';
+    }
+
     private setupFocusTrap(container: HTMLElement) {
+        if (this.trappedContainers.has(container)) return;
         container.addEventListener('keydown', (e: KeyboardEvent) => {
             if (e.key === 'Tab') {
                 const focusables = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
@@ -94,6 +120,7 @@ export class PdfWorkspace extends LitElement {
                 }
             }
         });
+        this.trappedContainers.add(container);
     }
 
     private generateId(): string {
@@ -176,6 +203,15 @@ export class PdfWorkspace extends LitElement {
             gap: 12px;
         }
 
+        .brand-title {
+            display: inline;
+        }
+
+        .verified-badge {
+            display: inline-flex;
+            align-items: center;
+        }
+
         .brand img {
             height: 32px;
             width: 32px;
@@ -235,7 +271,7 @@ export class PdfWorkspace extends LitElement {
                 padding-bottom: 100px; /* Space for bottom bar */
             }
 
-            .brand span {
+            .brand .brand-title {
                 display: none;
             }
         }
@@ -315,6 +351,28 @@ export class PdfWorkspace extends LitElement {
             .thumb-panel {
                 width: 64px;
                 padding: 8px 4px;
+            }
+        }
+
+        .annotations-panel {
+            width: min(250px, 40vw);
+            padding: 12px;
+            align-items: stretch;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+        }
+
+        @media (max-width: 1024px) {
+            .annotations-panel {
+                width: min(210px, 44vw);
+                padding: 10px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .annotations-panel {
+                width: min(170px, 46vw);
+                padding: 8px;
             }
         }
 
@@ -428,6 +486,33 @@ export class PdfWorkspace extends LitElement {
             position: relative;
         }
 
+        .panel-toggle.active {
+            background: var(--primary) !important;
+            color: #fff !important;
+            border-color: var(--primary) !important;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        }
+
+        .panel-toggle.active svg {
+            stroke: currentColor;
+        }
+
+        .btn.toggle.active {
+            background: var(--primary) !important;
+            color: #fff !important;
+            border-color: var(--primary) !important;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .modal-actions .btn {
+            flex: 1 1 140px;
+        }
+
         /* Toolbar scroll indicator gradient */
 
         .toolbar-row::after {
@@ -450,6 +535,10 @@ export class PdfWorkspace extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
+        if (this.activeSidebar === 'annotations' && this.annotations.length === 0) {
+            this.activeSidebar = 'thumbnails';
+            this.persistActiveSidebar();
+        }
         this.dir = i18n.lang === 'ar' ? 'rtl' : 'ltr';
         window.addEventListener('lang-changed', this.onLangChanged);
         window.addEventListener('mousemove', this.handleGlobalMove);
@@ -573,6 +662,7 @@ export class PdfWorkspace extends LitElement {
         pdfEngine.destroy();
         this.pdfName = name;
         this.loadedBytes = file;
+        this.isVerified = false;
         this.validationMsg = null;
         this.lastSavedId = null;
         this.lastSavedHash = null;
@@ -600,6 +690,10 @@ export class PdfWorkspace extends LitElement {
         this.scale = window.innerWidth < 768 ? 0.55 : 1.0;
         this.annotations = [];
         this.selectedIds = [];
+        if (this.activeSidebar === 'annotations') {
+            this.activeSidebar = 'thumbnails';
+            this.persistActiveSidebar();
+        }
         this.isDirty = false;
         this.lastSaved = null;
         this.lastSavedBytes = null;
@@ -623,13 +717,15 @@ export class PdfWorkspace extends LitElement {
         if (input === actual.toLowerCase()) {
             this.handoverResult = 'success';
             this.isVerified = true;
+            this.validationMsg = `Previous signature hash verified (Ref ${this.detectedRefId})`;
             setTimeout(() => {
-                this.showHandoverModal = false;
+                this.closeHandoverModal(false);
                 this.toast(i18n.t('integrityVerified'));
             }, 1500);
         } else {
             this.handoverResult = 'fail';
             this.isVerified = false;
+            this.validationMsg = `Previous signature hash mismatch (Ref ${this.detectedRefId})`;
         }
     }
 
@@ -653,9 +749,13 @@ export class PdfWorkspace extends LitElement {
     }
 
     updated(changed: Map<string, unknown>) {
-        if (changed.has('currentPage') && this.showThumbnails) {
+        if (changed.has('currentPage') && this.activeSidebar === 'thumbnails') {
             this.shadowRoot?.querySelector('.thumb-item.active')
                 ?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+        }
+        if (changed.has('annotations') && this.activeSidebar === 'annotations' && this.annotations.length === 0) {
+            this.activeSidebar = 'thumbnails';
+            this.persistActiveSidebar();
         }
         if (changed.has('showProofModal') && this.showProofModal) {
             const modal = this.shadowRoot?.querySelector('[data-testid="proof-modal"]') as HTMLElement;
@@ -1025,6 +1125,7 @@ export class PdfWorkspace extends LitElement {
         this.pdfName = '';
         this.outputFilename = '';
         this.isDirty = false;
+        this.isVerified = false;
         if (this.canvas) {
             this.canvas.getContext('2d')?.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.canvas.width = 0;
@@ -1122,6 +1223,11 @@ export class PdfWorkspace extends LitElement {
         (e.target as HTMLImageElement).style.display = 'none';
     }
 
+    toggleUIMode() {
+        this.uiMode = this.isBasicMode ? 'advanced' : 'basic';
+        localStorage.setItem('signer_ui_mode', this.uiMode);
+    }
+
     render() {
         const saveDisabled = !this.pdfName || !this.hasEdits;
         const shareDisabled = !this.pdfName || !this.hasEdits;
@@ -1141,8 +1247,8 @@ export class PdfWorkspace extends LitElement {
                     </button>
 
                     <img src="/icons/icon-192.webp" alt="${i18n.t('appTitle')}" @error=${this.handleImageError}/>
-                    <span>${i18n.t('appTitle')}</span>
-                    ${this.isVerified ? html`<span class="badge"
+                    <span class="brand-title">${i18n.t('appTitle')}</span>
+                    ${this.isVerified ? html`<span class="badge verified-badge"
                                                    style="background:var(--success); color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:8px;">${i18n.t('verifiedBadge')}</span>` : ''}
                 </div>
                 <select id="select-lang" data-testid="select-lang" class="lang-select"
@@ -1159,27 +1265,34 @@ export class PdfWorkspace extends LitElement {
                             @click=${this.openSignModal}>
                         ${ICONS.sign}<span class="btn-label" style="margin-left:6px;">${i18n.t('addSig')}</span>
                     </button>
-                    <button data-testid="btn-add-initials" class="btn" aria-label="${i18n.t('addInitials')}"
-                            @click=${this.openInitialsModal}>
-                        ${ICONS.text}<span class="btn-label" style="margin-left:6px;">${i18n.t('addInitials')}</span>
-                    </button>
-                    <button data-testid="btn-add-text" class="btn" aria-label="${i18n.t('addText')}"
-                            @click=${this.addTextAnnotation}>
-                        ${ICONS.text}<span class="btn-label" style="margin-left:6px;">${i18n.t('addText')}</span>
-                    </button>
-                    <button data-testid="btn-add-identity" class="btn"
-                            aria-label="${i18n.t('addIdentity') || 'Identity'}" @click=${this.addIdentity}>
-                        ${ICONS.identity}<span class="btn-label"
-                                               style="margin-left:6px;">${i18n.t('addIdentity') || 'Identity'}</span>
-                    </button>
-                    <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
-                            @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
-                        ${ICONS.stamp}<span class="btn-label" style="margin-left:6px;">${i18n.t('addStamp')}</span>
-                    </button>
                     <button data-testid="btn-add-date" class="btn" aria-label="${i18n.t('addDate')}"
                             @click=${this.addDateStamp}>
                         ${ICONS.date}<span class="btn-label" style="margin-left:6px;">${i18n.t('addDate')}</span>
                     </button>
+                    <button data-testid="btn-toggle-advanced" class="btn"
+                            aria-label="${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}"
+                            @click=${this.toggleUIMode}>
+                        ${ICONS.cog}<span class="btn-label" style="margin-left:6px;">${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
+                    </button>
+                    ${!this.isBasicMode ? html`
+                        <button data-testid="btn-add-initials" class="btn" aria-label="${i18n.t('addInitials')}"
+                                @click=${this.openInitialsModal}>
+                            ${ICONS.text}<span class="btn-label" style="margin-left:6px;">${i18n.t('addInitials')}</span>
+                        </button>
+                        <button data-testid="btn-add-text" class="btn" aria-label="${i18n.t('addText')}"
+                                @click=${this.addTextAnnotation}>
+                            ${ICONS.text}<span class="btn-label" style="margin-left:6px;">${i18n.t('addText')}</span>
+                        </button>
+                        <button data-testid="btn-add-identity" class="btn"
+                                aria-label="${i18n.t('addIdentity') || 'Identity'}" @click=${this.addIdentity}>
+                            ${ICONS.identity}<span class="btn-label"
+                                                   style="margin-left:6px;">${i18n.t('addIdentity') || 'Identity'}</span>
+                        </button>
+                        <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
+                                @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
+                            ${ICONS.stamp}<span class="btn-label" style="margin-left:6px;">${i18n.t('addStamp')}</span>
+                        </button>
+                    ` : ''}
                 </div>
 
                 <div class="toolbar-row" style="justify-content: space-between; background: var(--bg-muted);">
@@ -1205,24 +1318,28 @@ export class PdfWorkspace extends LitElement {
                     </div>
 
                     <div style="display:flex; gap:8px;">
-                        <button data-testid="btn-toggle-footer" class="btn toggle ${this.includeFooter ? 'active' : ''}"
-                                style="padding: 8px 12px;"
-                                aria-label="${i18n.t('addPageFooter')}"
-                                @click=${() => {
-                                    this.includeFooter = !this.includeFooter;
-                                    this.isDirty = true;
-                                }} title="${i18n.t('addPageFooter')}">
-                            ${ICONS.footer}
-                        </button>
-                        <button data-testid="btn-toggle-audit" class="btn toggle ${this.includeAudit ? 'active' : ''}"
-                                style="padding: 8px 12px;"
-                                aria-label="${i18n.t('addAuditPage')}"
-                                @click=${() => {
-                                    this.includeAudit = !this.includeAudit;
-                                    this.isDirty = true;
-                                }} title="${i18n.t('addAuditPage')}">
-                            ${ICONS.audit}
-                        </button>
+                        ${!this.isBasicMode ? html`
+                            <button data-testid="btn-toggle-footer" class="btn toggle ${this.includeFooter ? 'active' : ''}"
+                                    style="padding: 8px 12px;"
+                                    aria-label="${i18n.t('addPageFooter')}"
+                                    @click=${() => {
+                                        this.includeFooter = !this.includeFooter;
+                                        this.isDirty = true;
+                                    }} title="${i18n.t('addPageFooter')}">
+                                ${ICONS.footer}
+                            </button>
+                        ` : ''}
+                        ${(!this.isBasicMode || this.includeAudit) ? html`
+                            <button data-testid="btn-toggle-audit" class="btn toggle ${this.includeAudit ? 'active' : ''}"
+                                    style="padding: 8px 12px;"
+                                    aria-label="${i18n.t('addAuditPage')}"
+                                    @click=${() => {
+                                        this.includeAudit = !this.includeAudit;
+                                        this.isDirty = true;
+                                    }} title="${i18n.t('addAuditPage')}">
+                                ${ICONS.audit}
+                            </button>
+                        ` : ''}
                         <button data-testid="btn-share" class="btn" style="padding: 8px 12px;"
                                 aria-label="${i18n.t('share')}" @click=${this.shareLatest} ?disabled=${shareDisabled}>
                             ${ICONS.share}
@@ -1237,38 +1354,42 @@ export class PdfWorkspace extends LitElement {
                 </div>
             </div>
 
-                </div>
-            </div>
-
             <div class="toolbar-bottom" role="toolbar" aria-label="${i18n.t('ariaToolbar')}">
                 <button data-testid="m-btn-add-sig" class="btn btn-tool" aria-label="${i18n.t('signMode')}"
                         @click=${this.openSignModal}>
                     ${ICONS.sign} <span>${i18n.t('signMode')}</span>
                 </button>
-                <button data-testid="m-btn-add-initials" class="btn btn-tool" aria-label="${i18n.t('addInitials')}"
-                        @click=${this.openInitialsModal}>
-                    ${ICONS.text} <span>${i18n.t('addInitials')}</span>
-                </button>
-                <button data-testid="m-btn-add-text" class="btn btn-tool" aria-label="${i18n.t('addText')}"
-                        @click=${this.addTextAnnotation}>
-                    ${ICONS.text} <span>${i18n.t('addText')}</span>
-                </button>
-                <button data-testid="m-btn-add-identity" class="btn btn-tool"
-                        aria-label="${i18n.t('addIdentity') || 'Identity'}" @click=${this.addIdentity}>
-                    ${ICONS.identity} <span>${i18n.t('addIdentity') || 'Identity'}</span>
-                </button>
-                <button data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
-                        @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
-                    ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
-                </button>
                 <button data-testid="m-btn-add-date" class="btn btn-tool" aria-label="${i18n.t('addDate')}"
                         @click=${this.addDateStamp}>
                     ${ICONS.date} <span>${i18n.t('addDate')}</span>
                 </button>
+                <button data-testid="m-btn-toggle-advanced" class="btn btn-tool"
+                        aria-label="${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}"
+                        @click=${this.toggleUIMode}>
+                    ${ICONS.cog} <span>${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
+                </button>
+                ${!this.isBasicMode ? html`
+                    <button data-testid="m-btn-add-initials" class="btn btn-tool" aria-label="${i18n.t('addInitials')}"
+                            @click=${this.openInitialsModal}>
+                        ${ICONS.text} <span>${i18n.t('addInitials')}</span>
+                    </button>
+                    <button data-testid="m-btn-add-text" class="btn btn-tool" aria-label="${i18n.t('addText')}"
+                            @click=${this.addTextAnnotation}>
+                        ${ICONS.text} <span>${i18n.t('addText')}</span>
+                    </button>
+                    <button data-testid="m-btn-add-identity" class="btn btn-tool"
+                            aria-label="${i18n.t('addIdentity') || 'Identity'}" @click=${this.addIdentity}>
+                        ${ICONS.identity} <span>${i18n.t('addIdentity') || 'Identity'}</span>
+                    </button>
+                    <button data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
+                            @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
+                        ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
+                    </button>
+                ` : ''}
             </div>
 
             <div class="workspace-area">
-                ${this.showThumbnails && (this.thumbnailURLs.length > 0 || this.isGeneratingThumbs) ? html`
+                ${this.activeSidebar === 'thumbnails' && (this.thumbnailURLs.length > 0 || this.isGeneratingThumbs) ? html`
                     <div class="thumb-panel">
                         ${this.isGeneratingThumbs ? html`
                             <div style="display:flex; justify-content:center; padding:20px;">
@@ -1278,13 +1399,13 @@ export class PdfWorkspace extends LitElement {
                         ${this.thumbnailURLs.map((url, i) => html`
                             <div class="thumb-item ${this.currentPage === i + 1 ? 'active' : ''}"
                                  data-testid="thumb-page-${i + 1}"
-                                 aria-label="Page ${i + 1}"
+                                 aria-label="${i18n.t('pageLabel')} ${i + 1}"
                                  @click=${() => {
                                      this.currentPage = i + 1;
                                      this.selectedIds = [];
                                      void this.renderPage();
                                  }}>
-                                <img src="${url}" alt="Page ${i + 1}" style="width:100%; display:block;">
+                                <img src="${url}" alt="${i18n.t('pageLabel')} ${i + 1}" style="width:100%; display:block;">
                                 <div style="font-size:0.6rem; color:#9ca3af; text-align:center; padding:2px 0;">
                                     ${i + 1}
                                 </div>
@@ -1293,6 +1414,38 @@ export class PdfWorkspace extends LitElement {
                                 ` : ''}
                             </div>
                         `)}
+                    </div>
+                ` : this.activeSidebar === 'annotations' ? html`
+                    <div class="thumb-panel annotations-panel">
+                        <h4 style="color: var(--text-main); margin-top: 0; margin-bottom: 12px; font-size: 0.9rem;">${i18n.t('annotations')}</h4>
+                        ${this.annotations.length === 0 ? html`
+                            <div style="color: var(--text-sub); font-size: 0.8rem; text-align: center; margin-top: 20px;">
+                                ${i18n.t('noAnnotations')}
+                            </div>
+                        ` : ''}
+                        <div style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto;">
+                            ${this.annotations.map((ann) => html`
+                                <div style="background: ${this.selectedIds.includes(ann.id) ? 'var(--primary)' : 'var(--bg-muted)'}; padding: 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: ${this.selectedIds.includes(ann.id) ? 'white' : 'var(--text-main)'}; border: 1px solid var(--border);"
+                                     @click=${() => {
+                                         if (this.currentPage !== ann.page + 1) {
+                                             this.gotoPage(ann.page + 1);
+                                         }
+                                         this.selectedIds = [ann.id];
+                                     }}>
+                                    <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+                                        <div style="width: 16px; height: 16px; flex-shrink: 0; display:flex; align-items:center; justify-content:center;">
+                                            ${ann.type === 'signature' ? ICONS.sign : ann.type === 'stamp' ? ICONS.stamp : ICONS.text}
+                                        </div>
+                                        <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                            ${ann.type === 'date' || ann.type === 'identity' ? ann.data : (ann.type.charAt(0).toUpperCase() + ann.type.slice(1))}
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                                        <span style="background: var(--bg-surface); color: var(--text-main); padding: 2px 6px; border-radius: 10px; font-size: 0.6rem; border: 1px solid var(--border);">${i18n.t('pageLabel')} ${ann.page + 1}</span>
+                                    </div>
+                                </div>
+                            `)}
+                        </div>
                     </div>
                 ` : ''}
 
@@ -1311,13 +1464,14 @@ export class PdfWorkspace extends LitElement {
                         </button>
                         <div style="width:1px; height:20px; background:var(--border); margin:0 4px;"></div>
                         <button data-testid="btn-toggle-thumbs"
-                                class="btn toggle ${this.showThumbnails ? 'active' : ''}"
+                                class="btn toggle panel-toggle ${this.activeSidebar === 'thumbnails' ? 'active' : ''}"
                                 aria-label="${i18n.t('toggleThumbs') || 'Toggle Thumbnails'}"
+                                aria-pressed="${this.activeSidebar === 'thumbnails'}"
                                 style="padding:6px; border:none;"
                                 @click=${() => {
-                                    this.showThumbnails = !this.showThumbnails;
-                                    localStorage.setItem('signer_show_thumbs', String(this.showThumbnails));
-                                    if (this.showThumbnails && this.thumbnailURLs.length === 0) {
+                                    this.activeSidebar = this.activeSidebar === 'thumbnails' ? null : 'thumbnails';
+                                    this.persistActiveSidebar();
+                                    if (this.activeSidebar === 'thumbnails' && this.thumbnailURLs.length === 0) {
                                         void this.generateThumbnails();
                                     }
                                 }}>
@@ -1327,6 +1481,24 @@ export class PdfWorkspace extends LitElement {
                                 <rect x="14" y="3" width="7" height="7"/>
                                 <rect x="3" y="14" width="7" height="7"/>
                                 <rect x="14" y="14" width="7" height="7"/>
+                            </svg>
+                        </button>
+                        <button data-testid="btn-toggle-annotations"
+                                class="btn toggle panel-toggle ${this.activeSidebar === 'annotations' ? 'active' : ''}"
+                                aria-label="${(i18n.t as any)('annotations') || 'Toggle Annotations'}"
+                                aria-pressed="${this.activeSidebar === 'annotations'}"
+                                style="padding:6px; border:none;"
+                                @click=${() => {
+                                    this.activeSidebar = this.activeSidebar === 'annotations' ? null : 'annotations';
+                                    this.persistActiveSidebar();
+                                }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="8" y1="6" x2="21" y2="6"></line>
+                                <line x1="8" y1="12" x2="21" y2="12"></line>
+                                <line x1="8" y1="18" x2="21" y2="18"></line>
+                                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                <line x1="3" y1="18" x2="3.01" y2="18"></line>
                             </svg>
                         </button>
                     </div>
@@ -1373,7 +1545,7 @@ export class PdfWorkspace extends LitElement {
                                                     }}>✎
                                             </button>
                                             <select data-testid="select-font"
-                                                    aria-label="${(i18n.t as any)('fontFamily') || 'Font'}"
+                                                    aria-label="${i18n.t('fontFamily')}"
                                                     style="background:transparent; border:1px solid #374151; color:#fff; height:34px; border-radius:4px; cursor:pointer;"
                                                     @click=${(e: Event) => e.stopPropagation()}
                                                     @change=${(e: Event) => {
@@ -1385,7 +1557,7 @@ export class PdfWorkspace extends LitElement {
                                                 <option value="Noto Sans" ?selected=${ann.fontFamily === 'Noto Sans'}>Noto Sans</option>
                                             </select>
                                             <input type="color" data-testid="input-color"
-                                                   aria-label="${(i18n.t as any)('textColor') || 'Text Color'}"
+                                                   aria-label="${i18n.t('textColor')}"
                                                    value="${ann.color || '#000000'}"
                                                    style="background:transparent; border:1px solid #374151; height:34px; width:34px; border-radius:4px; cursor:pointer; padding: 0;"
                                                    @click=${(e: Event) => e.stopPropagation()}
@@ -1462,9 +1634,9 @@ export class PdfWorkspace extends LitElement {
             </div>
 
             ${this.showHandoverModal ? html`
-                <div class="modal-overlay">
+                <div class="modal-overlay" @click=${() => this.closeHandoverModal(true)}>
                     <div class="modal-card" data-testid="handover-modal" role="dialog" aria-modal="true"
-                         aria-labelledby="handover-title">
+                         aria-labelledby="handover-title" @click=${(e: Event) => e.stopPropagation()}>
                         <h3 id="handover-title" style="margin-top:0;">${i18n.t('previousSigDetected')}</h3>
                         <p style="font-size:0.9rem; color:var(--text-sub); margin-bottom:15px;">
                             ${i18n.t('verifyPreviousSigPrompt')}</p>
@@ -1484,13 +1656,16 @@ export class PdfWorkspace extends LitElement {
                         ${this.handoverResult === 'fail' ? html`
                             <div class="alert-box alert-error" data-testid="handover-fail"
                                  .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
-                        <div style="display:flex; gap:10px;">
+                        <p style="margin:0 0 12px 0; color:#9a3412; font-size:0.82rem; text-align:left;">
+                            ${i18n.t('handoverSkipRisk')}
+                        </p>
+                        <div class="modal-actions">
                             <button class="btn btn-primary btn-block" data-testid="btn-verify-handover"
                                     @click=${this.checkHandover}>
                                 ${i18n.t('verifyBtn')}
                             </button>
                             <button class="btn btn-block" data-testid="btn-skip-handover"
-                                    @click=${() => { this.showHandoverModal = false; this.handoverResult = 'idle'; }}>
+                                    @click=${() => this.closeHandoverModal(true)}>
                                 ${i18n.t('btnSkip')}
                             </button>
                         </div>
@@ -1499,17 +1674,20 @@ export class PdfWorkspace extends LitElement {
             ` : ''}
 
             ${this.showProofModal ? html`
-                <div class="modal-overlay">
+                <div class="modal-overlay" @click=${() => this.showProofModal = false}>
                     <div class="modal-card center" data-testid="proof-modal" role="dialog" aria-modal="true"
-                         aria-labelledby="proof-title">
+                         aria-labelledby="proof-title" @click=${(e: Event) => e.stopPropagation()}>
                         <div style="color:var(--success); margin-bottom:15px; display:flex; justify-content:center;">
                             <div style="padding:15px; background:var(--success-bg); border-radius:50%;">${ICONS.check}
                             </div>
                         </div>
                         <h2 id="proof-title" style="color:#166534; margin-top:0;">${i18n.t('savedMsg')}</h2>
                         <p style="color:var(--text-sub); font-size:0.95rem; margin-bottom:20px;">
-                            ${i18n.t('proveIdentityMsg')}</p>
+                            ${i18n.t('proofSavedFileHelp')}</p>
                         <div style="background:var(--bg-app); padding:15px; margin:15px 0; border-radius:8px; border:1px solid var(--border); text-align:left;">
+                            <div style="font-size:0.85rem; color:var(--text-main); font-weight:700; margin-bottom:10px;">
+                                ${i18n.t('proofSavedFileTitle')}
+                            </div>
                             <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600;">
                                 ${i18n.t('internalRefLabel')}
                             </div>
@@ -1517,6 +1695,12 @@ export class PdfWorkspace extends LitElement {
                                  data-testid="saved-doc-id">
                                 ${this.lastSavedId}
                             </div>
+                            <div style="font-size:0.85rem; color:var(--text-main); font-weight:700; margin:8px 0 6px 0;">
+                                ${i18n.t('proofShareHashTitle')}
+                            </div>
+                            <p style="margin:0 0 10px 0; color:var(--text-sub); font-size:0.82rem;">
+                                ${i18n.t('proofShareHashHelp')}
+                            </p>
                             <div style="font-size:0.8rem; color:var(--text-sub); font-weight:600; display:flex; align-items:center; gap:4px;">
                                 ${ICONS.lock} ${i18n.t('hashLabel')}
                             </div>
@@ -1525,7 +1709,7 @@ export class PdfWorkspace extends LitElement {
                                 ${this.lastSavedHash}
                             </div>
                         </div>
-                        <div style="display:flex; gap:10px; margin-bottom:12px;">
+                        <div class="modal-actions" style="margin-bottom:12px;">
                             <button class="btn btn-primary btn-block" data-testid="btn-copy-hash"
                                     @click=${this.copyHash}>
                                 ${ICONS.copy} ${i18n.t('copyShort')}
@@ -1558,12 +1742,12 @@ export class PdfWorkspace extends LitElement {
                                    if (e.key === 'Enter') this.saveCustomPrompt();
                                    if (e.key === 'Escape') this.customPrompt.show = false;
                                }}>
-                        <div style="display:flex; gap:10px; justify-content: flex-end;">
-                            <button class="btn" data-testid="btn-cancel-prompt"
+                        <div class="modal-actions">
+                            <button class="btn" data-testid="btn-cancel-prompt" style="flex:1;"
                                     @click=${() => this.customPrompt.show = false}>
                                 ${i18n.t('cancel') || 'Cancel'}
                             </button>
-                            <button class="btn btn-primary" data-testid="btn-save-prompt"
+                            <button class="btn btn-primary" data-testid="btn-save-prompt" style="flex:1;"
                                     @click=${this.saveCustomPrompt}>
                                 ${i18n.t('done') || 'Save'}
                             </button>

@@ -37,12 +37,14 @@ export class AppRoot extends LitElement {
 
     @query('pdf-workspace') workspace: any;
     @query('dialog#privacy-dialog') privacyDialog!: HTMLDialogElement;
+    private trappedContainers = new WeakSet<HTMLElement>();
 
     createRenderRoot() {
         return this;
     }
 
     private setupFocusTrap(container: HTMLElement) {
+        if (this.trappedContainers.has(container)) return;
         container.addEventListener('keydown', (e: KeyboardEvent) => {
             if (e.key === 'Tab') {
                 const focusables = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
@@ -62,6 +64,7 @@ export class AppRoot extends LitElement {
                 }
             }
         });
+        this.trappedContainers.add(container);
     }
 
     handleSecretTap = (e: Event) => {
@@ -176,6 +179,15 @@ export class AppRoot extends LitElement {
         const actual = this.verifyFileHash.toLowerCase();
         if (!input) return;
         this.integrityStatus = (input === actual) ? 'success' : 'fail';
+    }
+
+    private normalizedHashInput() {
+        return this.verifyHashInput.replace(/[\s\n-]/g, '').trim().toLowerCase();
+    }
+
+    private groupedHashPreview(hash: string) {
+        if (!hash) return '';
+        return hash.match(/.{1,4}/g)?.join(' ') ?? hash;
     }
 
     closeVerify() {
@@ -446,7 +458,7 @@ export class AppRoot extends LitElement {
                     </button>
                 </div>
                 <div class="dialog-footer">
-                    <button class="btn" data-testid="btn-close-privacy" @click=${this.closePrivacy}>${i18n.t('close')}</button>
+                    <button class="btn" data-testid="btn-close-privacy" @click=${() => this.closePrivacy()}>${i18n.t('close')}</button>
                 </div>
             </dialog>
 
@@ -475,7 +487,7 @@ export class AppRoot extends LitElement {
                 </div>
             ` : ''}
 
-            <dialog id="verify-dialog" @cancel=${this.closeVerify} aria-modal="true" aria-label="${i18n.t('verifyMode')}">
+            <dialog id="verify-dialog" @cancel=${() => this.closeVerify()} aria-modal="true" aria-label="${i18n.t('verifyMode')}">
                 <div class="dialog-content" style="text-align: center;">
                     ${this.verifyResult.status === 'pending_file' ? html`
                         <div style="color:var(--primary); margin-bottom:15px; display:flex; justify-content:center;">
@@ -483,31 +495,29 @@ export class AppRoot extends LitElement {
                         </div>
                         <h2>${i18n.t('linkDetected')}</h2>
                         <p class="sub">${i18n.t('linkDetectedMsg')} <strong>${this.verifyResult.id}</strong></p>
-                        <button class="btn btn-primary" data-testid="btn-start-verify" style="width: 100%;" @click=${this.startPendingVerification}>
+                        <button class="btn btn-primary" data-testid="btn-start-verify" style="width: 100%;" @click=${() => this.startPendingVerification()}>
                             ${i18n.t('selectFileVerify')}
                         </button>
-                    ` : this.verifyResult.status === 'success' ? html`
-                        <div style="color:#10b981; margin-bottom:15px; display:flex; justify-content:center;">
-                            <div style="padding:15px; background:#ecfdf5; border-radius:50%;">${ICONS.info}</div>
-                        </div>
-                        <h2 style="color:#166534;" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
-                        <p class="sub">${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong></p>
-                        <div class="amanah-panel"
-                             style="text-align:left; color:#b45309; background:#fffbeb; border-color:#fde68a;">
-                            ${i18n.t('recordFoundDisclaimer')}
-                        </div>
                     ` : html`
-                        <div style="color:#ef4444; margin-bottom:15px; display:flex; justify-content:center;">
-                            <div style="padding:15px; background:#fee2e2; border-radius:50%;">${ICONS.alert}</div>
+                        <div class="info-panel" style="text-align:left; margin-bottom: 14px;">
+                            <h3 style="margin:0 0 8px 0; font-size:0.95rem;">${i18n.t('metadataCheckTitle')}</h3>
+                            ${this.verifyResult.status === 'success' ? html`
+                                <h2 style="color:#166534; margin:0 0 8px 0;" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
+                                <p style="margin:0; color:var(--text-sub);">${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong></p>
+                                <div class="amanah-panel"
+                                     style="text-align:left; color:#b45309; background:#fffbeb; border-color:#fde68a; margin-top:10px;">
+                                    ${i18n.t('recordFoundDisclaimer')}
+                                </div>
+                            ` : html`
+                                <h2 style="color:#991b1b; margin:0 0 8px 0;" data-testid="verify-fail-title">${i18n.t('noRecordFound')}</h2>
+                                <p style="margin:0; color:var(--text-sub);">${i18n.t('noRecordMsg')}</p>
+                            `}
                         </div>
-                        <h2 style="color:#991b1b;" data-testid="verify-fail-title">${i18n.t('noRecordFound')}</h2>
-                    `}
 
-                    ${this.verifyResult.status !== 'pending_file' ? html`
-                        <hr style="margin: 20px 0; border: 0; border-top: 1px dashed var(--border);"/>
                         <div class="info-panel" style="text-align:left;">
-                            <h3 style="margin: 0 0 10px 0; font-size: 0.95rem;">${i18n.t('integrityCheck')}</h3>
-                            <div style="display:flex; gap:8px;">
+                            <h3 style="margin:0 0 8px 0; font-size:1rem; color:#111827;">${i18n.t('strictIntegrityTitle')}</h3>
+                            <p style="margin:0 0 10px 0; color:var(--text-sub); font-size:0.9rem;">${i18n.t('strictIntegrityHelp')}</p>
+                            <div class="verify-hash-row">
                                 <input type="text" class="input-field" data-testid="input-verify-hash" .value="${this.verifyHashInput}"
                                        @input="${(e: any) => {
                                            this.verifyHashInput = e.target.value;
@@ -516,17 +526,25 @@ export class AppRoot extends LitElement {
                                 <button class="btn btn-primary" data-testid="btn-check-hash" @click="${this.checkHash}">${i18n.t('verifyBtn')}
                                 </button>
                             </div>
+                            <p style="margin:8px 0 0 0; font-size:0.8rem; color:var(--text-sub);">
+                                ${i18n.t('hashFormatHint').replace('{count}', String(this.verifyFileHash?.length || 64))}
+                            </p>
+                            ${this.normalizedHashInput() ? html`
+                                <div class="info-panel" data-testid="hash-normalized" style="margin-top:8px; background:var(--bg-muted); font-family:monospace; font-size:0.75rem; color:var(--text-main); word-break:break-all;">
+                                    ${this.groupedHashPreview(this.normalizedHashInput())}
+                                </div>
+                            ` : ''}
                             ${this.integrityStatus === 'success' ? html`
-                                <div class="info-panel alert-success" data-testid="integrity-success" style="margin-top:10px;"
-                                     .innerHTML=${i18n.t('statusVerified')}></div>` : ''}
+                                <div class="alert-box alert-success" data-testid="integrity-success" style="margin-top:12px;"
+                                     .innerHTML=${i18n.t('strictVerified')}></div>` : ''}
                             ${this.integrityStatus === 'fail' ? html`
-                                <div class="info-panel alert-error" data-testid="integrity-fail" style="margin-top:10px;"
-                                     .innerHTML=${i18n.t('statusMismatch')}></div>` : ''}
+                                <div class="alert-box alert-error" data-testid="integrity-fail" style="margin-top:12px;"
+                                     .innerHTML=${i18n.t('strictMismatch')}></div>` : ''}
                         </div>
-                    ` : ''}
+                    `}
                 </div>
                 <div class="dialog-footer">
-                    <button class="btn" data-testid="btn-close-verify" style="width: 100%;" @click=${this.closeVerify}>${i18n.t('close')}</button>
+                    <button class="btn" data-testid="btn-close-verify" @click=${() => this.closeVerify()}>${i18n.t('close')}</button>
                 </div>
             </dialog>
 

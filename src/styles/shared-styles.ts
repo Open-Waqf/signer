@@ -89,17 +89,19 @@ export const sharedStyles = css`
         justify-content: center;
         z-index: 99999;
         backdrop-filter: blur(4px);
-        padding: 16px;
+        padding: 12px;
         box-sizing: border-box;
     }
 
     .modal-card {
         background: var(--bg-surface, #ffffff);
-        padding: 24px;
+        padding: clamp(16px, 3.5vw, 24px);
         border-radius: var(--radius-lg, 16px);
         box-shadow: var(--shadow-floating);
         width: 100%;
         max-width: 420px;
+        max-height: min(92dvh, 760px);
+        overflow-y: auto;
         text-align: left;
         box-sizing: border-box;
         animation: modalScale 0.2s ease-out;
@@ -128,7 +130,7 @@ export const sharedStyles = css`
         border: 1px solid rgba(16, 185, 129, 0.2);
     }
 
-  claude  .alert-warning {
+    .alert-warning {
         background: var(--warning-bg, #fff7ed);
         color: #9a3412;
         border: 1px solid rgba(245, 158, 11, 0.2);
@@ -138,5 +140,15 @@ export const sharedStyles = css`
         background: var(--danger-bg, #fee2e2);
         color: #991b1b;
         border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    @media (max-width: 480px) {
+        .modal-overlay {
+            padding: 8px;
+        }
+
+        .modal-card {
+            border-radius: 12px;
+        }
     }
 `;
