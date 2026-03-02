@@ -135,6 +135,7 @@ Anyone receiving a signed document can verify it:
 * **Testing:** Playwright (End-to-End & Workflow logic).
 * **PDF Engine:** `pdf-lib` (modification) & `pdfjs-dist` (rendering).
 * **Cryptography:** Native `crypto.subtle` API for SHA-256 and `crypto.randomUUID()` for identifiers.
+* **Refactor Docs:** See `docs/architecture/` for app shell, workspace, and PDF pipeline boundaries.
 
 ---
 

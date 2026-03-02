@@ -1,4 +1,5 @@
 import {config, LanguageCode, LANGUAGES, resources} from '../i18n/locales';
+import {preferences} from './preferences';
 
 class I18nService {
     private currentLang: LanguageCode = 'en';
@@ -13,7 +14,7 @@ class I18nService {
         const urlLang = params.get('lang');
 
         // 2. Secondary: LocalStorage
-        const saved = localStorage.getItem('signer_lang') as LanguageCode;
+        const saved = preferences.getLang() as LanguageCode;
 
         // 3. Fallback: System Language
         const system = navigator.language.split('-')[0] as LanguageCode;
@@ -48,7 +49,7 @@ class I18nService {
         this.currentLang = lang;
 
         // 1. Save Preference
-        localStorage.setItem('signer_lang', lang);
+        preferences.setLang(lang);
 
         // 2. Update URL (Silent push, no reload)
         const url = new URL(window.location.href);

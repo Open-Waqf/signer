@@ -11,6 +11,9 @@ import {sharedStyles} from '../styles/shared-styles';
 import {LANGUAGES} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
 import {WebAuthnService} from '../lib/webauthn-service';
+import {extractHex64} from '../domain/hash';
+import {extractPin6} from '../domain/handover';
+import {preferences} from '../lib/preferences';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
@@ -19,7 +22,7 @@ export class PdfWorkspace extends LitElement {
     @state() totalPages = 0;
     @state() scale = 1.0;
     @state() hasHardwareSupport = false;
-    @state() hardwarePref: 'prompt' | 'always' | 'never' = (localStorage.getItem('signer_hardware_pref') as any) || 'prompt';
+    @state() hardwarePref: 'prompt' | 'always' | 'never' = preferences.getHardwarePref() || 'prompt';
     @state() showHardwarePrompt = false;
     @state() rememberHardwareChoice = false;
 
@@ -68,16 +71,10 @@ export class PdfWorkspace extends LitElement {
 
     @state() guideLines: { axis: 'x' | 'y', pos: number }[] = [];
 
-    @state() activeSidebar: 'thumbnails' | 'annotations' | null =
-        (() => {
-            const saved = localStorage.getItem('signer_active_sidebar');
-            if (saved === 'annotations') return 'annotations';
-            if (saved === 'none') return null;
-            return 'thumbnails';
-        })();
+    @state() activeSidebar: 'thumbnails' | 'annotations' | null = preferences.getActiveSidebar();
     @state() thumbnailURLs: string[] = [];
     @state() isGeneratingThumbs = false;
-    @state() uiMode: 'basic' | 'advanced' = (localStorage.getItem('signer_ui_mode') as 'basic' | 'advanced') || 'basic';
+    @state() uiMode: 'basic' | 'advanced' = preferences.getUiMode();
 
     @state() customPrompt: {
         show: boolean,
@@ -98,7 +95,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     private persistActiveSidebar() {
-        localStorage.setItem('signer_active_sidebar', this.activeSidebar ?? 'none');
+        preferences.setActiveSidebar(this.activeSidebar);
     }
 
     private closeHandoverModal(markSkipped = false) {
@@ -143,19 +140,8 @@ export class PdfWorkspace extends LitElement {
         return !!this.annotations.find((a) => a.id === id)?.lockedByChain;
     }
 
-    private extractHex64(input: string): string | null {
-        const match = input.match(/(?:^|[^a-fA-F0-9])([a-fA-F0-9]{64})(?:[^a-fA-F0-9]|$)/);
-        return match ? match[1].toLowerCase() : null;
-    }
-
-    private extractPin6(input: string): string | null {
-        const all = input.match(/\d{6}/g);
-        if (!all || all.length === 0) return null;
-        return all[all.length - 1];
-    }
-
     addIdentity() {
-        const savedEmail = localStorage.getItem('user_email') || '';
+        const savedEmail = preferences.getUserEmail();
         this.customPrompt = {
             show: true,
             title: i18n.t('identityPrompt') || 'Enter your email:',
@@ -169,7 +155,7 @@ export class PdfWorkspace extends LitElement {
     saveCustomPrompt() {
         const val = this.customPrompt.value.trim();
         if (this.customPrompt.isIdentity && val) {
-            localStorage.setItem('user_email', val);
+            preferences.setUserEmail(val);
             const text = `${i18n.t('signedBy') || 'Signed by'}: ${val}`;
             this.addAnnotation('identity', text, 0);
         } else if (!this.customPrompt.isIdentity && this.customPrompt.targetId && val) {
@@ -767,8 +753,8 @@ export class PdfWorkspace extends LitElement {
 
     async checkHandover() {
         if (!this.loadedBytes) return;
-        const inputPin = this.extractPin6(this.handoverHashInput);
-        const fullHashInput = this.extractHex64(this.handoverHashInput);
+        const inputPin = extractPin6(this.handoverHashInput);
+        const fullHashInput = extractHex64(this.handoverHashInput);
         const actual = await pdfEngine.getFileHash(this.loadedBytes);
         const expectedCode = pdfEngine.getSixDigitCode(actual);
 
@@ -1213,7 +1199,7 @@ export class PdfWorkspace extends LitElement {
             // Convert hex to bytes
             const hashBytes = new Uint8Array(hashHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
             
-            const savedEmail = localStorage.getItem('user_email') || 'User';
+            const savedEmail = preferences.getUserEmail('User');
             const result = await WebAuthnService.sign(hashBytes, savedEmail);
             
             this.snapshot();
@@ -1314,7 +1300,7 @@ export class PdfWorkspace extends LitElement {
         await new Promise((r) => setTimeout(r, 50));
 
         try {
-            const savedEmail = localStorage.getItem('user_email') || 'User';
+            const savedEmail = preferences.getUserEmail('User');
             let result;
             try {
                 result = await pdfEngine.saveProfessional(
@@ -1335,7 +1321,7 @@ export class PdfWorkspace extends LitElement {
                 const message = String(e?.message || '');
                 if (useHardware && message.includes('Hardware proof unavailable')) {
                     this.hardwarePref = 'never';
-                    localStorage.setItem('signer_hardware_pref', 'never');
+                    preferences.setHardwarePref('never');
                     console.warn('Hardware proof fallback: browser could not embed WebAuthn public key proof; saving as visual-only.');
                     this.toast(i18n.t('hardwareProofUnavailable') || 'Hardware proof unavailable on this browser. Saved as visual-only.');
                     result = await pdfEngine.saveProfessional(
@@ -1449,7 +1435,7 @@ export class PdfWorkspace extends LitElement {
 
     toggleUIMode() {
         this.uiMode = this.isBasicMode ? 'advanced' : 'basic';
-        localStorage.setItem('signer_ui_mode', this.uiMode);
+        preferences.setUiMode(this.uiMode);
     }
 
     private getHardwareIcon() {
@@ -1474,7 +1460,7 @@ export class PdfWorkspace extends LitElement {
         if (this.hardwarePref === 'prompt') this.hardwarePref = 'always';
         else if (this.hardwarePref === 'always') this.hardwarePref = 'never';
         else this.hardwarePref = 'prompt';
-        localStorage.setItem('signer_hardware_pref', this.hardwarePref);
+        preferences.setHardwarePref(this.hardwarePref);
         this.toast(`${i18n.t('hardwareSign') || 'Hardware Sign'}: ${this.hardwarePref.toUpperCase()}`);
     }
 
@@ -1483,7 +1469,7 @@ export class PdfWorkspace extends LitElement {
     async resolveHardwarePrompt(choice: boolean | null) {
         if (choice !== null && this.rememberHardwareChoice) {
             this.hardwarePref = choice ? 'always' : 'never';
-            localStorage.setItem('signer_hardware_pref', this.hardwarePref);
+            preferences.setHardwarePref(this.hardwarePref);
         }
         this.showHardwarePrompt = false;
         if (this.hardwareResolver) {
