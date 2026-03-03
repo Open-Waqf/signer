@@ -607,6 +607,7 @@ export class AppRoot extends LitElement {
             <div class="toast toast-interactive show">
                 <span class="update-banner-label">${ICONS.alert} ${i18n.t('updateAvailable')}</span>
                 <button class="btn btn-primary update-banner-btn"
+                        data-testid="btn-update-reload"
                         @click=${() => this.updateSW && this.updateSW(true)}>
                     ${i18n.t('reload')}
                 </button>

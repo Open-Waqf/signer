@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import {cleanupOutdatedCaches, precacheAndRoute} from 'workbox-precaching';
+import {clientsClaim} from 'workbox-core';
 
 declare let self: ServiceWorkerGlobalScope & {
     __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
@@ -12,6 +13,7 @@ const SHARE_DEFAULT_NAME = 'Shared_Document.pdf';
 
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
+clientsClaim();
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -79,6 +81,10 @@ self.addEventListener('fetch', (event: FetchEvent) => {
 });
 
 self.addEventListener('message', (event: ExtendableMessageEvent) => {
+    if (event.data?.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+        return;
+    }
     if (event.data?.type !== 'OWQ_SHARE_TARGET_CLIENT_READY') return;
 
     event.waitUntil((async () => {

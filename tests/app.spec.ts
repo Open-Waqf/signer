@@ -60,6 +60,23 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     });
 
+    test('2.2 PWA update banner reload triggers service worker activation callback', async ({page}) => {
+        await page.goto('/');
+        await page.evaluate(() => {
+            const app = document.querySelector('app-root') as any;
+            (window as any).__updateReloadArg = null;
+            app.updateSW = (reload: boolean) => {
+                (window as any).__updateReloadArg = reload;
+            };
+            app.updateAvailable = true;
+            app.requestUpdate();
+        });
+
+        await expect(page.getByTestId('btn-update-reload')).toBeVisible();
+        await page.getByTestId('btn-update-reload').click();
+        await expect.poll(async () => page.evaluate(() => (window as any).__updateReloadArg)).toBe(true);
+    });
+
     test('2.5 RTL: Modal direction follows selected language', async ({page}) => {
         await page.goto('/');
 
