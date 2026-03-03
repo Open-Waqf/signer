@@ -77,6 +77,16 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect.poll(async () => page.evaluate(() => (window as any).__updateReloadArg)).toBe(true);
     });
 
+    test('2.3 Modal host uses native dialog element', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('link-privacy').click();
+        const hasDialog = await page.locator('owq-modal[open]').first().evaluate((el) => {
+            const root = (el as HTMLElement).shadowRoot;
+            return !!root?.querySelector('dialog[open]');
+        });
+        expect(hasDialog).toBe(true);
+    });
+
     test('2.5 RTL: Modal direction follows selected language', async ({page}) => {
         await page.goto('/');
 
@@ -85,8 +95,9 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const rtlModal = await page.locator('owq-modal[open]').first().evaluate((el) => {
             const root = (el as HTMLElement).shadowRoot;
             const card = root?.querySelector('.modal-card') as HTMLElement | null;
+            const shell = root?.querySelector('.modal-shell') as HTMLElement | null;
             return {
-                overlayDir: root?.querySelector('.modal-overlay')?.getAttribute('dir') || '',
+                overlayDir: shell?.getAttribute('dir') || '',
                 cardDir: card?.getAttribute('dir') || '',
                 cardDirection: card ? getComputedStyle(card).direction : '',
             };
@@ -101,8 +112,9 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const ltrModal = await page.locator('owq-modal[open]').first().evaluate((el) => {
             const root = (el as HTMLElement).shadowRoot;
             const card = root?.querySelector('.modal-card') as HTMLElement | null;
+            const shell = root?.querySelector('.modal-shell') as HTMLElement | null;
             return {
-                overlayDir: root?.querySelector('.modal-overlay')?.getAttribute('dir') || '',
+                overlayDir: shell?.getAttribute('dir') || '',
                 cardDir: card?.getAttribute('dir') || '',
                 cardDirection: card ? getComputedStyle(card).direction : '',
             };
@@ -123,8 +135,9 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const modalDir = await page.locator('owq-modal[open][data-testid=\"exit-confirm-modal\"]').evaluate((el) => {
             const root = (el as HTMLElement).shadowRoot;
             const card = root?.querySelector('.modal-card') as HTMLElement | null;
+            const shell = root?.querySelector('.modal-shell') as HTMLElement | null;
             return {
-                overlayDir: root?.querySelector('.modal-overlay')?.getAttribute('dir') || '',
+                overlayDir: shell?.getAttribute('dir') || '',
                 cardDir: card?.getAttribute('dir') || '',
                 cardDirection: card ? getComputedStyle(card).direction : '',
             };
@@ -143,7 +156,13 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
             await logo.click();
         }
 
-        await expect(page.getByTestId('diagnostics-modal')).toBeVisible();
+        await expect.poll(async () => {
+            return page.getByTestId('diagnostics-modal').evaluate((el) => {
+                const root = (el as HTMLElement).shadowRoot;
+                const dialog = root?.querySelector('dialog');
+                return !!dialog?.hasAttribute('open');
+            });
+        }).toBe(true);
         await page.getByTestId('btn-close-diagnostics').click();
         await expect(page.getByTestId('diagnostics-modal')).not.toBeVisible();
     });
