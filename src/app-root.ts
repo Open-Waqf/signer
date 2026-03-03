@@ -927,7 +927,7 @@ export class AppRoot extends LitElement {
 
             ${this.chainStatus.status === 'success' ? html`
                 <div class="alert-box alert-success alert-top-gap" data-testid="chain-success"
-                     .innerHTML=${i18n.t(this.integrityStatus === 'success' ? 'chainValidated' : 'chainValidatedPreliminary')
+                     .innerHTML=${(this.integrityStatus === 'success' ? i18n.t('chainValidated') : i18n.t('chainValidatedPreliminary'))
                          .replace('{count}', String(this.chainStatus.total || 0))}></div>
             ` : ''}
             ${this.chainStatus.status === 'fail' ? html`
