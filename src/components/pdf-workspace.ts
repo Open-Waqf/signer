@@ -98,6 +98,15 @@ export class PdfWorkspace extends LitElement {
     private marqueeCurrent = {x: 0, y: 0};
     private marqueeBaseIds: string[] = [];
     private hadSnapGuides = false;
+    private thumbObserver: IntersectionObserver | null = null;
+    private thumbVisiblePages = new Set<number>();
+    private thumbQueuedPages = new Set<number>();
+    private thumbRenderingPages = new Set<number>();
+    private thumbQueueTimer: number | null = null;
+    private thumbRenderToken = 0;
+    private readonly thumbScale = 0.18;
+    private readonly maxStampUploadBytes = 5 * 1024 * 1024;
+    private readonly maxStampImagePixels = 12_000_000;
 
     private loadedBytes: Uint8Array | null = null;
     @state() isVerified = false;
@@ -110,7 +119,7 @@ export class PdfWorkspace extends LitElement {
     @state() guideLines: { axis: 'x' | 'y', pos: number }[] = [];
 
     @state() activeSidebar: 'thumbnails' | 'annotations' | null = preferences.getActiveSidebar();
-    @state() thumbnailURLs: string[] = [];
+    @state() thumbnailURLs: Array<string | null> = [];
     @state() isGeneratingThumbs = false;
     @state() uiMode: 'basic' | 'advanced' = preferences.getUiMode();
 
@@ -507,6 +516,23 @@ export class PdfWorkspace extends LitElement {
         .thumb-image {
             width: 100%;
             display: block;
+        }
+
+        .thumb-placeholder {
+            width: 100%;
+            aspect-ratio: 1 / 1.35;
+            background: linear-gradient(90deg, var(--bg-muted) 25%, var(--bg-app) 50%, var(--bg-muted) 75%);
+            background-size: 200% 100%;
+            animation: thumb-shimmer 1.1s linear infinite;
+        }
+
+        @keyframes thumb-shimmer {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
         }
 
         .thumb-index {
@@ -952,6 +978,7 @@ export class PdfWorkspace extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        this.resetThumbnailState();
         window.removeEventListener('lang-changed', this.onLangChanged);
         window.removeEventListener('mousemove', this.handleGlobalMove);
         window.removeEventListener('touchmove', this.handleGlobalMove as any);
@@ -1068,6 +1095,7 @@ export class PdfWorkspace extends LitElement {
 
     async loadPdf(file: Uint8Array, name: string) {
         pdfEngine.destroy();
+        this.resetThumbnailState();
         this.clearCertificateSession();
         this.pdfName = name;
         this.loadedBytes = file;
@@ -1120,11 +1148,14 @@ export class PdfWorkspace extends LitElement {
         const datePart = now.toISOString().slice(0, 10);
         const timePart = now.toTimeString().slice(0, 5).replace(':', '');
         this.outputFilename = `${cleanName}_signed_${datePart}_${timePart}`;
-        this.thumbnailURLs = [];
+        this.thumbnailURLs = new Array(this.totalPages).fill(null);
 
         await this.updateComplete;
         void this.renderPage();
-        void this.generateThumbnails();
+        if (this.activeSidebar === 'thumbnails') {
+            this.setupThumbnailObserver();
+        }
+        this.queueVisibleThumbnailsNow();
     }
 
     async checkHandover() {
@@ -1173,21 +1204,26 @@ export class PdfWorkspace extends LitElement {
 
     async generateThumbnails() {
         if (this.totalPages === 0) return;
-        this.isGeneratingThumbs = true;
-        this.thumbnailURLs = [];
-        const offscreen = document.createElement('canvas');
-        for (let p = 1; p <= this.totalPages; p++) {
-            await pdfEngine.renderPage(p, offscreen, 0.18);
-            this.thumbnailURLs = [...this.thumbnailURLs, offscreen.toDataURL('image/jpeg', 0.75)];
-            await new Promise(r => requestAnimationFrame(r));
+        if (this.thumbnailURLs.length !== this.totalPages) {
+            this.thumbnailURLs = new Array(this.totalPages).fill(null);
         }
         this.isGeneratingThumbs = false;
+        this.setupThumbnailObserver();
+        this.queueVisibleThumbnailsNow();
     }
 
     updated(changed: Map<string, unknown>) {
         if (changed.has('currentPage') && this.activeSidebar === 'thumbnails') {
             this.shadowRoot?.querySelector('.thumb-item.active')
                 ?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+        }
+        if (changed.has('activeSidebar')) {
+            if (this.activeSidebar === 'thumbnails') {
+                this.setupThumbnailObserver();
+                this.queueVisibleThumbnailsNow();
+            } else {
+                this.disconnectThumbnailObserver();
+            }
         }
         if (changed.has('annotations') && this.activeSidebar === 'annotations' && this.annotations.length === 0) {
             this.activeSidebar = 'thumbnails';
@@ -1196,6 +1232,133 @@ export class PdfWorkspace extends LitElement {
         if (changed.has('selectedIds') && this.selectedIds.length === 0) {
             this.isMultiSelectMode = false;
         }
+    }
+
+    private setupThumbnailObserver() {
+        if (this.activeSidebar !== 'thumbnails' || this.totalPages === 0) return;
+        const panel = this.shadowRoot?.querySelector('.thumb-panel');
+        if (!panel) return;
+
+        this.disconnectThumbnailObserver();
+        this.thumbVisiblePages.clear();
+        this.thumbObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                const pageAttr = (entry.target as HTMLElement).dataset.page;
+                if (!pageAttr) continue;
+                const page = Number(pageAttr);
+                if (!Number.isFinite(page)) continue;
+                if (entry.isIntersecting) {
+                    this.thumbVisiblePages.add(page);
+                } else {
+                    this.thumbVisiblePages.delete(page);
+                }
+            }
+            this.scheduleThumbnailQueueFlush();
+        }, {
+            root: panel,
+            rootMargin: '160px 0px',
+            threshold: 0.01
+        });
+
+        for (const el of panel.querySelectorAll('.thumb-item[data-page]')) {
+            this.thumbObserver.observe(el);
+        }
+    }
+
+    private disconnectThumbnailObserver() {
+        if (this.thumbObserver) {
+            this.thumbObserver.disconnect();
+            this.thumbObserver = null;
+        }
+        if (this.thumbQueueTimer != null) {
+            window.clearTimeout(this.thumbQueueTimer);
+            this.thumbQueueTimer = null;
+        }
+        this.thumbVisiblePages.clear();
+        this.thumbQueuedPages.clear();
+        this.thumbRenderingPages.clear();
+        this.thumbRenderToken++;
+    }
+
+    private scheduleThumbnailQueueFlush() {
+        if (this.thumbQueueTimer != null) {
+            window.clearTimeout(this.thumbQueueTimer);
+        }
+        this.thumbQueueTimer = window.setTimeout(() => {
+            this.thumbQueueTimer = null;
+            this.queueVisibleThumbnailsNow();
+        }, 80);
+    }
+
+    private queueVisibleThumbnailsNow() {
+        if (this.activeSidebar !== 'thumbnails' || this.totalPages === 0) return;
+        const focused = this.thumbVisiblePages.size > 0
+            ? Array.from(this.thumbVisiblePages).sort((a, b) => a - b)
+            : [this.currentPage];
+        const targets = new Set<number>(focused);
+        for (const page of focused) {
+            if (page > 1) targets.add(page - 1);
+            if (page < this.totalPages) targets.add(page + 1);
+        }
+        const pages = Array.from(targets)
+            .filter((page) => !this.thumbnailURLs[page - 1])
+            .sort((a, b) => a - b);
+        this.thumbQueuedPages = new Set(pages);
+        this.thumbRenderToken++;
+        void this.processThumbnailQueue(this.thumbRenderToken);
+    }
+
+    private async processThumbnailQueue(token: number) {
+        for (const page of Array.from(this.thumbQueuedPages)) {
+            if (token !== this.thumbRenderToken) return;
+            if (!this.thumbQueuedPages.has(page)) continue;
+            if (this.thumbRenderingPages.has(page)) continue;
+            if (this.thumbnailURLs[page - 1]) continue;
+            this.thumbQueuedPages.delete(page);
+            this.thumbRenderingPages.add(page);
+            try {
+                const url = await this.renderThumbnailBlobUrl(page);
+                if (token !== this.thumbRenderToken) {
+                    URL.revokeObjectURL(url);
+                    return;
+                }
+                const prev = this.thumbnailURLs[page - 1];
+                if (prev) URL.revokeObjectURL(prev);
+                const next = [...this.thumbnailURLs];
+                next[page - 1] = url;
+                this.thumbnailURLs = next;
+            } catch {
+                // Keep placeholder if rendering fails.
+            } finally {
+                this.thumbRenderingPages.delete(page);
+            }
+            await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+        }
+    }
+
+    private async renderThumbnailBlobUrl(page: number): Promise<string> {
+        const offscreen = document.createElement('canvas');
+        await pdfEngine.renderPage(page, offscreen, this.thumbScale);
+        const blob = await new Promise<Blob>((resolve, reject) => {
+            offscreen.toBlob((result) => {
+                if (result) resolve(result);
+                else reject(new Error('thumb-blob-failed'));
+            }, 'image/jpeg', 0.75);
+        });
+        return URL.createObjectURL(blob);
+    }
+
+    private revokeThumbnailUrls() {
+        for (const url of this.thumbnailURLs) {
+            if (url) URL.revokeObjectURL(url);
+        }
+    }
+
+    private resetThumbnailState() {
+        this.disconnectThumbnailObserver();
+        this.revokeThumbnailUrls();
+        this.thumbnailURLs = [];
+        this.isGeneratingThumbs = false;
     }
 
     changePage(offset: number) {
@@ -1740,6 +1903,7 @@ export class PdfWorkspace extends LitElement {
 
     public reset() {
         pdfEngine.destroy();
+        this.resetThumbnailState();
         this.clearCertificateSession();
         this.annotations = [];
         this.signaturesChain = [];
@@ -1755,6 +1919,8 @@ export class PdfWorkspace extends LitElement {
         this.lastSaveHardwareFallback = false;
         this.previousHashManuallyVerified = true;
         this.openedDocumentHash = '';
+        this.totalPages = 0;
+        this.currentPage = 1;
         if (this.canvas) {
             this.canvas.getContext('2d')?.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.canvas.width = 0;
@@ -1854,12 +2020,22 @@ export class PdfWorkspace extends LitElement {
         const input = e.target as HTMLInputElement;
         const file = input.files?.[0];
         if (file) {
+            if (file.size > this.maxStampUploadBytes) {
+                this.toast(i18n.t('stampFileTooLarge').replace('{size}', String(Math.floor(this.maxStampUploadBytes / (1024 * 1024)))));
+                input.value = '';
+                return;
+            }
             const reader = new FileReader();
             reader.onerror = () => this.toast(i18n.t('errorReadingFile'));
             reader.onload = (evt) => {
                 const img = new Image();
                 img.onerror = () => this.toast(i18n.t('errorReadingFile'));
                 img.onload = () => {
+                    const pixels = img.width * img.height;
+                    if (pixels > this.maxStampImagePixels) {
+                        this.toast(i18n.t('stampImageTooLarge'));
+                        return;
+                    }
                     const canvas = document.createElement('canvas');
                     canvas.width = img.width;
                     canvas.height = img.height;
@@ -2315,7 +2491,7 @@ export class PdfWorkspace extends LitElement {
     private toggleSidebar(target: 'thumbnails' | 'annotations') {
         this.activeSidebar = this.activeSidebar === target ? null : target;
         this.persistActiveSidebar();
-        if (target === 'thumbnails' && this.activeSidebar === 'thumbnails' && this.thumbnailURLs.length === 0) {
+        if (target === 'thumbnails' && this.activeSidebar === 'thumbnails' && this.totalPages > 0) {
             void this.generateThumbnails();
         }
     }
@@ -2343,16 +2519,15 @@ export class PdfWorkspace extends LitElement {
     }
 
     private renderWorkspaceSidebar() {
-        if (this.activeSidebar === 'thumbnails' && (this.thumbnailURLs.length > 0 || this.isGeneratingThumbs)) {
+        if (this.activeSidebar === 'thumbnails' && this.totalPages > 0) {
             return html`
                 <div class="thumb-panel">
-                    ${this.isGeneratingThumbs ? html`
-                        <div class="thumb-loading">
-                            <div class="spinner"></div>
-                        </div>
-                    ` : ''}
-                    ${this.thumbnailURLs.map((url, i) => html`
+                    ${Array.from({length: this.totalPages}, (_, i) => i + 1).map((page) => {
+                        const url = this.thumbnailURLs[page - 1];
+                        const i = page - 1;
+                        return html`
                         <div class="thumb-item ${this.currentPage === i + 1 ? 'active' : ''}"
+                             data-page="${page}"
                              data-testid="thumb-page-${i + 1}"
                              aria-label="${i18n.t('pageLabel')} ${i + 1}"
                              @click=${() => {
@@ -2360,11 +2535,14 @@ export class PdfWorkspace extends LitElement {
                                  this.selectedIds = [];
                                  void this.renderPage();
                              }}>
-                            <img src="${url}" alt="${i18n.t('pageLabel')} ${i + 1}" class="thumb-image">
+                            ${url
+                                ? html`<img src="${url}" alt="${i18n.t('pageLabel')} ${i + 1}" class="thumb-image">`
+                                : html`<div class="thumb-placeholder" aria-hidden="true"></div>`}
                             <div class="thumb-index">${i + 1}</div>
                             ${this.annotations.some(a => a.page === i) ? html`<div class="thumb-has-annotations"></div>` : ''}
                         </div>
-                    `)}
+                    `;
+                    })}
                 </div>
             `;
         }

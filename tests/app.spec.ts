@@ -623,6 +623,76 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.locator('[data-testid^="stamp-preset-"]')).toHaveCount(1);
     });
 
+    test('6.3 Thumbnails lazy-load with blob URLs and deep pages render on demand', async ({page}) => {
+        const bigPdf = await PDFDocument.create();
+        for (let i = 0; i < 120; i++) {
+            bigPdf.addPage([595, 842]);
+        }
+        const bigPdfBytes = Buffer.from(await bigPdf.save());
+
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({
+            name: 'big-120-pages.pdf',
+            mimeType: 'application/pdf',
+            buffer: bigPdfBytes,
+        });
+
+        const ws = page.locator('pdf-workspace');
+        await expect(ws).toBeVisible();
+        const toggleBtn = page.getByTestId('btn-toggle-thumbs');
+        const isActive = await toggleBtn.evaluate((el) => el.classList.contains('active'));
+        if (!isActive) await toggleBtn.click();
+        await expect(page.locator('.thumb-panel')).toBeVisible();
+
+        await expect.poll(async () => {
+            const src = await page.getByTestId('thumb-page-1').locator('img').first().getAttribute('src');
+            return src || '';
+        }).toMatch(/^blob:/);
+
+        await expect(page.getByTestId('thumb-page-120').locator('img')).toHaveCount(0);
+
+        await ws.evaluate((el) => {
+            const panel = (el.shadowRoot?.querySelector('.thumb-panel') as HTMLElement | null);
+            if (panel) panel.scrollTop = panel.scrollHeight;
+        });
+
+        await expect.poll(async () => page.getByTestId('thumb-page-120').locator('img').count()).toBe(1);
+        await expect.poll(async () => {
+            const src = await page.getByTestId('thumb-page-120').locator('img').getAttribute('src');
+            return src || '';
+        }).toMatch(/^blob:/);
+    });
+
+    test('6.4 Stamp upload size cap rejects oversized files gracefully', async ({page}) => {
+        const openStampLibrary = async () => {
+            await page.locator('pdf-workspace').evaluate((el) => {
+                const ws = el as any;
+                ws.uiMode = 'advanced';
+                ws.showStampLibraryModal = true;
+                ws.requestUpdate();
+            });
+        };
+
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+        await openStampLibrary();
+        await expect(page.getByTestId('stamp-library-modal')).toBeVisible();
+
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-stamp-upload').click();
+        (await chooser).setFiles({
+            name: 'too-big-stamp.png',
+            mimeType: 'image/png',
+            buffer: Buffer.alloc(6 * 1024 * 1024, 1),
+        });
+
+        await expect(page.locator('.toast')).toContainText(/too large|max/i);
+        await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(0);
+    });
+
     test('7. Workflow: Verification Logic', async ({page}) => {
         if (!aliceSignedBuffer) return test.skip();
 
