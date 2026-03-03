@@ -717,6 +717,68 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(ws.locator('.draggable.selected')).toHaveCount(2);
     });
 
+    test('9.2 Workflow: snap guideline haptic is transition-based (no spam)', async ({page}) => {
+        await page.goto('/');
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'snap_haptic_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer),
+        });
+
+        const ws = page.locator('pdf-workspace');
+        await ws.getByTestId('btn-add-date').click();
+        await ws.getByTestId('btn-add-date').click();
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(2);
+
+        await page.evaluate(() => {
+            (window as any).__vibrateCalls = 0;
+            const original = navigator.vibrate?.bind(navigator);
+            (window as any).__originalVibrate = original;
+            (navigator as any).vibrate = () => {
+                (window as any).__vibrateCalls += 1;
+                return true;
+            };
+        });
+
+        const anns = ws.locator('[data-testid^="annotation-"]');
+        const first = anns.nth(0);
+        const second = anns.nth(1);
+        const firstBox = await first.boundingBox();
+        const secondBox = await second.boundingBox();
+        if (!firstBox || !secondBox) throw new Error('Missing annotation bounds');
+
+        // Drag first near second to trigger snapping guides repeatedly while moving.
+        const startX = firstBox.x + firstBox.width / 2;
+        const startY = firstBox.y + firstBox.height / 2;
+        const endX = secondBox.x + secondBox.width / 2;
+        const endY = secondBox.y + secondBox.height / 2;
+
+        await page.mouse.move(startX, startY);
+        await page.mouse.down();
+        for (let i = 0; i < 8; i++) {
+            const t = (i + 1) / 8;
+            await page.mouse.move(startX + (endX - startX) * t, startY + (endY - startY) * t);
+        }
+        await page.mouse.up();
+
+        const calls = await page.evaluate(() => (window as any).__vibrateCalls || 0);
+        expect(calls).toBeGreaterThan(0);
+        expect(calls).toBeLessThanOrEqual(3);
+
+        await page.evaluate(() => {
+            const original = (window as any).__originalVibrate;
+            if (original) {
+                (navigator as any).vibrate = original;
+            }
+            delete (window as any).__originalVibrate;
+            delete (window as any).__vibrateCalls;
+        });
+    });
+
     test('10. REQ-19 TC-01: Sequential chain happy path', async ({page}) => {
         const sourcePdf = await generateTestPDF();
         await page.goto('/');

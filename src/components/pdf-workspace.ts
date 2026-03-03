@@ -91,6 +91,7 @@ export class PdfWorkspace extends LitElement {
     private marqueeStart = {x: 0, y: 0};
     private marqueeCurrent = {x: 0, y: 0};
     private marqueeBaseIds: string[] = [];
+    private hadSnapGuides = false;
 
     private loadedBytes: Uint8Array | null = null;
     @state() isVerified = false;
@@ -1423,6 +1424,11 @@ export class PdfWorkspace extends LitElement {
                     : undefined,
             });
             this.guideLines = move.guideLines;
+            const hasSnapGuides = move.guideLines.length > 0;
+            if (hasSnapGuides && !this.hadSnapGuides) {
+                void HapticService.selection();
+            }
+            this.hadSnapGuides = hasSnapGuides;
 
             if (move.changed) {
                 takeSnapshotIfNeeded();
@@ -1467,6 +1473,7 @@ export class PdfWorkspace extends LitElement {
         this.interactionChanged = false;
         if (changed) this.isDirty = true;
         this.guideLines = [];
+        this.hadSnapGuides = false;
     };
 
     openSignModal() {

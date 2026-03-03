@@ -2,6 +2,16 @@ import {Haptics, ImpactStyle} from '@capacitor/haptics';
 import {Capacitor} from '@capacitor/core';
 
 export class HapticService {
+    private static vibrateFallback(durationMs = 10) {
+        try {
+            if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+                navigator.vibrate(durationMs);
+            }
+        } catch {
+            // Ignore unsupported or blocked vibration APIs.
+        }
+    }
+
     static async impact(style: ImpactStyle = ImpactStyle.Light) {
         if (Capacitor.isNativePlatform()) {
             try {
@@ -9,7 +19,9 @@ export class HapticService {
             } catch (e) {
                 console.error('Haptics error:', e);
             }
+            return;
         }
+        this.vibrateFallback(10);
     }
 
     static async success() {
@@ -19,7 +31,9 @@ export class HapticService {
             } catch (e) {
                 console.error('Haptics error:', e);
             }
+            return;
         }
+        this.vibrateFallback(15);
     }
 
     static async selection() {
@@ -29,6 +43,8 @@ export class HapticService {
             } catch (e) {
                 console.error('Haptics error:', e);
             }
+            return;
         }
+        this.vibrateFallback(10);
     }
 }
