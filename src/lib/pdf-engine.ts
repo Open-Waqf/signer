@@ -37,15 +37,19 @@ export class PdfEngine {
 
     async load(data: Uint8Array) {
         this.pdfBytes = data;
-
-        const baseUrl = window.location.href.replace(/index\.html.*/, '');
-        const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+        // Resolve PDF.js static assets from Vite base path relative to current location
+        // so query params (e.g. ?lang=ar) and sub-path deployments both work.
+        const base = new URL(import.meta.env.BASE_URL, window.location.href);
+        const cMapUrl = new URL('cmaps/', base).toString();
+        const standardFontDataUrl = new URL('standard_fonts/', base).toString();
 
         const loadingTask = pdfjsLib.getDocument({
             data: new Uint8Array(data),
-            cMapUrl: `${cleanBase}cmaps/`,
+            cMapUrl,
             cMapPacked: true,
-            standardFontDataUrl: `${cleanBase}standard_fonts/`
+            standardFontDataUrl,
+            useSystemFonts: true,
+            disableFontFace: false
         });
         this.pdfDoc = await loadingTask.promise;
         return this.pdfDoc.numPages;
@@ -57,7 +61,12 @@ export class PdfEngine {
         const viewport = page.getViewport({scale});
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-        await page.render({canvasContext: canvas.getContext('2d')!, viewport}).promise;
+        const canvasContext = canvas.getContext('2d')!;
+        // Keep PDF glyph shaping stable regardless of UI direction (RTL/LTR).
+        if ('direction' in canvasContext) {
+            (canvasContext as CanvasRenderingContext2D & { direction?: CanvasDirection }).direction = 'ltr';
+        }
+        await page.render({canvasContext, viewport}).promise;
     }
 
     async saveProfessional(

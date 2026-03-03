@@ -238,6 +238,14 @@ export class PdfWorkspace extends LitElement {
             height: 44px;
         }
 
+        .exit-icon {
+            display: block;
+        }
+
+        .exit-icon-rtl {
+            transform: scaleX(-1);
+        }
+
         .btn-label {
             margin-left: 6px;
         }
@@ -388,6 +396,12 @@ export class PdfWorkspace extends LitElement {
             border-radius: 2px;
             margin-bottom: 40px;
             transition: transform 0.2s ease;
+            direction: ltr;
+        }
+
+        #pdf-canvas {
+            display: block;
+            direction: ltr;
         }
 
         .thumb-panel {
@@ -822,7 +836,9 @@ export class PdfWorkspace extends LitElement {
     `];
 
     private onLangChanged = () => {
-        this.dir = i18n.lang === 'ar' ? 'rtl' : 'ltr';
+        const dir = i18n.lang === 'ar' ? 'rtl' : 'ltr';
+        this.dir = dir;
+        this.setAttribute('dir', dir);
         this.requestUpdate();
     };
 
@@ -833,7 +849,9 @@ export class PdfWorkspace extends LitElement {
             this.activeSidebar = 'thumbnails';
             this.persistActiveSidebar();
         }
-        this.dir = i18n.lang === 'ar' ? 'rtl' : 'ltr';
+        const dir = i18n.lang === 'ar' ? 'rtl' : 'ltr';
+        this.dir = dir;
+        this.setAttribute('dir', dir);
         window.addEventListener('lang-changed', this.onLangChanged);
         window.addEventListener('mousemove', this.handleGlobalMove);
         window.addEventListener('touchmove', this.handleGlobalMove as any, {passive: false});
@@ -1586,6 +1604,28 @@ export class PdfWorkspace extends LitElement {
         });
     }
 
+    async startAirGapTransfer() {
+        if ((this.isDirty || !this.lastSavedBytes) && this.hasEdits) {
+            await this.saveDocument({silentWeb: true, showToast: false});
+        }
+
+        const data = this.lastSavedBytes ?? this.loadedBytes;
+        if (!data) {
+            this.toast(i18n.t('noChanges'));
+            return;
+        }
+
+        const name = this.outputFilename || this.pdfName || 'Transferred_Document.pdf';
+        this.dispatchEvent(new CustomEvent('airgap-send', {
+            detail: {
+                data: new Uint8Array(data),
+                name,
+            },
+            bubbles: true,
+            composed: true,
+        }));
+    }
+
     requestExit() {
         this.dispatchEvent(new CustomEvent('exit-workspace', {bubbles: true, composed: true}));
     }
@@ -1971,10 +2011,10 @@ export class PdfWorkspace extends LitElement {
         return html`
             <header>
                 <div class="brand">
-                    <button id="btn-exit" data-testid="btn-exit" class="btn mirror-rtl icon-only-btn"
+                    <button id="btn-exit" data-testid="btn-exit" class="btn icon-only-btn"
                             aria-label="${i18n.t('exitBtn')}"
                             @click=${this.requestExit}>
-                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                        <svg class="exit-icon ${this.dir === 'rtl' ? 'exit-icon-rtl' : ''}" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
                              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="19" y1="12" x2="5" y2="12"/>
                             <polyline points="12 19 5 12 12 5"/>
@@ -2078,6 +2118,13 @@ export class PdfWorkspace extends LitElement {
                         <button data-testid="btn-share" class="btn toolbar-btn-compact"
                                 aria-label="${i18n.t('share')}" @click=${this.shareLatest} ?disabled=${shareDisabled}>
                             ${ICONS.share}
+                        </button>
+                        <button data-testid="btn-airgap-transfer" class="btn toolbar-btn-compact"
+                                aria-label="${i18n.t('airGapTransfer')}"
+                                title="${i18n.t('airGapTransfer')}"
+                                @click=${this.startAirGapTransfer}
+                                ?disabled=${shareDisabled}>
+                            ${ICONS.qr}
                         </button>
                         <button data-testid="btn-save" class="btn btn-primary toolbar-btn-compact"
                                 aria-label="${i18n.t('done')}"

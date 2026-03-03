@@ -58,6 +58,63 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     });
 
+    test('2.5 RTL: Modal direction follows selected language', async ({page}) => {
+        await page.goto('/');
+
+        await page.getByTestId('select-lang-home').selectOption('ar');
+        await page.getByTestId('link-privacy').click();
+        const rtlModal = await page.locator('owq-modal[open]').first().evaluate((el) => {
+            const root = (el as HTMLElement).shadowRoot;
+            const card = root?.querySelector('.modal-card') as HTMLElement | null;
+            return {
+                overlayDir: root?.querySelector('.modal-overlay')?.getAttribute('dir') || '',
+                cardDir: card?.getAttribute('dir') || '',
+                cardDirection: card ? getComputedStyle(card).direction : '',
+            };
+        });
+        expect(rtlModal.overlayDir).toBe('rtl');
+        expect(rtlModal.cardDir).toBe('rtl');
+        expect(rtlModal.cardDirection).toBe('rtl');
+        await page.getByTestId('btn-close-privacy').click();
+
+        await page.getByTestId('select-lang-home').selectOption('en');
+        await page.getByTestId('link-privacy').click();
+        const ltrModal = await page.locator('owq-modal[open]').first().evaluate((el) => {
+            const root = (el as HTMLElement).shadowRoot;
+            const card = root?.querySelector('.modal-card') as HTMLElement | null;
+            return {
+                overlayDir: root?.querySelector('.modal-overlay')?.getAttribute('dir') || '',
+                cardDir: card?.getAttribute('dir') || '',
+                cardDirection: card ? getComputedStyle(card).direction : '',
+            };
+        });
+        expect(ltrModal.overlayDir).toBe('ltr');
+        expect(ltrModal.cardDir).toBe('ltr');
+        expect(ltrModal.cardDirection).toBe('ltr');
+    });
+
+    test('2.6 RTL: Workspace exit confirm modal uses RTL direction', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('select-lang-home').selectOption('ar');
+        await page.getByTestId('btn-sample').click();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        await page.getByTestId('btn-add-date').click();
+        await page.getByTestId('btn-exit').click();
+
+        const modalDir = await page.locator('owq-modal[open][data-testid=\"exit-confirm-modal\"]').evaluate((el) => {
+            const root = (el as HTMLElement).shadowRoot;
+            const card = root?.querySelector('.modal-card') as HTMLElement | null;
+            return {
+                overlayDir: root?.querySelector('.modal-overlay')?.getAttribute('dir') || '',
+                cardDir: card?.getAttribute('dir') || '',
+                cardDirection: card ? getComputedStyle(card).direction : '',
+            };
+        });
+        expect(modalDir.overlayDir).toBe('rtl');
+        expect(modalDir.cardDir).toBe('rtl');
+        expect(modalDir.cardDirection).toBe('rtl');
+    });
+
     test('3. Diagnostics: Secret Tap Logic', async ({page}) => {
         await page.goto('/');
         const logo = page.getByTestId('logo-img');
@@ -72,7 +129,55 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.getByTestId('diagnostics-modal')).not.toBeVisible();
     });
 
-    test('4. Workflow: Share Target cache handoff opens PDF', async ({page}) => {
+    test('3.5 Arabic: Sample and PDF open still work', async ({page}) => {
+        const pdfBuffer = await generateTestPDF();
+        await page.goto('/');
+        const homeCard = page.locator('.drop-card');
+        await expect(homeCard).toBeVisible();
+        const widthEn = await homeCard.evaluate((el) => Math.round(el.getBoundingClientRect().width));
+
+        await page.getByTestId('select-lang-home').selectOption('fr');
+        const widthFr = await homeCard.evaluate((el) => Math.round(el.getBoundingClientRect().width));
+        expect(Math.abs(widthFr - widthEn)).toBeLessThanOrEqual(2);
+
+        await page.getByTestId('select-lang-home').selectOption('ar');
+        await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+        const widthAr = await homeCard.evaluate((el) => Math.round(el.getBoundingClientRect().width));
+        expect(Math.abs(widthAr - widthEn)).toBeLessThanOrEqual(2);
+
+        await page.getByTestId('btn-sample').click();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        const exitArrowRtlClass = await page.getByTestId('btn-exit').locator('svg').first()
+            .evaluate((el) => el.getAttribute('class') || '');
+        expect(String(exitArrowRtlClass)).toContain('exit-icon-rtl');
+        const canvasDirectionRtl = await page.locator('pdf-workspace').evaluate((el) => {
+            const root = (el as HTMLElement).shadowRoot;
+            const canvas = root?.querySelector('#pdf-canvas') as HTMLCanvasElement | null;
+            return canvas ? getComputedStyle(canvas).direction : '';
+        });
+        expect(canvasDirectionRtl).toBe('ltr');
+        await page.getByTestId('btn-exit').click();
+        await expect(page.getByTestId('btn-select-file')).toBeVisible();
+
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        await fileChooser.setFiles({
+            name: 'arabic_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: pdfBuffer,
+        });
+
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        await page.getByTestId('btn-exit').click();
+        await page.getByTestId('select-lang-home').selectOption('en');
+        await page.getByTestId('btn-sample').click();
+        const exitArrowLtrClass = await page.getByTestId('btn-exit').locator('svg').first()
+            .evaluate((el) => el.getAttribute('class') || '');
+        expect(String(exitArrowLtrClass)).not.toContain('exit-icon-rtl');
+    });
+
+    test('4. Workflow: Share Target handoff opens PDF on app start', async ({page}) => {
         const pdfBuffer = await generateTestPDF();
         const pdfBase64 = pdfBuffer.toString('base64');
 
@@ -94,8 +199,35 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
             );
         }, {base64: pdfBase64});
 
-        await page.goto('/?shared-pdf=1');
+        await page.reload();
+        await expect(page.getByTestId('btn-exit')).toBeVisible({timeout: 15000});
+    });
+
+    test('4. Workflow: Air-Gap sender initializes without runtime crash', async ({page}) => {
+        const pageErrors: string[] = [];
+        page.on('pageerror', (error) => pageErrors.push(error.message));
+        const consoleErrors: string[] = [];
+        page.on('console', (msg) => {
+            if (msg.type() === 'error') consoleErrors.push(msg.text());
+        });
+
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
         await expect(page.getByTestId('btn-exit')).toBeVisible();
+        await page.getByTestId('btn-add-date').click();
+        await page.getByTestId('btn-airgap-transfer').click();
+
+        const errorBlock = page.locator('.info-panel').filter({hasText: /Failed to prepare|تعذر تجهيز|Échec de préparation/i});
+        await page.waitForTimeout(1000);
+        const errorCount = await errorBlock.count();
+        if (errorCount > 0) {
+            const errorText = await errorBlock.first().innerText();
+            throw new Error(`Air-Gap prepare failed: ${errorText}\nConsole errors:\n${consoleErrors.join('\n')}\nPage errors:\n${pageErrors.join('\n')}`);
+        }
+        await expect(page.getByTestId('airgap-send-canvas')).toBeVisible({timeout: 15000});
+
+        const combinedErrors = `${pageErrors.join('\n')}\n${consoleErrors.join('\n')}`;
+        expect(combinedErrors).not.toContain('process is not defined');
     });
 
     test('4. Workflow: Full Signing Loop with Annotation controls', async ({page}) => {

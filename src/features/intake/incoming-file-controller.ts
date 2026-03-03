@@ -21,10 +21,31 @@ export class IncomingFileController {
     }
 
     serviceWorkerMessageHandler = (event: MessageEvent) => {
+        if (event.data?.type === 'SHARED_FILE' && event.data.file instanceof File) {
+            void this.handleSharedBrowserFile(event.data.file);
+            return;
+        }
+
         if (event.data?.type === 'OWQ_SHARED_PDF_READY') {
             void this.consumeSharedPdfFromCache();
         }
     };
+
+    async initializeServiceWorkerShareBridge() {
+        if (!('serviceWorker' in navigator)) return;
+
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            const target = navigator.serviceWorker.controller ?? registration.active;
+            target?.postMessage({type: 'OWQ_SHARE_TARGET_CLIENT_READY'});
+        } catch (error) {
+            console.error('Failed to initialize share target bridge:', error);
+        }
+    }
+
+    async consumePendingSharedPdf() {
+        await this.consumeSharedPdfFromCache();
+    }
 
     async consumeSharedPdfFromLocation(locationSearch: string): Promise<string | null> {
         const params = new URLSearchParams(locationSearch);
@@ -128,5 +149,14 @@ export class IncomingFileController {
             this.options.onError();
         }
     }
-}
 
+    private async handleSharedBrowserFile(file: File) {
+        try {
+            const data = new Uint8Array(await file.arrayBuffer());
+            await this.options.onSharedFile(data, file.name || 'Shared_Document.pdf');
+        } catch (error) {
+            console.error('Failed to load shared browser file:', error);
+            this.options.onError();
+        }
+    }
+}

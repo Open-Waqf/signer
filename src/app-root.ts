@@ -8,9 +8,10 @@ import './components/pdf-workspace';
 import './components/owq-modal';
 import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
-import {LANGUAGES} from './i18n/locales';
+import {LANGUAGES, resources} from './i18n/locales';
 import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import {ICONS} from './lib/icons';
+import QRCode from 'qrcode';
 import {StatusBar, Style} from '@capacitor/status-bar';
 import {IncomingFileController} from './features/intake/incoming-file-controller';
 import {VerifyController} from './features/verify/verify-controller';
@@ -46,12 +47,30 @@ export class AppRoot extends LitElement {
     private logoTapTimeout: any = null;
     @state() showExitConfirm = false;
     @state() showPrivacyModal = false;
+    @state() showAirGapModal = false;
+    @state() airGapMode: 'send' | 'receive' = 'receive';
+    @state() airGapSendReady = false;
+    @state() airGapFrameCounter = 0;
+    @state() airGapFrameTotal = 0;
+    @state() airGapReceivePercent = 0;
+    @state() airGapReceiveLabel = '';
+    @state() airGapReceiveActive = false;
+    @state() airGapStatus = '';
 
     private updateSW: ((reload: boolean) => void) | undefined;
     private backButtonListener: Promise<{ remove: () => Promise<void> }> | null = null;
     private readonly onLangChanged = () => this.requestUpdate();
+    private airGapSender: any | null = null;
+    private airGapDecoder: any | null = null;
+    private airGapSendTimer: number | null = null;
+    private airGapHtml5Scanner: any | null = null;
+    private airGapNativeListener: any | null = null;
+    private airGapNativeScanner: any | null = null;
+    private airGapNativeScanActive = false;
+    private airGapSentFileName = 'Transferred_Document.pdf';
 
     @query('pdf-workspace') workspace: any;
+    @query('#airgap-send-canvas') private airGapCanvas?: HTMLCanvasElement;
     private readonly verifyController = new VerifyController();
     private readonly incomingFileController = new IncomingFileController({
         onSharedFile: async (data, name) => {
@@ -84,6 +103,7 @@ export class AppRoot extends LitElement {
         super.firstUpdated(_changedProperties);
         const params = new URLSearchParams(window.location.search);
         const nextSearch = await this.incomingFileController.consumeSharedPdfFromLocation(window.location.search);
+        await this.incomingFileController.consumePendingSharedPdf();
         if (nextSearch !== null) {
             const nextUrl = nextSearch ? `${window.location.pathname}?${nextSearch}` : window.location.pathname;
             window.history.replaceState({}, document.title, nextUrl);
@@ -107,6 +127,7 @@ export class AppRoot extends LitElement {
         window.addEventListener('lang-changed', this.onLangChanged);
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', this.incomingFileController.serviceWorkerMessageHandler);
+            void this.incomingFileController.initializeServiceWorkerShareBridge();
         }
         this.setupPWA();
         this.incomingFileController.setupIncomingNativeFileRouting();
@@ -117,6 +138,8 @@ export class AppRoot extends LitElement {
     disconnectedCallback() {
         super.disconnectedCallback();
         window.removeEventListener('lang-changed', this.onLangChanged);
+        this.stopAirGapSendLoop();
+        this.stopAirGapScanner();
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.removeEventListener('message', this.incomingFileController.serviceWorkerMessageHandler);
         }
@@ -253,14 +276,20 @@ export class AppRoot extends LitElement {
             const pdfDoc = await PDFDocument.create();
             const page = pdfDoc.addPage([595.28, 841.89]);
             const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-            page.drawText(i18n.t('sampleDocTitle'), {x: 50, y: 750, size: 24, font, color: rgb(0, 0.33, 0.71)});
-            page.drawText(i18n.t('sampleDocText1'), {
+            const sampleTitleLocalized = i18n.t('sampleDocTitle');
+            const sampleText1Localized = i18n.t('sampleDocText1');
+            const sampleText2Localized = i18n.t('sampleDocText2');
+            const sampleTitle = /[^\x00-\x7F]/.test(sampleTitleLocalized) ? resources.en.sampleDocTitle : sampleTitleLocalized;
+            const sampleText1 = /[^\x00-\x7F]/.test(sampleText1Localized) ? resources.en.sampleDocText1 : sampleText1Localized;
+            const sampleText2 = /[^\x00-\x7F]/.test(sampleText2Localized) ? resources.en.sampleDocText2 : sampleText2Localized;
+            page.drawText(sampleTitle, {x: 50, y: 750, size: 24, font, color: rgb(0, 0.33, 0.71)});
+            page.drawText(sampleText1, {
                 x: 50,
                 y: 700,
                 size: 12,
                 font
             });
-            page.drawText(i18n.t('sampleDocText2'), {
+            page.drawText(sampleText2, {
                 x: 50,
                 y: 680,
                 size: 12,
@@ -313,6 +342,236 @@ export class AppRoot extends LitElement {
 
     closePrivacy() {
         this.showPrivacyModal = false;
+    }
+
+    private resetAirGapState() {
+        this.airGapSendReady = false;
+        this.airGapFrameCounter = 0;
+        this.airGapFrameTotal = 0;
+        this.airGapReceivePercent = 0;
+        this.airGapReceiveLabel = '';
+        this.airGapReceiveActive = false;
+        this.airGapStatus = '';
+        this.airGapSender = null;
+        this.airGapDecoder = null;
+        this.airGapSentFileName = 'Transferred_Document.pdf';
+    }
+
+    private stopAirGapSendLoop() {
+        if (this.airGapSendTimer !== null) {
+            window.clearInterval(this.airGapSendTimer);
+            this.airGapSendTimer = null;
+        }
+    }
+
+    private stopAirGapScanner() {
+        if (this.airGapHtml5Scanner) {
+            const scanner = this.airGapHtml5Scanner;
+            this.airGapHtml5Scanner = null;
+            scanner.stop().catch(() => {
+            });
+            scanner.clear();
+        }
+
+        if (this.airGapNativeListener) {
+            const listener = this.airGapNativeListener;
+            this.airGapNativeListener = null;
+            listener.remove().catch(() => {
+            });
+        }
+
+        this.airGapNativeScanActive = false;
+        if (this.airGapNativeScanner) {
+            this.airGapNativeScanner.stopScan().catch(() => {
+            });
+            this.airGapNativeScanner = null;
+        }
+        document.body.classList.remove('airgap-native-camera');
+    }
+
+    closeAirGapModal() {
+        this.stopAirGapSendLoop();
+        this.stopAirGapScanner();
+        this.resetAirGapState();
+        this.showAirGapModal = false;
+    }
+
+    async openReceiveAirGapModal() {
+        this.showAirGapModal = true;
+        this.airGapMode = 'receive';
+        this.resetAirGapState();
+        await this.updateComplete;
+        void this.startReceiveScanner();
+    }
+
+    async handleAirGapSendRequest(e: CustomEvent<{ data: Uint8Array; name: string }>) {
+        const payload = e.detail;
+        if (!payload?.data?.byteLength) return;
+        this.showAirGapModal = true;
+        this.airGapMode = 'send';
+        this.resetAirGapState();
+        this.airGapSentFileName = payload.name || 'Transferred_Document.pdf';
+        this.airGapStatus = i18n.t('airGapPreparing');
+
+        try {
+            const {AirGapTransferSender} = await import('./lib/airgap-transfer');
+            this.airGapSender = await AirGapTransferSender.create(payload.data, this.airGapSentFileName);
+            this.airGapFrameTotal = this.airGapSender.totalShards;
+            this.airGapSendReady = true;
+            this.airGapStatus = i18n.t('airGapReady').replace('{count}', String(this.airGapFrameTotal));
+            await this.updateComplete;
+            this.startAirGapAnimation();
+        } catch (error) {
+            console.error('Failed to prepare air-gap transfer:', error);
+            this.airGapStatus = i18n.t('airGapPrepareFailed');
+        }
+    }
+
+    private startAirGapAnimation() {
+        this.stopAirGapSendLoop();
+        const drawNext = async () => {
+            if (!this.airGapSender || !this.airGapCanvas) return;
+            const frame = this.airGapSender.nextFrame();
+            this.airGapFrameCounter++;
+            this.airGapStatus = i18n.t('airGapBroadcasting').replace('{index}', String((this.airGapFrameCounter % Math.max(1, this.airGapFrameTotal)) + 1)).replace('{total}', String(this.airGapFrameTotal));
+            await QRCode.toCanvas(this.airGapCanvas, frame, {
+                errorCorrectionLevel: 'M',
+                margin: 1,
+                width: 320,
+            });
+        };
+
+        void drawNext();
+        this.airGapSendTimer = window.setInterval(() => {
+            void drawNext();
+        }, 150);
+    }
+
+    private async startReceiveScanner() {
+        this.stopAirGapScanner();
+        const {AirGapTransferDecoder} = await import('./lib/airgap-transfer');
+        this.airGapDecoder = await AirGapTransferDecoder.create();
+        this.airGapReceivePercent = 0;
+        this.airGapReceiveLabel = i18n.t('airGapWaitingFrames');
+        this.airGapReceiveActive = true;
+        this.airGapStatus = i18n.t('airGapScannerStarting');
+
+        if (isNativePlatform()) {
+            const started = await this.startNativeScanner();
+            if (started) return;
+        }
+        await this.startWebScanner();
+    }
+
+    private async startWebScanner() {
+        try {
+            const {Html5Qrcode, Html5QrcodeSupportedFormats} = await import('html5-qrcode');
+            const scannerElementId = 'airgap-web-scanner';
+            this.airGapHtml5Scanner = new Html5Qrcode(scannerElementId, {
+                verbose: false,
+                formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+            });
+
+            this.airGapStatus = i18n.t('airGapScannerRunning');
+            await this.airGapHtml5Scanner.start(
+                {facingMode: 'environment'},
+                {
+                    fps: 10,
+                    qrbox: {width: 260, height: 260},
+                    disableFlip: true,
+                },
+                (decodedText: string) => {
+                    void this.consumeAirGapFrame(decodedText);
+                },
+                (_errorMessage: string) => {
+                    // Ignore per-frame decode errors to keep UI smooth.
+                }
+            );
+        } catch (error) {
+            console.error('Failed to start web scanner:', error);
+            this.airGapStatus = i18n.t('airGapScannerUnsupported');
+            this.airGapReceiveActive = false;
+        }
+    }
+
+    private async startNativeScanner(): Promise<boolean> {
+        const module = await import('@capacitor-mlkit/barcode-scanning').catch(() => null);
+        if (!module) return false;
+        const {BarcodeScanner, BarcodeFormat, LensFacing} = module;
+        this.airGapNativeScanner = BarcodeScanner;
+
+        const support = await BarcodeScanner.isSupported().catch(() => ({supported: false}));
+        if (!support.supported) return false;
+
+        this.airGapNativeScanActive = true;
+        document.body.classList.add('airgap-native-camera');
+        this.airGapStatus = i18n.t('airGapNativeScanner');
+
+        try {
+            const permission = await BarcodeScanner.requestPermissions();
+            if (permission.camera !== 'granted' && permission.camera !== 'limited') {
+                this.airGapStatus = i18n.t('airGapScannerDenied');
+                this.airGapReceiveActive = false;
+                this.airGapNativeScanActive = false;
+                document.body.classList.remove('airgap-native-camera');
+                return true;
+            }
+        } catch (error) {
+            console.error('Native scanner permission failed:', error);
+            this.airGapStatus = i18n.t('airGapScannerDenied');
+            this.airGapReceiveActive = false;
+            return true;
+        }
+
+        this.airGapNativeListener = await BarcodeScanner.addListener('barcodesScanned', (event) => {
+            if (!this.airGapNativeScanActive) return;
+            for (const barcode of event.barcodes || []) {
+                const raw = barcode.rawValue || barcode.displayValue;
+                if (raw) {
+                    void this.consumeAirGapFrame(raw);
+                }
+            }
+        });
+
+        await BarcodeScanner.startScan({
+            formats: [BarcodeFormat.QrCode],
+            lensFacing: LensFacing.Back,
+        });
+
+        return true;
+    }
+
+    private async consumeAirGapFrame(raw: string) {
+        if (!this.airGapDecoder) return;
+
+        const progress = this.airGapDecoder.addFrame(raw);
+        if (progress.total > 0) {
+            this.airGapReceivePercent = Math.min(100, Math.round(progress.progress * 100));
+            this.airGapReceiveLabel = i18n.t('airGapReceivingFrames')
+                .replace('{received}', String(progress.received))
+                .replace('{total}', String(progress.total));
+        }
+
+        if (!progress.done) return;
+        this.airGapStatus = i18n.t('airGapReconstructing');
+
+        try {
+            const finalized = await this.airGapDecoder.finalizeIfComplete();
+            if (!finalized.data) return;
+
+            this.stopAirGapScanner();
+            this.airGapReceiveActive = false;
+            this.airGapStatus = i18n.t('airGapComplete');
+            const loadName = finalized.fileName || 'Transferred_Document.pdf';
+            await this.handleFile(finalized.data, loadName);
+            this.closeAirGapModal();
+        } catch (error) {
+            console.error('Failed to finalize transfer:', error);
+            this.airGapStatus = i18n.t('airGapDecodeFailed');
+            this.showToast(i18n.t('airGapDecodeFailed'));
+            this.airGapReceiveActive = false;
+            this.stopAirGapScanner();
+        }
     }
 
     clearAppCache() {
@@ -421,6 +680,15 @@ export class AppRoot extends LitElement {
                             <p class="sub drop-hint">
                                 ${this.verifyMode ? i18n.t('dropHintVerify') : i18n.t('dragDropHint')}
                             </p>
+                            ${!this.verifyMode ? html`
+                                <button class="btn" type="button" data-testid="btn-receive-airgap"
+                                        @click=${(e: Event) => {
+                                            e.stopPropagation();
+                                            void this.openReceiveAirGapModal();
+                                        }}>
+                                    ${ICONS.camera} ${i18n.t('receiveDocument')}
+                                </button>
+                            ` : ''}
                         </div>
 
                         ${!this.verifyMode ? html`
@@ -461,6 +729,7 @@ export class AppRoot extends LitElement {
                            @set-loading=${(e: CustomEvent) => {
                                this.setLoading(e.detail);
                            }}
+                           @airgap-send=${(e: CustomEvent<{ data: Uint8Array; name: string }>) => void this.handleAirGapSendRequest(e)}
                            @exit-workspace=${this.handleExitWorkspace}>
             </pdf-workspace>
         `;
@@ -654,6 +923,76 @@ export class AppRoot extends LitElement {
         `;
     }
 
+    private renderAirGapModal() {
+        if (!this.showAirGapModal) return '';
+        return html`
+            <owq-modal .open=${this.showAirGapModal}
+                       .closeOnBackdrop=${false}
+                       ariaLabel="${i18n.t('airGapTransfer')}"
+                       @modal-close=${() => this.closeAirGapModal()}>
+                <div class="dialog-content" dir=${document.documentElement.dir || 'ltr'}>
+                    <h2 class="modal-title">${i18n.t('airGapTransfer')}</h2>
+                    <div class="mode-toggle">
+                        <button data-testid="btn-airgap-send-tab"
+                                class="${this.airGapMode === 'send' ? 'active' : ''}"
+                                @click=${async () => {
+                                    this.airGapMode = 'send';
+                                    this.stopAirGapScanner();
+                                    await this.updateComplete;
+                                    if (this.airGapSender) this.startAirGapAnimation();
+                                }}>
+                            <span class="mode-label">${ICONS.qr} ${i18n.t('airGapSend')}</span>
+                        </button>
+                        <button data-testid="btn-airgap-receive-tab"
+                                class="${this.airGapMode === 'receive' ? 'active' : ''}"
+                                @click=${async () => {
+                                    this.airGapMode = 'receive';
+                                    this.stopAirGapSendLoop();
+                                    await this.updateComplete;
+                                    await this.startReceiveScanner();
+                                }}>
+                            <span class="mode-label">${ICONS.camera} ${i18n.t('airGapReceive')}</span>
+                        </button>
+                    </div>
+
+                    ${this.airGapMode === 'send' ? html`
+                        <p class="modal-copy">${i18n.t('airGapSendHelp')}</p>
+                        <div class="info-panel">${this.airGapStatus}</div>
+                        ${this.airGapSendReady ? html`
+                            <canvas id="airgap-send-canvas" data-testid="airgap-send-canvas" class="airgap-qr-canvas"></canvas>
+                            <p class="verify-step-note">${this.airGapSentFileName}</p>
+                        ` : html`
+                            <p class="verify-step-note">${i18n.t('airGapNoSendPayload')}</p>
+                        `}
+                    ` : html`
+                        <p class="modal-copy">${i18n.t('airGapReceiveHelp')}</p>
+                        <div class="info-panel">${this.airGapStatus}</div>
+                        ${isNativePlatform() ? html`
+                            <div class="airgap-native-hint">${i18n.t('airGapNativeScanner')}</div>
+                        ` : html`
+                            <div id="airgap-web-scanner" data-testid="airgap-web-scanner" class="airgap-video"></div>
+                        `}
+                        <div class="airgap-progress-wrap" data-testid="airgap-progress-wrap">
+                            <div class="airgap-progress-bar" style="width:${this.airGapReceivePercent}%"></div>
+                        </div>
+                        <p class="verify-step-note">${this.airGapReceiveLabel}</p>
+                        ${!this.airGapReceiveActive ? html`
+                            <button class="btn btn-primary" data-testid="btn-airgap-retry"
+                                    @click=${() => this.startReceiveScanner()}>
+                                ${i18n.t('airGapRetryScan')}
+                            </button>
+                        ` : ''}
+                    `}
+                </div>
+                <div class="dialog-footer">
+                    <button class="btn" data-testid="btn-close-airgap" @click=${() => this.closeAirGapModal()}>
+                        ${i18n.t('close')}
+                    </button>
+                </div>
+            </owq-modal>
+        `;
+    }
+
     render() {
         return html`
             ${this.renderLoaderOverlay()}
@@ -668,6 +1007,7 @@ export class AppRoot extends LitElement {
             ${this.renderDiagnosticsModal()}
             ${this.renderVerifyModal()}
             ${this.renderExitConfirmModal()}
+            ${this.renderAirGapModal()}
         `;
     }
 }

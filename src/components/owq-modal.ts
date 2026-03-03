@@ -86,9 +86,11 @@ export class OwqModal extends LitElement {
 
     render() {
         if (!this.open) return html``;
+        const dir = document.documentElement.dir || 'ltr';
         return html`
-            <div class="modal-overlay" @click=${this.onBackdropClick} @keydown=${this.onKeydown}>
+            <div class="modal-overlay" dir=${dir} @click=${this.onBackdropClick} @keydown=${this.onKeydown}>
                 <div class="modal-card ${this.center ? 'center' : ''}" role="dialog" aria-modal="true"
+                     dir=${dir}
                      aria-label=${this.ariaLabel || nothing} aria-labelledby=${this.ariaLabelledby || nothing}
                      @click=${(e: Event) => e.stopPropagation()}>
                     <slot></slot>

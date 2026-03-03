@@ -61,6 +61,10 @@ device's RAM.
   internet connection.
 * **Native "Open With" / Share-In:** PDFs can be opened directly into Signer from Android file managers/apps (APK) and
   from installed Android/Windows PWAs through OS share targets.
+* **Share Target Reliability:** A custom Workbox `injectManifest` service worker intercepts Web Share Target `POST`
+  uploads, prevents static-host 404 navigation issues, and safely hands shared PDFs to the running app.
+* **Air-Gapped QR Transfer:** Share signed PDFs between fully offline devices using animated **UR** fountain QR frames
+  with local reconstruction, progress tracking, and no network/Bluetooth/USB dependency.
 * **Multilingual:** Native support for **English**, **Arabic (RTL)**, and **French** with dynamic UI mirroring.
 
 ---

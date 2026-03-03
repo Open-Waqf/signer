@@ -102,7 +102,8 @@ export const sharedStyles = css`
         max-width: var(--owq-modal-max-width, 420px);
         max-height: var(--owq-modal-max-height, min(92dvh, 760px));
         overflow-y: auto;
-        text-align: left;
+        text-align: start;
+        direction: inherit;
         box-sizing: border-box;
         animation: modalScale var(--owq-modal-animation-duration, 0.2s) ease-out;
     }
@@ -135,7 +136,7 @@ export const sharedStyles = css`
         margin: 0 0 12px 0;
         color: var(--warning-text, #9a3412);
         font-size: 0.82rem;
-        text-align: left;
+        text-align: start;
     }
 
     .modal-icon-wrap {
@@ -160,7 +161,7 @@ export const sharedStyles = css`
         margin: 15px 0;
         border-radius: 8px;
         border: 1px solid var(--border, #e5e7eb);
-        text-align: left;
+        text-align: start;
     }
 
     .modal-section-title {
