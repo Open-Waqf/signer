@@ -11,6 +11,10 @@ let aliceSignedBuffer: Buffer | null = null;
 let signerABuffer: Buffer | null = null;
 let signerBBuffer: Buffer | null = null;
 let signerCSingleAuditBuffer: Buffer | null = null;
+const TINY_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAukB9oN2VN8AAAAASUVORK5CYII=',
+    'base64'
+);
 
 async function readPdfSignatures(buffer: Buffer): Promise<any[]> {
     const pdf = await PDFDocument.load(buffer, {updateMetadata: false});
@@ -576,6 +580,47 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('btn-sample').click();
         await page.getByTestId('btn-add-sig').click();
         await expect(page.locator('.preset-item[title=\"E2E IndexedDB Preset\"]')).toHaveCount(1);
+    });
+
+    test('6.2 Stamp presets persist across reload via IndexedDB', async ({page}) => {
+        const openStampLibrary = async () => {
+            await page.locator('pdf-workspace').evaluate((el) => {
+                const ws = el as any;
+                ws.uiMode = 'advanced';
+                ws.showStampLibraryModal = true;
+                ws.requestUpdate();
+            });
+        };
+
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+        await openStampLibrary();
+        await expect(page.getByTestId('stamp-library-modal')).toBeVisible();
+
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-stamp-upload').click();
+        (await chooser).setFiles({
+            name: 'tiny-stamp.png',
+            mimeType: 'image/png',
+            buffer: TINY_PNG,
+        });
+
+        await expect(page.getByTestId('stamp-library-modal')).not.toBeVisible();
+        await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+
+        await openStampLibrary();
+        await expect(page.locator('[data-testid^="stamp-preset-"]')).toHaveCount(1);
+        await page.locator('pdf-workspace').evaluate((el) => {
+            (el as any).showStampLibraryModal = false;
+            (el as any).requestUpdate();
+        });
+
+        await page.reload();
+        await page.getByTestId('btn-sample').click();
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+        await openStampLibrary();
+        await expect(page.locator('[data-testid^="stamp-preset-"]')).toHaveCount(1);
     });
 
     test('7. Workflow: Verification Logic', async ({page}) => {

@@ -30,6 +30,10 @@ import {
     validatePkcs12Certificate,
     wipeCertificateConfig
 } from '../lib/pdf/cms-signature-service';
+import {
+    loadPresets as loadPresetsFromDb,
+    persistPresets as persistPresetsToDb
+} from '../lib/preset-store';
 import type {CertificateSigningConfig} from '../types';
 
 @customElement('pdf-workspace')
@@ -76,6 +80,8 @@ export class PdfWorkspace extends LitElement {
     @state() lastSaved: { filename: string; uri?: string } | null = null;
     private lastSavedBytes: Uint8Array | null = null;
     @state() outputFilename = '';
+    @state() showStampLibraryModal = false;
+    @state() stampPresets: Array<{ id: string; name: string; dataURL: string }> = [];
     @state() showCertificateModal = false;
     @state() certificatePassword = '';
     @state() certificateFileName = '';
@@ -803,6 +809,61 @@ export class PdfWorkspace extends LitElement {
             font-size: 0.9rem;
         }
 
+        .stamp-presets {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 10px 0 14px 0;
+        }
+
+        .stamp-preset {
+            position: relative;
+            width: 84px;
+            height: 56px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-surface);
+            cursor: pointer;
+            overflow: hidden;
+            padding: 0;
+        }
+
+        .stamp-preset img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+        }
+
+        .stamp-preset-name {
+            position: absolute;
+            inset-inline: 0;
+            bottom: 0;
+            font-size: 0.6rem;
+            text-align: center;
+            background: color-mix(in srgb, var(--bg-surface), transparent 15%);
+            color: var(--text-main);
+            padding: 1px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .stamp-preset-delete {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            border: none;
+            border-radius: 50%;
+            background: color-mix(in srgb, var(--danger), transparent 15%);
+            color: var(--bg-surface);
+            cursor: pointer;
+            line-height: 1;
+            font-size: 11px;
+        }
+
         /* RTL for style popup */
 
         :host([dir="rtl"]) .style-popup {
@@ -873,6 +934,7 @@ export class PdfWorkspace extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         WebAuthnService.isAvailable().then(avail => this.hasHardwareSupport = avail);
+        void this.loadStampPresets();
         if (this.activeSidebar === 'annotations' && this.annotations.length === 0) {
             this.activeSidebar = 'thumbnails';
             this.persistActiveSidebar();
@@ -1790,12 +1852,13 @@ export class PdfWorkspace extends LitElement {
 
     handleStampUpload(e: Event) {
         const input = e.target as HTMLInputElement;
-        if (input.files && input.files[0]) {
+        const file = input.files?.[0];
+        if (file) {
             const reader = new FileReader();
             reader.onerror = () => this.toast(i18n.t('errorReadingFile'));
             reader.onload = (evt) => {
                 const img = new Image();
-                img.onerror = () => this.toast('Invalid image file');
+                img.onerror = () => this.toast(i18n.t('errorReadingFile'));
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     canvas.width = img.width;
@@ -1803,15 +1866,67 @@ export class PdfWorkspace extends LitElement {
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
                         ctx.drawImage(img, 0, 0);
-                        this.addAnnotation('stamp', canvas.toDataURL('image/png'), img.height / img.width);
+                        const dataURL = canvas.toDataURL('image/png');
+                        this.addStampFromDataUrl(dataURL, file.name);
                         canvas.remove();
                     }
                 };
                 img.src = evt.target?.result as string;
             };
-            reader.readAsDataURL(input.files[0]);
+            reader.readAsDataURL(file);
         }
         input.value = '';
+    }
+
+    private async loadStampPresets() {
+        const presets = await loadPresetsFromDb('stamp');
+        this.stampPresets = Array.isArray(presets) ? presets : [];
+    }
+
+    private async persistStampPresets(next: Array<{ id: string; name: string; dataURL: string }>) {
+        this.stampPresets = next;
+        await persistPresetsToDb('stamp', next);
+    }
+
+    private async deleteStampPreset(id: string) {
+        const next = this.stampPresets.filter((p) => p.id !== id);
+        await this.persistStampPresets(next);
+    }
+
+    private addStampFromPreset(preset: { id: string; name: string; dataURL: string }) {
+        const img = new Image();
+        img.onerror = () => this.toast(i18n.t('errorReadingFile'));
+        img.onload = () => {
+            if (img.width <= 0 || img.height <= 0) return;
+            this.addAnnotation('stamp', preset.dataURL, img.height / img.width);
+            this.showStampLibraryModal = false;
+        };
+        img.src = preset.dataURL;
+    }
+
+    private async addStampFromDataUrl(dataURL: string, fileName: string) {
+        const img = new Image();
+        img.onerror = () => this.toast(i18n.t('errorReadingFile'));
+        img.onload = async () => {
+            if (img.width <= 0 || img.height <= 0) return;
+            this.addAnnotation('stamp', dataURL, img.height / img.width);
+            const cleanName = fileName.replace(/\.[^.]+$/, '').slice(0, 30) || i18n.t('addStamp');
+            const existing = this.stampPresets.find((p) => p.dataURL === dataURL);
+            if (!existing) {
+                const next = [...this.stampPresets, {id: this.generateId(), name: cleanName, dataURL}];
+                await this.persistStampPresets(next);
+            }
+            this.showStampLibraryModal = false;
+        };
+        img.src = dataURL;
+    }
+
+    private openStampLibrary() {
+        this.showStampLibraryModal = true;
+    }
+
+    private openStampPicker() {
+        this.shadowRoot?.getElementById('stamp-input')?.click();
     }
 
     async shareLatest() {
@@ -2154,6 +2269,49 @@ export class PdfWorkspace extends LitElement {
         `;
     }
 
+    private renderStampLibraryModal() {
+        if (!this.showStampLibraryModal) return '';
+        return html`
+            <owq-modal .open=${this.showStampLibraryModal}
+                       data-testid="stamp-library-modal"
+                       ariaLabelledby="stamp-library-title"
+                       @modal-close=${() => this.showStampLibraryModal = false}>
+                <h3 id="stamp-library-title" class="modal-title">${i18n.t('stampLibraryTitle')}</h3>
+                <p class="modal-copy">${i18n.t('stampLibraryHelp')}</p>
+                <button class="btn btn-primary" data-testid="btn-stamp-upload" @click=${this.openStampPicker}>
+                    ${i18n.t('uploadStamp')}
+                </button>
+                <div class="stamp-presets" data-testid="stamp-presets-list">
+                    ${this.stampPresets.length === 0 ? html`
+                        <p class="modal-copy">${i18n.t('noStampPresets')}</p>
+                    ` : this.stampPresets.map((preset) => html`
+                        <div class="stamp-preset" role="button" tabindex="0"
+                             data-testid="stamp-preset-${preset.id}"
+                             title=${preset.name}
+                             @click=${() => this.addStampFromPreset(preset)}
+                             @keydown=${(e: KeyboardEvent) => {
+                                 if (e.key === 'Enter' || e.key === ' ') {
+                                     e.preventDefault();
+                                     this.addStampFromPreset(preset);
+                                 }
+                             }}>
+                            <img src=${preset.dataURL} alt=${preset.name}/>
+                            <span class="stamp-preset-name">${preset.name}</span>
+                            <button class="stamp-preset-delete"
+                                    data-testid="btn-delete-stamp-preset-${preset.id}"
+                                    aria-label=${i18n.t('deleteStampPreset')}
+                                    @click=${async (e: Event) => {
+                                        e.stopPropagation();
+                                        await this.deleteStampPreset(preset.id);
+                                    }}>×
+                            </button>
+                        </div>
+                    `)}
+                </div>
+            </owq-modal>
+        `;
+    }
+
     private toggleSidebar(target: 'thumbnails' | 'annotations') {
         this.activeSidebar = this.activeSidebar === target ? null : target;
         this.persistActiveSidebar();
@@ -2327,7 +2485,7 @@ export class PdfWorkspace extends LitElement {
                             ${ICONS.identity}<span class="btn-label">${i18n.t('addIdentity')}</span>
                         </button>
                         <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
-                                @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
+                                @click=${this.openStampLibrary}>
                             ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
                         </button>
                         <button data-testid="btn-cert-sign"
@@ -2441,7 +2599,7 @@ export class PdfWorkspace extends LitElement {
                         ${ICONS.identity} <span>${i18n.t('addIdentity')}</span>
                     </button>
                     <button data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
-                            @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
+                            @click=${this.openStampLibrary}>
                         ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
                     </button>
                     <button data-testid="m-btn-cert-sign"
@@ -2610,6 +2768,7 @@ export class PdfWorkspace extends LitElement {
             ${this.renderProofModal()}
             ${this.renderCustomPromptModal()}
             ${this.renderHardwarePromptModal()}
+            ${this.renderStampLibraryModal()}
             ${this.renderCertificateModal()}
         `;
     }
