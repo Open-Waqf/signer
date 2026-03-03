@@ -6,6 +6,7 @@ export type VerifyOutcome = {
     verifyResult: { status: 'success' | 'fail' | null, id?: string };
     chainStatus: { status: 'idle' | 'success' | 'fail', failedSignerIndex?: number, total?: number };
     expectedVerifyId: string | null;
+    hasStandardSignature: boolean;
 };
 
 export class VerifyController {
@@ -39,6 +40,7 @@ export class VerifyController {
             verifyResult: {status, id: fileId || undefined},
             chainStatus,
             expectedVerifyId: nextExpected,
+            hasStandardSignature: meta.hasStandardSignature,
         };
     }
 
@@ -54,4 +56,3 @@ export class VerifyController {
         return strictOrNormalizedHash(input);
     }
 }
-

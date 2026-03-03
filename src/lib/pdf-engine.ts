@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker?url';
-import {Annotation, SignaturePayload} from '../types';
+import {Annotation, CertificateSigningConfig, SignaturePayload} from '../types';
 import {WebAuthnService} from './webauthn-service';
 import {appendAuditPage, getHexToRgb, removeTrailingAuditPages, textToImage} from './pdf/audit-page-service';
 import {
@@ -12,6 +12,8 @@ import {
 } from './pdf/hash-service';
 import {readMetadataID, setSignaturesSubject} from './pdf/metadata-service';
 import {verifySignatureChain as verifySignatureChainCore} from './pdf/webauthn-chain-service';
+import {signPdfWithCertificate} from './pdf/cms-signature-service';
+import {getTimestampProof} from './tsa-service';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -82,6 +84,7 @@ export class PdfEngine {
             enableWebAuthn?: boolean;
             userName?: string;
             hardwareFallbackUsed?: boolean;
+            certificateConfig?: CertificateSigningConfig;
         }
     ): Promise<{
         pdfBytes: Uint8Array,
@@ -203,6 +206,7 @@ export class PdfEngine {
         const interimBytes = await pdfDoc.save();
         const integrityAnchorHash = await calculateDeterministicHashIgnoringSubject(interimBytes);
         const challengeHash = integrityAnchorHash;
+        const tsaProof = await getTimestampProof(challengeHash);
 
         let webauthnData: SignaturePayload['webauthnData'] = undefined;
         if (useWebAuthn) {
@@ -223,6 +227,11 @@ export class PdfEngine {
 
         const finalizedSignatures = [...baseSignatures, {
             ...provisionalPayload,
+            timestampIso: tsaProof.timestampIso,
+            tsaVerified: tsaProof.tsaVerified,
+            tsaProvider: tsaProof.tsaProvider,
+            tsaTokenBase64: tsaProof.tsaTokenBase64,
+            tsaFailureReason: tsaProof.tsaFailureReason,
             challengeHash,
             integrityAnchorHash,
             isHardwareBacked: !!webauthnData,
@@ -230,7 +239,14 @@ export class PdfEngine {
         }];
         const finalDoc = await PDFDocument.load(interimBytes, {updateMetadata: false});
         setSignaturesSubject(finalDoc, finalizedSignatures);
-        const savedBytes = await finalDoc.save();
+        let savedBytes = await finalDoc.save({useObjectStreams: false});
+        if (opts?.certificateConfig) {
+            try {
+                savedBytes = await signPdfWithCertificate(savedBytes, opts.certificateConfig);
+            } catch (error) {
+                throw new Error('Certificate signing failed. Check certificate password and file format.');
+            }
+        }
 
         const finalHash = await calculateSHA256(savedBytes);
         const finalCode = this.getSixDigitCode(finalHash);
@@ -252,10 +268,11 @@ export class PdfEngine {
             fileData,
             signatures: meta.signatures,
             calculateDeterministicHashIgnoringSubject,
+            hasStandardSignature: meta.hasStandardSignature,
         });
     }
 
-    async readMetadataID(fileData: Uint8Array): Promise<{id: string | null, assertions: any[], signatures: SignaturePayload[]}> {
+    async readMetadataID(fileData: Uint8Array): Promise<{id: string | null, assertions: any[], signatures: SignaturePayload[], hasStandardSignature: boolean}> {
         return readMetadataID(fileData);
     }
 }

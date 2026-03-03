@@ -40,6 +40,7 @@ export class AppRoot extends LitElement {
     @state() verifyFileHash = '';
     @state() showVerifyModal = false;
     @state() integrityStatus: 'idle' | 'success' | 'fail' = 'idle';
+    @state() hasStandardSignature = false;
     @state() chainStatus: VerifyChainStatus = initialChainStatus();
 
     @state() showDiagnostics = false;
@@ -180,6 +181,7 @@ export class AppRoot extends LitElement {
         this.expectedVerifyId = null;
         this.integrityStatus = 'idle';
         this.chainStatus = initialChainStatus();
+        this.hasStandardSignature = false;
     }
 
     private exitToHome() {
@@ -744,6 +746,7 @@ export class AppRoot extends LitElement {
                 <div class="dialog-content">
                     <h2 id="privacy-title" class="modal-title">${i18n.t('privacyTitle')}</h2>
                     <p class="modal-copy">${i18n.t('privacyContent')}</p>
+                    <p class="modal-note">${i18n.t('privacyTimestampNote')}</p>
 
                     <div class="amanah-panel">
                         <h4 class="modal-section-title modal-inline-icon privacy-heading">
@@ -864,6 +867,12 @@ export class AppRoot extends LitElement {
     private renderVerifyDetailsBody() {
         return html`
             ${this.renderVerifyResultCard()}
+            ${this.hasStandardSignature ? html`
+                <div class="alert-box alert-warning" data-testid="cms-signature-banner">
+                    <div class="cms-signature-title">${ICONS.certificate} ${i18n.t('standardSignatureTitle')}</div>
+                    <div class="cms-signature-copy">${i18n.t('standardSignatureDetectedBanner')}</div>
+                </div>
+            ` : ''}
             ${this.renderHashCheckCard()}
 
             ${this.chainStatus.status === 'success' ? html`

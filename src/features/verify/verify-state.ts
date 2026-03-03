@@ -24,5 +24,6 @@ export const verifyOutcomeState = (outcome: VerifyOutcome) => ({
     verifyHashInput: '',
     integrityStatus: 'idle' as const,
     chainStatus: outcome.chainStatus,
+    hasStandardSignature: outcome.hasStandardSignature,
     showVerifyModal: true,
 });

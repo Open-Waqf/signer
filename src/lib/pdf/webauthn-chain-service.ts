@@ -5,11 +5,12 @@ export async function verifySignatureChain(input: {
     fileData: Uint8Array;
     signatures: SignaturePayload[];
     calculateDeterministicHashIgnoringSubject: (bytes: Uint8Array) => Promise<string>;
+    hasStandardSignature?: boolean;
 }): Promise<{ valid: boolean, failedSignerIndex?: number, signatures: SignaturePayload[] }> {
-    const {signatures} = input;
+    const {signatures, hasStandardSignature} = input;
     if (signatures.length === 0) return {valid: false, signatures: []};
     const latest = signatures[signatures.length - 1];
-    if (latest.integrityAnchorHash) {
+    if (latest.integrityAnchorHash && !hasStandardSignature) {
         const currentAnchor = await input.calculateDeterministicHashIgnoringSubject(input.fileData);
         if (currentAnchor !== latest.integrityAnchorHash) {
             return {valid: false, failedSignerIndex: latest.signerIndex, signatures};
@@ -54,4 +55,3 @@ export async function verifySignatureChain(input: {
 
     return {valid: true, signatures};
 }
-

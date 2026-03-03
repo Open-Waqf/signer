@@ -28,6 +28,8 @@ device's RAM.
     2. **Strict Integrity Check (External):** Uses military-grade `crypto.subtle` SHA-256 hashing to prove
        mathematically that a document has not been tampered with since signing.
 * **Audit Trail:** Automatically appends a verification page with a **QR code**, Event Log, and Digital Fingerprint.
+* **RFC 3161 Timestamp Proof (Best-Effort):** When online, Signer sends only an abstract SHA-256 fingerprint query to a TSA relay endpoint and records returned timestamp token metadata; when offline or timed out, it falls back to local device time with explicit unverified labeling.
+* **Certificate-Based CMS Signatures (.p12/.pfx):** Optionally sign with your own certificate file. Parsing and signing are performed locally in-memory, and certificate credentials are cleared after each save.
 
 ### 🤝 Multi-Party Workflows
 
@@ -94,6 +96,7 @@ We don't just "hope" the code works; we prove it before every release.
     * ✅ **Workflows:** Simulates Alice signing, Bob verifying, and complex multi-page interactions.
     * ✅ **Navigation:** Full audit of landing page modes, privacy dialogs, and exit confirmation logic.
     * ✅ **Robustness:** Tests for RTL mirroring, dirty-state detection, and keyboard shortcuts.
+    * ✅ **Certificate Flow:** E2E coverage for `.p12` load/unlock, incorrect-password handling, and CMS `/ByteRange` output.
 * **Type Safety:** The entire codebase is strictly typed. We run `tsc --noEmit` to ensure zero regression in logic or
   data structures.
 * **CI/CD Guardrails:** Deployment is physically blocked by GitHub Actions if any test fails or type-check fails,
@@ -184,6 +187,14 @@ npm run typecheck
 npm test
 ```
 
+### Test Certificate Fixture
+
+For Playwright certificate-signing tests, a dummy self-signed PKCS#12 fixture is committed at:
+
+`tests/fixtures/test-cert.p12`
+
+Fixture password (test-only): `owq-test-1234`
+
 ### 4. Build for Production (PWA)
 
 Compiles TypeScript to optimized, offline-ready JS in `dist/`.
@@ -191,6 +202,35 @@ Compiles TypeScript to optimized, offline-ready JS in `dist/`.
 ```bash
 npm run build
 ```
+
+### Cloudflare Worker Relay (GitHub Pages Hosting)
+
+If the app is hosted on GitHub Pages, deploy the TSA relay as a separate Cloudflare Worker:
+
+* Worker source: `workers/tsa-relay/src/index.ts`
+* Worker config: `workers/tsa-relay/wrangler.toml`
+* Recommended route: `https://tsa.open-waqf.org/api/tsa`
+
+Runtime behavior:
+
+* Browser sends RFC 3161 query bytes to `VITE_TSA_RELAY_URL`.
+* Relay forwards only timestamp-query bytes to FreeTSA (`https://freetsa.org/tsr`).
+* PDF bytes are never uploaded.
+
+Required app env var:
+
+* `VITE_TSA_RELAY_URL=https://tsa.open-waqf.org/api/tsa`
+
+Required CSP update (already included in `index.html`):
+
+* `connect-src 'self' data: https://tsa.open-waqf.org`
+
+GitHub Actions deploy workflow for relay:
+
+* `.github/workflows/deploy-tsa-relay.yml`
+* Requires secrets:
+  * `CLOUDFLARE_API_TOKEN`
+  * `CLOUDFLARE_ACCOUNT_ID`
 
 ---
 

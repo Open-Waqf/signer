@@ -1,0 +1,11 @@
+name = "tsa-relay"
+main = "src/index.ts"
+compatibility_date = "2026-03-03"
+
+routes = [
+  { pattern = "tsa.open-waqf.org/api/tsa*", zone_name = "open-waqf.org" }
+]
+
+[vars]
+ALLOWED_ORIGIN = "https://sign.open-waqf.org"
+TSA_UPSTREAM_URL = "https://freetsa.org/tsr"

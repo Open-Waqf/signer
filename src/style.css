@@ -642,6 +642,18 @@ app-root {
     width: 100%;
 }
 
+.cms-signature-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.cms-signature-copy {
+    text-align: start;
+}
+
 .verify-hash-hint {
     margin: 8px 0 0 0;
     font-size: 0.8rem;

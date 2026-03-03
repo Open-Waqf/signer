@@ -26,6 +26,11 @@ import {runHandoverCheck} from '../features/workspace/handover-workflow';
 import {computeDragMove, computeResizeWidthPct} from '../features/workspace/interaction-controller';
 import {executeSave, finalizeSave, resolveHardwareUsage, shareLatestDocument} from '../features/workspace/save-workflow';
 import {isNativePlatform} from '../lib/runtime-platform';
+import {
+    validatePkcs12Certificate,
+    wipeCertificateConfig
+} from '../lib/pdf/cms-signature-service';
+import type {CertificateSigningConfig} from '../types';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
@@ -69,6 +74,13 @@ export class PdfWorkspace extends LitElement {
     @state() lastSaved: { filename: string; uri?: string } | null = null;
     private lastSavedBytes: Uint8Array | null = null;
     @state() outputFilename = '';
+    @state() showCertificateModal = false;
+    @state() certificatePassword = '';
+    @state() certificateFileName = '';
+    @state() certificateReady = false;
+    private certificateConfig: CertificateSigningConfig | null = null;
+    private pendingCertificateBytes: Uint8Array | null = null;
+    private pendingCertificateName = '';
 
     @state() public isDirty = false;
     private interactionSnapshotTaken = false;
@@ -80,6 +92,7 @@ export class PdfWorkspace extends LitElement {
     @query('#pdf-canvas') canvas!: HTMLCanvasElement;
     @query('.page-container') container!: HTMLDivElement;
     @query('.viewport') viewport!: HTMLDivElement;
+    @query('#cert-input') certInput!: HTMLInputElement;
 
     @state() guideLines: { axis: 'x' | 'y', pos: number }[] = [];
 
@@ -978,6 +991,7 @@ export class PdfWorkspace extends LitElement {
 
     async loadPdf(file: Uint8Array, name: string) {
         pdfEngine.destroy();
+        this.clearCertificateSession();
         this.pdfName = name;
         this.loadedBytes = file;
         this.openedDocumentHash = await pdfEngine.getIntegrityAnchorHash(file);
@@ -1024,8 +1038,11 @@ export class PdfWorkspace extends LitElement {
         this.history = [];
         this.future = [];
 
-        const cleanName = name.replace(/_signed_\d{4}-\d{2}-\d{2}.*$/, '').replace(/\.pdf$/i, '');
-        this.outputFilename = `${cleanName}_signed_${new Date().toISOString().slice(0, 10)}`;
+        const cleanName = name.replace(/_signed_\d{4}-\d{2}-\d{2}(_\d{4})?.*$/, '').replace(/\.pdf$/i, '');
+        const now = new Date();
+        const datePart = now.toISOString().slice(0, 10);
+        const timePart = now.toTimeString().slice(0, 5).replace(':', '');
+        this.outputFilename = `${cleanName}_signed_${datePart}_${timePart}`;
         this.thumbnailURLs = [];
 
         await this.updateComplete;
@@ -1375,6 +1392,81 @@ export class PdfWorkspace extends LitElement {
         this.addAnnotation('date', dateStr, 0.3);
     }
 
+    openCertificatePicker() {
+        this.certInput?.click();
+    }
+
+    private wipePendingCertificate() {
+        if (this.pendingCertificateBytes) this.pendingCertificateBytes.fill(0);
+        this.pendingCertificateBytes = null;
+        this.pendingCertificateName = '';
+        this.certificatePassword = '';
+    }
+
+    private clearCertificateSession() {
+        wipeCertificateConfig(this.certificateConfig);
+        this.certificateConfig = null;
+        this.certificateReady = false;
+        this.certificateFileName = '';
+        this.wipePendingCertificate();
+    }
+
+    async handleCertificateUpload(e: Event) {
+        const input = e.target as HTMLInputElement;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) return;
+        try {
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            this.pendingCertificateBytes = bytes;
+            this.pendingCertificateName = file.name;
+            this.certificatePassword = '';
+            this.showCertificateModal = true;
+        } catch {
+            this.toast(i18n.t('certReadFailed'));
+        }
+    }
+
+    async confirmCertificatePassword() {
+        if (!this.pendingCertificateBytes) {
+            this.toast(i18n.t('certReadFailed'));
+            return;
+        }
+        if (!this.certificatePassword) {
+            this.toast(i18n.t('certPasswordRequired'));
+            return;
+        }
+        try {
+            await validatePkcs12Certificate({
+                p12Bytes: this.pendingCertificateBytes,
+                password: this.certificatePassword,
+            });
+            wipeCertificateConfig(this.certificateConfig);
+            this.certificateConfig = null;
+            this.certificateReady = false;
+            this.certificateFileName = '';
+            this.certificateConfig = {
+                p12Bytes: this.pendingCertificateBytes,
+                password: this.certificatePassword,
+                signerName: preferences.getUserEmail('User'),
+            };
+            this.certificateReady = true;
+            this.certificateFileName = this.pendingCertificateName;
+            this.pendingCertificateBytes = null;
+            this.pendingCertificateName = '';
+            this.certificatePassword = '';
+            this.showCertificateModal = false;
+            this.toast(i18n.t('certReady'));
+        } catch {
+            this.toast(i18n.t('certInvalidPassword'));
+        }
+    }
+
+    closeCertificateModal() {
+        this.showCertificateModal = false;
+        this.wipePendingCertificate();
+    }
+
     async addBiometric() {
         if (!this.loadedBytes) return;
         this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
@@ -1470,6 +1562,7 @@ export class PdfWorkspace extends LitElement {
 
     public reset() {
         pdfEngine.destroy();
+        this.clearCertificateSession();
         this.annotations = [];
         this.signaturesChain = [];
         this.history = [];
@@ -1491,7 +1584,7 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
-    async saveDocument(opts?: { silentWeb?: boolean; showToast?: boolean }) {
+    async saveDocument(opts?: { silentWeb?: boolean; showToast?: boolean; suppressProofModal?: boolean }) {
         if (!this.hasEdits) {
             this.toast(i18n.t('noChanges'));
             return;
@@ -1515,6 +1608,13 @@ export class PdfWorkspace extends LitElement {
 
         this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
         await new Promise((r) => setTimeout(r, 50));
+        const certificateConfig = this.certificateConfig
+            ? {
+                p12Bytes: new Uint8Array(this.certificateConfig.p12Bytes),
+                password: this.certificateConfig.password,
+                signerName: this.certificateConfig.signerName,
+            }
+            : undefined;
 
         try {
             const executed = await executeSave({
@@ -1528,6 +1628,7 @@ export class PdfWorkspace extends LitElement {
                 previousHashManuallyVerified: this.previousHashManuallyVerified,
                 openedDocumentHash: this.openedDocumentHash,
                 useHardware: decision.useHardware,
+                certificateConfig,
             });
             if (executed.hardwareFallbackUsed) {
                 console.warn('Hardware proof fallback: browser could not embed WebAuthn public key proof; saving as visual-only.');
@@ -1537,12 +1638,18 @@ export class PdfWorkspace extends LitElement {
             console.error('Save Error', e);
             this.toast(e.message.includes('OOM') ? i18n.t('outOfMemory') : `${i18n.t('errorSaving')}: ${e.message}`);
             this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
+        } finally {
+            if (certificateConfig) {
+                wipeCertificateConfig(certificateConfig);
+                this.clearCertificateSession();
+            }
         }
     }
 
-    private async finishSave(result: {pdfBytes: Uint8Array, docId: string, finalHash: string, finalCode: string, signatures: SignaturePayload[]}, opts?: { silentWeb?: boolean; showToast?: boolean }) {
+    private async finishSave(result: {pdfBytes: Uint8Array, docId: string, finalHash: string, finalCode: string, signatures: SignaturePayload[]}, opts?: { silentWeb?: boolean; showToast?: boolean; suppressProofModal?: boolean }) {
         const silentWeb = !!opts?.silentWeb;
         const showToast = opts?.showToast ?? true;
+        const suppressProofModal = !!opts?.suppressProofModal;
         const finalized = await finalizeSave({
             deps: this.getFinalizeSaveDeps(),
             result,
@@ -1561,7 +1668,7 @@ export class PdfWorkspace extends LitElement {
         this.loadedBytes = result.pdfBytes;
         this.openedDocumentHash = result.signatures[result.signatures.length - 1]?.integrityAnchorHash || result.finalHash;
         this.previousHashManuallyVerified = true;
-        this.showProofModal = true;
+        this.showProofModal = !suppressProofModal;
         this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
     }
 
@@ -1599,14 +1706,14 @@ export class PdfWorkspace extends LitElement {
             lastSavedBytes: this.lastSavedBytes,
             lastSaved: this.lastSaved,
             saveIfNeeded: async () => {
-                await this.saveDocument({silentWeb: !isNativePlatform(), showToast: false});
+                await this.saveDocument({silentWeb: false, showToast: false, suppressProofModal: false});
             },
         });
     }
 
     async startAirGapTransfer() {
         if ((this.isDirty || !this.lastSavedBytes) && this.hasEdits) {
-            await this.saveDocument({silentWeb: true, showToast: false});
+            await this.saveDocument({silentWeb: true, showToast: false, suppressProofModal: true});
         }
 
         const data = this.lastSavedBytes ?? this.loadedBytes;
@@ -1661,12 +1768,18 @@ export class PdfWorkspace extends LitElement {
             </svg>`;
     }
 
+    private getHardwarePrefLabel() {
+        if (this.hardwarePref === 'always') return i18n.t('hardwarePrefAlways');
+        if (this.hardwarePref === 'never') return i18n.t('hardwarePrefNever');
+        return i18n.t('hardwarePrefPrompt');
+    }
+
     toggleHardwarePref() {
         if (this.hardwarePref === 'prompt') this.hardwarePref = 'always';
         else if (this.hardwarePref === 'always') this.hardwarePref = 'never';
         else this.hardwarePref = 'prompt';
         preferences.setHardwarePref(this.hardwarePref);
-        this.toast(`${i18n.t('hardwareSign')}: ${this.hardwarePref.toUpperCase()}`);
+        this.toast(`${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}`);
     }
 
     private guideLineStyle(guide: { axis: 'x' | 'y'; pos: number }) {
@@ -1889,6 +2002,42 @@ export class PdfWorkspace extends LitElement {
         `;
     }
 
+    private renderCertificateModal() {
+        if (!this.showCertificateModal) return '';
+        return html`
+            <owq-modal .open=${this.showCertificateModal}
+                       data-testid="cert-password-modal"
+                       ariaLabelledby="cert-modal-title"
+                       @modal-close=${this.closeCertificateModal}>
+                <h3 id="cert-modal-title" class="modal-title">${i18n.t('signWithCertificate')}</h3>
+                <p class="modal-copy">${this.pendingCertificateName}</p>
+                <div class="alert-box alert-success">
+                    ${i18n.t('certTrustNotice')}
+                </div>
+                <input type="password"
+                       class="input-field modal-input-spaced"
+                       data-testid="input-cert-password"
+                       aria-label="${i18n.t('certPassword')}"
+                       placeholder="${i18n.t('certPasswordPlaceholder')}"
+                       autofocus
+                       .value=${this.certificatePassword}
+                       @input=${(e: Event) => this.certificatePassword = (e.target as HTMLInputElement).value}
+                       @keydown=${(e: KeyboardEvent) => {
+                           if (e.key === 'Enter') void this.confirmCertificatePassword();
+                       }}>
+                <div class="modal-actions">
+                    <button class="btn modal-btn-flex" data-testid="btn-cert-cancel" @click=${this.closeCertificateModal}>
+                        ${i18n.t('cancel')}
+                    </button>
+                    <button class="btn btn-primary modal-btn-flex" data-testid="btn-cert-confirm"
+                            @click=${this.confirmCertificatePassword}>
+                        ${i18n.t('done')}
+                    </button>
+                </div>
+            </owq-modal>
+        `;
+    }
+
     private toggleSidebar(target: 'thumbnails' | 'annotations') {
         this.activeSidebar = this.activeSidebar === target ? null : target;
         this.persistActiveSidebar();
@@ -2065,9 +2214,15 @@ export class PdfWorkspace extends LitElement {
                                 @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
                             ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
                         </button>
+                        <button data-testid="btn-cert-sign"
+                                class="btn ${this.certificateReady ? 'toggle active' : ''}"
+                                aria-label="${i18n.t('signWithCertificate')}"
+                                @click=${this.openCertificatePicker}>
+                            ${ICONS.certificate}<span class="btn-label">${i18n.t('signWithCertificate')}</span>
+                        </button>
                         <button data-testid="btn-hw-pref" class="btn" aria-label="Hardware Sign Preference"
                                 @click=${this.toggleHardwarePref}>
-                            ${this.getHardwareIcon()}<span class="btn-label">${i18n.t('hardwareSign')}: ${this.hardwarePref.toUpperCase()}</span>
+                            ${this.getHardwareIcon()}<span class="btn-label">${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}</span>
                         </button>
                     ` : ''}
                 </div>
@@ -2153,7 +2308,7 @@ export class PdfWorkspace extends LitElement {
                 ${(this.hasHardwareSupport && !this.isBasicMode) ? html`
                     <button data-testid="m-btn-hw-pref" class="btn btn-tool" aria-label="Hardware Sign Preference"
                             @click=${this.toggleHardwarePref}>
-                        ${this.getHardwareIcon()} <span>${i18n.t('hardwareSign')}: ${this.hardwarePref.toUpperCase()}</span>
+                        ${this.getHardwareIcon()} <span>${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}</span>
                     </button>
                 ` : ''}
                 ${!this.isBasicMode ? html`
@@ -2172,6 +2327,12 @@ export class PdfWorkspace extends LitElement {
                     <button data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
                             @click=${() => this.shadowRoot?.getElementById('stamp-input')?.click()}>
                         ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
+                    </button>
+                    <button data-testid="m-btn-cert-sign"
+                            class="btn btn-tool ${this.certificateReady ? 'active' : ''}"
+                            aria-label="${i18n.t('signWithCertificate')}"
+                            @click=${this.openCertificatePicker}>
+                        ${ICONS.certificate} <span>${i18n.t('signWithCertificate')}</span>
                     </button>
                 ` : ''}
             </div>
@@ -2313,11 +2474,18 @@ export class PdfWorkspace extends LitElement {
                     </div>
                 </div>
             </div>
+            <input id="stamp-input" type="file" accept="image/png,image/jpeg,image/webp" style="display:none"
+                   @change=${this.handleStampUpload}>
+            <input id="cert-input" data-testid="input-cert-file" type="file"
+                   accept=".p12,.pfx,application/x-pkcs12"
+                   style="display:none"
+                   @change=${this.handleCertificateUpload}>
 
             ${this.renderHandoverModal()}
             ${this.renderProofModal()}
             ${this.renderCustomPromptModal()}
             ${this.renderHardwarePromptModal()}
+            ${this.renderCertificateModal()}
         `;
     }
 }

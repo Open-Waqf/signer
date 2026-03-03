@@ -1,4 +1,4 @@
-import {PDFDocument} from 'pdf-lib';
+import {PDFArray, PDFDict, PDFDocument, PDFName} from 'pdf-lib';
 import {SignaturePayload} from '../../types';
 import {CHAIN_META_PREFIX} from './constants';
 
@@ -13,6 +13,10 @@ function normalizeSignaturePayload(input: any, index: number): SignaturePayload 
         integrityAnchorHash: typeof input.integrityAnchorHash === 'string' ? input.integrityAnchorHash : undefined,
         previousHashManuallyVerified: !!input.previousHashManuallyVerified,
         timestampIso: typeof input.timestampIso === 'string' ? input.timestampIso : new Date(0).toISOString(),
+        tsaVerified: !!input.tsaVerified,
+        tsaProvider: typeof input.tsaProvider === 'string' ? input.tsaProvider : undefined,
+        tsaTokenBase64: typeof input.tsaTokenBase64 === 'string' ? input.tsaTokenBase64 : undefined,
+        tsaFailureReason: typeof input.tsaFailureReason === 'string' ? input.tsaFailureReason : undefined,
         signerAnnotationIds: Array.isArray(input.signerAnnotationIds) ? input.signerAnnotationIds.filter((v: unknown) => typeof v === 'string') : [],
         validationLog: typeof input.validationLog === 'string' ? input.validationLog : null,
         refId: typeof input.refId === 'string' ? input.refId : undefined,
@@ -48,7 +52,40 @@ export function setSignaturesSubject(pdfDoc: PDFDocument, signatures: SignatureP
     pdfDoc.setSubject(`${CHAIN_META_PREFIX}${JSON.stringify({version: 1, signatures: safe})}`);
 }
 
-export async function readMetadataID(fileData: Uint8Array): Promise<{ id: string | null, assertions: any[], signatures: SignaturePayload[] }> {
+function hasStandardCmsSignature(pdfDoc: PDFDocument): boolean {
+    try {
+        const context: any = (pdfDoc as any).context;
+        const acroFormRef = pdfDoc.catalog.get(PDFName.of('AcroForm'));
+        if (!acroFormRef) return false;
+        const acroForm = context.lookup(acroFormRef, PDFDict);
+        if (!acroForm) return false;
+
+        const fields = acroForm.lookup(PDFName.of('Fields'), PDFArray);
+        if (!fields) return false;
+
+        const stack = [...fields.asArray()];
+        while (stack.length > 0) {
+            const node = stack.pop();
+            if (!node) continue;
+            const field = context.lookup(node, PDFDict);
+            if (!field) continue;
+
+            const ft = field.get(PDFName.of('FT'));
+            if (ft instanceof PDFName && ft.asString() === '/Sig') return true;
+
+            const value = field.get(PDFName.of('V'));
+            if (value) return true;
+
+            const kids = field.lookup(PDFName.of('Kids'), PDFArray);
+            if (kids) stack.push(...kids.asArray());
+        }
+    } catch {
+        return false;
+    }
+    return false;
+}
+
+export async function readMetadataID(fileData: Uint8Array): Promise<{ id: string | null, assertions: any[], signatures: SignaturePayload[], hasStandardSignature: boolean }> {
     try {
         const pdfDoc = await PDFDocument.load(fileData, {updateMetadata: false});
         const keywords = pdfDoc.getKeywords();
@@ -67,10 +104,10 @@ export async function readMetadataID(fileData: Uint8Array): Promise<{ id: string
         }
 
         const signatures = parseSignaturesFromSubject(pdfDoc.getSubject() || '');
-        return {id, assertions, signatures};
+        const hasStandardSignature = hasStandardCmsSignature(pdfDoc);
+        return {id, assertions, signatures, hasStandardSignature};
     } catch (e) {
         console.error('Read Error', e);
-        return {id: null, assertions: [], signatures: []};
+        return {id: null, assertions: [], signatures: [], hasStandardSignature: false};
     }
 }
-

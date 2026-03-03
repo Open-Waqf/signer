@@ -146,16 +146,22 @@ export class FileService {
 
         // Try modern Web Share API (e.g. Chrome on Android)
         if (navAny.share && navAny.canShare && navAny.canShare({files: [f]})) {
-            await navAny.share({
-                title: i18n.t('shareTitle'),
-                text: i18n.t('shareText'),
-                files: [f],
-            });
-            return;
+            try {
+                await navAny.share({
+                    title: i18n.t('shareTitle'),
+                    text: i18n.t('shareText'),
+                    files: [f],
+                });
+                return;
+            } catch (error) {
+                console.warn('Web Share failed, falling back to download.', error);
+                await this.saveFileBrowser(file.filename, dataIfWeb);
+                return;
+            }
         }
 
         // Fallback: Just ensure it was downloaded (which savePdf does)
-        this.saveFileBrowser(file.filename, dataIfWeb);
+        await this.saveFileBrowser(file.filename, dataIfWeb);
         console.log("Web Share API not supported, file downloaded instead.");
     }
 

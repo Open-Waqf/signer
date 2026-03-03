@@ -27,6 +27,10 @@ export interface SignaturePayload {
     integrityAnchorHash?: string;
     previousHashManuallyVerified: boolean;
     timestampIso: string;
+    tsaVerified?: boolean;
+    tsaProvider?: string;
+    tsaTokenBase64?: string;
+    tsaFailureReason?: string;
     signerAnnotationIds: string[];
     validationLog?: string | null;
     refId?: string;
@@ -37,4 +41,10 @@ export interface SignaturePayload {
         publicKey: string;
         assertion: string;
     };
+}
+
+export interface CertificateSigningConfig {
+    p12Bytes: Uint8Array;
+    password: string;
+    signerName?: string;
 }

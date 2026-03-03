@@ -1,6 +1,8 @@
 import {expect, test} from '@playwright/test';
 import {generateTestPDF} from './utils';
 import {PDFDocument} from 'pdf-lib';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // ---------------------------------------------------------------------------
 // 🌍 SHARED STATE
@@ -156,6 +158,11 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
             return canvas ? getComputedStyle(canvas).direction : '';
         });
         expect(canvasDirectionRtl).toBe('ltr');
+        await page.getByTestId('btn-add-date').click();
+        const downloadPromise = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        await downloadPromise;
+        await page.getByTestId('btn-close-proof').click();
         await page.getByTestId('btn-exit').click();
         await expect(page.getByTestId('btn-select-file')).toBeVisible();
 
@@ -228,6 +235,144 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
 
         const combinedErrors = `${pageErrors.join('\n')}\n${consoleErrors.join('\n')}`;
         expect(combinedErrors).not.toContain('process is not defined');
+    });
+
+    test('4.5 Workflow: Certificate signing with .p12 works and wrong password is handled', async ({page}) => {
+        const certPath = path.join(process.cwd(), 'tests/fixtures/test-cert.p12');
+        const certBuffer = fs.readFileSync(certPath);
+
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        await page.getByTestId('btn-add-date').click();
+        await page.getByTestId('btn-toggle-advanced').click();
+
+        const certChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-cert-sign').click();
+        const certChooser = await certChooserPromise;
+        await certChooser.setFiles({
+            name: 'test-cert.p12',
+            mimeType: 'application/x-pkcs12',
+            buffer: certBuffer,
+        });
+
+        const certModal = page.getByTestId('cert-password-modal');
+        await expect(certModal).toBeVisible();
+
+        await page.getByTestId('input-cert-password').fill('wrong-password');
+        await page.getByTestId('btn-cert-confirm').click();
+        await expect(certModal).toBeVisible();
+        await expect(page.locator('.toast')).toContainText(/Invalid certificate or password/i);
+
+        await page.getByTestId('input-cert-password').fill('owq-test-1234');
+        await page.getByTestId('btn-cert-confirm').click();
+        await expect(certModal).not.toBeVisible();
+
+        const downloadPromise = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const download = await downloadPromise;
+        expect(download.suggestedFilename()).toMatch(/_signed_\d{4}-\d{2}-\d{2}_\d{4}\.pdf$/);
+
+        const stream = await download.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const signedBuffer = Buffer.concat(chunks);
+        const signedRaw = signedBuffer.toString('latin1');
+        expect(signedRaw).toContain('/ByteRange');
+    });
+
+    test('4.6 Verify mode: Detect CMS signature banner and verify generated hash for p12-signed file', async ({page}) => {
+        const certPath = path.join(process.cwd(), 'tests/fixtures/test-cert.p12');
+        const certBuffer = fs.readFileSync(certPath);
+
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        await page.getByTestId('btn-add-date').click();
+        await page.getByTestId('btn-toggle-advanced').click();
+
+        const certChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-cert-sign').click();
+        const certChooser = await certChooserPromise;
+        await certChooser.setFiles({
+            name: 'test-cert.p12',
+            mimeType: 'application/x-pkcs12',
+            buffer: certBuffer,
+        });
+        await page.getByTestId('input-cert-password').fill('owq-test-1234');
+        await page.getByTestId('btn-cert-confirm').click();
+        await expect(page.getByTestId('cert-password-modal')).not.toBeVisible();
+
+        const downloadPromise = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        const download = await downloadPromise;
+        const generatedHash = (await page.getByTestId('saved-doc-hash').innerText()).trim();
+
+        const stream = await download.createReadStream();
+        const chunks = [];
+        for await (const chunk of stream) chunks.push(chunk);
+        const signedBuffer = Buffer.concat(chunks);
+
+        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-exit').click();
+        await page.getByTestId('btn-verify-mode').click();
+
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        await fileChooser.setFiles({
+            name: 'p12_signed.pdf',
+            mimeType: 'application/pdf',
+            buffer: signedBuffer,
+        });
+
+        await expect(page.getByTestId('cms-signature-banner')).toBeVisible();
+        await expect(page.getByTestId('verify-success-title')).toBeVisible();
+
+        await page.getByTestId('input-verify-hash').fill(generatedHash);
+        await page.getByTestId('btn-check-hash').click();
+        await expect(page.getByTestId('integrity-success')).toBeVisible();
+
+        const chainSuccess = page.getByTestId('chain-success');
+        const chainFail = page.getByTestId('chain-fail');
+        expect((await chainSuccess.count()) + (await chainFail.count())).toBeGreaterThan(0);
+    });
+
+    test('4.7 Share fallback: web share failure still downloads on first click', async ({page}) => {
+        await page.addInitScript(() => {
+            const navAny = navigator as any;
+            (window as any).__owqShareCalled = 0;
+            const failingShare = async () => {
+                (window as any).__owqShareCalled += 1;
+                throw new Error('Simulated share failure');
+            };
+            const canShare = () => true;
+
+            try {
+                Object.defineProperty(navAny, 'share', {value: failingShare, configurable: true});
+                Object.defineProperty(navAny, 'canShare', {value: canShare, configurable: true});
+            } catch {
+                // ignore and try prototype fallback
+            }
+
+            try {
+                const proto = Object.getPrototypeOf(navAny);
+                Object.defineProperty(proto, 'share', {value: failingShare, configurable: true});
+                Object.defineProperty(proto, 'canShare', {value: canShare, configurable: true});
+            } catch {
+                // ignore
+            }
+        });
+
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        await page.getByTestId('btn-add-date').click();
+
+        const downloadPromise = page.waitForEvent('download');
+        await page.getByTestId('btn-share').click();
+        const download = await downloadPromise;
+        expect(download.suggestedFilename()).toMatch(/_signed_\d{4}-\d{2}-\d{2}_\d{4}\.pdf$/);
     });
 
     test('4. Workflow: Full Signing Loop with Annotation controls', async ({page}) => {

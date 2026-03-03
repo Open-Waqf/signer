@@ -1,4 +1,4 @@
-import {Annotation, SignaturePayload} from '../../types';
+import {Annotation, CertificateSigningConfig, SignaturePayload} from '../../types';
 
 export type SaveDocResult = {
     pdfBytes: Uint8Array;
@@ -22,6 +22,7 @@ export type ExecuteSaveDeps = {
             enableWebAuthn?: boolean;
             userName?: string;
             hardwareFallbackUsed?: boolean;
+            certificateConfig?: CertificateSigningConfig;
         }
     ) => Promise<SaveDocResult>;
     getSavedEmail: () => string;
@@ -85,6 +86,7 @@ export async function executeSave(input: {
     previousHashManuallyVerified: boolean;
     openedDocumentHash: string;
     useHardware: boolean;
+    certificateConfig?: CertificateSigningConfig;
 }): Promise<{ result: SaveDocResult; hardwareFallbackUsed: boolean }> {
     const savedEmail = input.deps.getSavedEmail();
     try {
@@ -100,6 +102,7 @@ export async function executeSave(input: {
                 openedDocumentHash: input.openedDocumentHash,
                 enableWebAuthn: input.useHardware,
                 userName: savedEmail,
+                certificateConfig: input.certificateConfig,
             }
         );
         return {result, hardwareFallbackUsed: false};
@@ -122,6 +125,7 @@ export async function executeSave(input: {
                 enableWebAuthn: false,
                 userName: savedEmail,
                 hardwareFallbackUsed: true,
+                certificateConfig: input.certificateConfig,
             }
         );
         return {result, hardwareFallbackUsed: true};
