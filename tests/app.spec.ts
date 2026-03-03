@@ -550,6 +550,34 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1);
     });
 
+    test('6.1 Signature presets persist across reload via IndexedDB', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing signature pad bounds');
+        await page.mouse.move(box.x + 18, box.y + 18);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 90, box.y + 90);
+        await page.mouse.up();
+
+        await page.getByTestId('btn-save-preset').click();
+        await page.getByTestId('input-preset-name').fill('E2E IndexedDB Preset');
+        await page.getByTestId('btn-confirm-preset').click();
+        await expect(page.locator('.preset-item[title=\"E2E IndexedDB Preset\"]')).toHaveCount(1);
+        await page.evaluate(() => {
+            document.querySelector('signature-modal')?.remove();
+        });
+
+        await page.reload();
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        await expect(page.locator('.preset-item[title=\"E2E IndexedDB Preset\"]')).toHaveCount(1);
+    });
+
     test('7. Workflow: Verification Logic', async ({page}) => {
         if (!aliceSignedBuffer) return test.skip();
 

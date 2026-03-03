@@ -4,6 +4,13 @@ import {i18n} from '../lib/i18n-service';
 import {sharedStyles} from '../styles/shared-styles';
 import {TranslationKey} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
+import {
+    clearLastUsed,
+    loadLastUsed,
+    loadPresets as loadPresetsFromDb,
+    persistLastUsed,
+    persistPresets as persistPresetsToDb
+} from '../lib/preset-store';
 import './owq-modal';
 
 const INK_COLORS: Array<{ value: string; labelKey: TranslationKey }> = [
@@ -21,18 +28,6 @@ interface SignaturePreset {
     dataURL: string;
 }
 
-function loadPresets(mode: string): SignaturePreset[] {
-    try {
-        return JSON.parse(localStorage.getItem(`signer_presets_${mode}`) ?? '[]');
-    } catch {
-        return [];
-    }
-}
-
-function persistPresets(mode: string, presets: SignaturePreset[]) {
-    localStorage.setItem(`signer_presets_${mode}`, JSON.stringify(presets));
-}
-
 @customElement('signature-modal')
 export class SignatureModal extends LitElement {
     @query('canvas') canvas!: HTMLCanvasElement;
@@ -46,16 +41,11 @@ export class SignatureModal extends LitElement {
     private ctx: CanvasRenderingContext2D | null = null;
     private points: { x: number, y: number }[] = [];
     private _resizeHandler: (() => void) | null = null;
-    private _touchStartHandler: ((e: TouchEvent) => void) | null = null;
-    private _touchMoveHandler: ((e: TouchEvent) => void) | null = null;
-    private _touchEndHandler: (() => void) | null = null;
-    private _touchCancelHandler: (() => void) | null = null;
-    private _mouseDownHandler: ((e: MouseEvent) => void) | null = null;
-    private _mouseMoveHandler: ((e: MouseEvent) => void) | null = null;
-    private _mouseUpHandler: (() => void) | null = null;
-    private _windowMouseUpHandler: (() => void) | null = null;
-    private _windowTouchEndHandler: (() => void) | null = null;
-    private _windowTouchCancelHandler: (() => void) | null = null;
+    private _pointerDownHandler: ((e: PointerEvent) => void) | null = null;
+    private _pointerMoveHandler: ((e: PointerEvent) => void) | null = null;
+    private _pointerUpHandler: ((e: PointerEvent) => void) | null = null;
+    private _pointerCancelHandler: ((e: PointerEvent) => void) | null = null;
+    private activePointerId: number | null = null;
     private _keyDownHandler: ((e: KeyboardEvent) => void) | null = null;
 
     @state() private originalData: string | null = null;
@@ -260,7 +250,7 @@ export class SignatureModal extends LitElement {
         };
         window.addEventListener('resize', this._resizeHandler!);
         this.setupEvents();
-        this.loadSaved();
+        await this.loadSaved();
 
         // Focus trap
         this._keyDownHandler = (e: KeyboardEvent) => {
@@ -300,38 +290,35 @@ export class SignatureModal extends LitElement {
         super.disconnectedCallback();
         if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
         if (this.canvas) {
-            if (this._touchStartHandler) this.canvas.removeEventListener('touchstart', this._touchStartHandler);
-            if (this._touchMoveHandler) this.canvas.removeEventListener('touchmove', this._touchMoveHandler);
-            if (this._touchEndHandler) this.canvas.removeEventListener('touchend', this._touchEndHandler);
-            if (this._touchCancelHandler) this.canvas.removeEventListener('touchcancel', this._touchCancelHandler);
-            if (this._mouseDownHandler) this.canvas.removeEventListener('mousedown', this._mouseDownHandler);
-            if (this._mouseMoveHandler) this.canvas.removeEventListener('mousemove', this._mouseMoveHandler);
-            if (this._mouseUpHandler) this.canvas.removeEventListener('mouseup', this._mouseUpHandler);
+            if (this._pointerDownHandler) this.canvas.removeEventListener('pointerdown', this._pointerDownHandler);
+            if (this._pointerMoveHandler) this.canvas.removeEventListener('pointermove', this._pointerMoveHandler);
+            if (this._pointerUpHandler) this.canvas.removeEventListener('pointerup', this._pointerUpHandler);
+            if (this._pointerCancelHandler) this.canvas.removeEventListener('pointercancel', this._pointerCancelHandler);
         }
-        if (this._windowMouseUpHandler) window.removeEventListener('mouseup', this._windowMouseUpHandler);
-        if (this._windowTouchEndHandler) window.removeEventListener('touchend', this._windowTouchEndHandler);
-        if (this._windowTouchCancelHandler) window.removeEventListener('touchcancel', this._windowTouchCancelHandler);
         if (this._keyDownHandler) this.shadowRoot?.removeEventListener('keydown', this._keyDownHandler as EventListener);
     }
 
-    loadSaved() {
+    async loadSaved() {
         // Load presets and migrate legacy single-key if needed
-        let presets = loadPresets(this.mode);
+        let presets = await loadPresetsFromDb(this.mode);
         const legacyKey = `signer_${this.mode}`;
         const legacy = localStorage.getItem(legacyKey);
         if (legacy && presets.length === 0) {
             const defaultName = `${this.mode === 'signature' ? i18n.t('presetBaseSignature') : i18n.t('presetBaseInitials')} 1`;
             presets = [{id: Date.now().toString(), name: defaultName, dataURL: legacy}];
-            persistPresets(this.mode, presets);
+            await persistPresetsToDb(this.mode, presets);
         }
         this.presets = presets;
 
         // Load last-used drawing into canvas
-        const saved = localStorage.getItem(legacyKey);
+        let saved = await loadLastUsed(this.mode);
+        if (!saved) saved = localStorage.getItem(legacyKey);
         if (saved) {
             this.originalData = saved;
             this.drawFromData(saved);
         }
+        localStorage.removeItem(`signer_presets_${this.mode}`);
+        localStorage.removeItem(legacyKey);
     }
 
     drawFromData(dataUrl: string) {
@@ -366,33 +353,34 @@ export class SignatureModal extends LitElement {
     }
 
     setupEvents() {
-        this._touchStartHandler = (e: TouchEvent) => {
+        this._pointerDownHandler = (e: PointerEvent) => {
+            if (e.button !== 0 && e.pointerType === 'mouse') return;
             e.preventDefault();
-            this.start(e.touches[0]);
+            this.activePointerId = e.pointerId;
+            this.canvas.setPointerCapture(e.pointerId);
+            this.start(e);
         };
-        this._touchMoveHandler = (e: TouchEvent) => {
+        this._pointerMoveHandler = (e: PointerEvent) => {
+            if (this.activePointerId !== e.pointerId) return;
             e.preventDefault();
-            this.draw(e.touches[0]);
+            this.draw(e);
         };
-        this._touchEndHandler = () => this.stop();
-        this._touchCancelHandler = () => this.stop();
-        this._mouseDownHandler = (e: MouseEvent) => this.start(e);
-        this._mouseMoveHandler = (e: MouseEvent) => this.draw(e);
-        this._mouseUpHandler = () => this.stop();
-        this._windowMouseUpHandler = () => this.stop();
-        this._windowTouchEndHandler = () => this.stop();
-        this._windowTouchCancelHandler = () => this.stop();
+        this._pointerUpHandler = (e: PointerEvent) => {
+            if (this.activePointerId !== e.pointerId) return;
+            this.canvas.releasePointerCapture(e.pointerId);
+            this.activePointerId = null;
+            this.stop();
+        };
+        this._pointerCancelHandler = (e: PointerEvent) => {
+            if (this.activePointerId !== e.pointerId) return;
+            this.activePointerId = null;
+            this.stop();
+        };
 
-        this.canvas.addEventListener('touchstart', this._touchStartHandler, {passive: false});
-        this.canvas.addEventListener('touchmove', this._touchMoveHandler, {passive: false});
-        this.canvas.addEventListener('touchend', this._touchEndHandler);
-        this.canvas.addEventListener('touchcancel', this._touchCancelHandler);
-        this.canvas.addEventListener('mousedown', this._mouseDownHandler);
-        this.canvas.addEventListener('mousemove', this._mouseMoveHandler);
-        this.canvas.addEventListener('mouseup', this._mouseUpHandler);
-        window.addEventListener('mouseup', this._windowMouseUpHandler);
-        window.addEventListener('touchend', this._windowTouchEndHandler);
-        window.addEventListener('touchcancel', this._windowTouchCancelHandler);
+        this.canvas.addEventListener('pointerdown', this._pointerDownHandler, {passive: false});
+        this.canvas.addEventListener('pointermove', this._pointerMoveHandler, {passive: false});
+        this.canvas.addEventListener('pointerup', this._pointerUpHandler);
+        this.canvas.addEventListener('pointercancel', this._pointerCancelHandler);
     }
 
     start(e: { clientX: number, clientY: number }) {
@@ -436,7 +424,7 @@ export class SignatureModal extends LitElement {
         this.isDirty = false;
         this.originalData = null;
         this.showSaveNameRow = false;
-        localStorage.removeItem(`signer_${this.mode}`);
+        void clearLastUsed(this.mode);
     }
 
     private setInkColor(color: string) {
@@ -461,7 +449,7 @@ export class SignatureModal extends LitElement {
         }
         this.drawFromData(preset.dataURL);
         // Update last-used cache
-        localStorage.setItem(`signer_${this.mode}`, preset.dataURL);
+        void persistLastUsed(this.mode, preset.dataURL);
     }
 
     private deletePreset(id: string) {
@@ -472,11 +460,11 @@ export class SignatureModal extends LitElement {
             this.originalData = null;
             this.isDirty = false;
             this.showSaveNameRow = false;
-            localStorage.removeItem(`signer_${this.mode}`);
+            void clearLastUsed(this.mode);
         }
         const updated = this.presets.filter(p => p.id !== id);
         this.presets = updated;
-        persistPresets(this.mode, updated);
+        void persistPresetsToDb(this.mode, updated);
     }
 
     private saveAsPreset() {
@@ -498,7 +486,7 @@ export class SignatureModal extends LitElement {
         const preset: SignaturePreset = {id: Date.now().toString(), name, dataURL: dataUrl};
         const updated = [...this.presets, preset];
         this.presets = updated;
-        persistPresets(this.mode, updated);
+        void persistPresetsToDb(this.mode, updated);
         this.showSaveNameRow = false;
         this.saveNameValue = '';
     }
@@ -532,7 +520,7 @@ export class SignatureModal extends LitElement {
         const dataUrl = this.exportCanvas();
         if (!dataUrl) return;
         HapticService.success();
-        localStorage.setItem(`signer_${this.mode}`, dataUrl);
+        void persistLastUsed(this.mode, dataUrl);
         this.dispatchEvent(new CustomEvent('signed', {detail: dataUrl}));
         this.remove();
     }
