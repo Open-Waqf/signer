@@ -64,9 +64,11 @@ export class PdfWorkspace extends LitElement {
     @state() openedDocumentHash = '';
 
     @state() selectedIds: string[] = [];
+    @state() isMultiSelectMode = false;
     @state() isDragging = false;
     @state() isResizing = false;
     @state() dragOffset = {x: 0, y: 0};
+    @state() marqueeBox: { left: number; top: number; width: number; height: number } | null = null;
 
     @state() history: Annotation[][] = [];
     @state() future: Annotation[][] = [];
@@ -85,6 +87,10 @@ export class PdfWorkspace extends LitElement {
     @state() public isDirty = false;
     private interactionSnapshotTaken = false;
     private interactionChanged = false;
+    private isMarqueeSelecting = false;
+    private marqueeStart = {x: 0, y: 0};
+    private marqueeCurrent = {x: 0, y: 0};
+    private marqueeBaseIds: string[] = [];
 
     private loadedBytes: Uint8Array | null = null;
     @state() isVerified = false;
@@ -645,6 +651,14 @@ export class PdfWorkspace extends LitElement {
             z-index: 50;
         }
 
+        .marquee-box {
+            position: absolute;
+            border: 1px dashed var(--primary);
+            background: color-mix(in srgb, var(--primary), transparent 88%);
+            pointer-events: none;
+            z-index: 60;
+        }
+
         /* Draggables */
 
         .draggable {
@@ -1116,6 +1130,9 @@ export class PdfWorkspace extends LitElement {
             this.activeSidebar = 'thumbnails';
             this.persistActiveSidebar();
         }
+        if (changed.has('selectedIds') && this.selectedIds.length === 0) {
+            this.isMultiSelectMode = false;
+        }
     }
 
     changePage(offset: number) {
@@ -1218,9 +1235,67 @@ export class PdfWorkspace extends LitElement {
         const target = e.target as Element;
         if (target.closest('.draggable') || target.closest('.style-popup')) return;
         this.selectedIds = [];
+        this.isMultiSelectMode = false;
     }
 
     private touchTimer: ReturnType<typeof setTimeout> | null = null;
+    private isTouchLongPressTriggered = false;
+
+    private getPointFromEvent(e: MouseEvent | TouchEvent) {
+        if ('touches' in e) {
+            const t = e.touches[0] || (e as TouchEvent).changedTouches?.[0];
+            if (!t) return {x: 0, y: 0};
+            return {x: t.clientX, y: t.clientY};
+        }
+        return {x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY};
+    }
+
+    private updateMarqueeSelection(append: boolean) {
+        if (!this.container) return;
+        const box = this.marqueeBox;
+        if (!box) return;
+        const left = box.left;
+        const right = box.left + box.width;
+        const top = box.top;
+        const bottom = box.top + box.height;
+
+        const hitIds: string[] = [];
+        const nodes = this.shadowRoot?.querySelectorAll<HTMLElement>('.page-container .draggable') || [];
+        nodes.forEach((node) => {
+            const annId = node.dataset.annId;
+            if (!annId) return;
+            const nodeLeft = node.offsetLeft;
+            const nodeTop = node.offsetTop;
+            const nodeRight = nodeLeft + node.offsetWidth;
+            const nodeBottom = nodeTop + node.offsetHeight;
+            const intersects = nodeLeft <= right && nodeRight >= left && nodeTop <= bottom && nodeBottom >= top;
+            if (intersects) hitIds.push(annId);
+        });
+
+        if (append) {
+            this.selectedIds = Array.from(new Set([...this.marqueeBaseIds, ...hitIds]));
+            return;
+        }
+        this.selectedIds = hitIds;
+    }
+
+    private startMarqueeSelection(e: MouseEvent) {
+        if (e.button !== 0) return;
+        const target = e.target as Element;
+        if (target.closest('.draggable') || target.closest('.style-popup')) return;
+        if (!this.container) return;
+
+        const rect = this.container.getBoundingClientRect();
+        const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+        const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+        this.isMarqueeSelecting = true;
+        this.marqueeStart = {x, y};
+        this.marqueeCurrent = {x, y};
+        this.marqueeBaseIds = e.shiftKey ? [...this.selectedIds] : [];
+        if (!e.shiftKey) this.selectedIds = [];
+        this.marqueeBox = {left: x, top: y, width: 0, height: 0};
+        e.preventDefault();
+    }
 
     startDrag(e: MouseEvent | TouchEvent, id: string) {
         if (this.isAnnotationLocked(id)) return;
@@ -1252,11 +1327,21 @@ export class PdfWorkspace extends LitElement {
         };
 
         if ('touches' in e) {
+            this.isTouchLongPressTriggered = false;
+            if (this.isMultiSelectMode) {
+                applySelection(true);
+                return;
+            }
             // Touch device: start a long-press timer for multi-select
             applySelection(false); // Default to single select initially
             this.touchTimer = setTimeout(() => {
+                this.isTouchLongPressTriggered = true;
+                this.isMultiSelectMode = true;
+                this.isDragging = false;
                 HapticService.impact();
-                applySelection(true); // Toggle on long press
+                if (!this.selectedIds.includes(id)) {
+                    this.selectedIds = [...this.selectedIds, id];
+                }
             }, 500);
         } else {
             // Mouse device: use Shift key
@@ -1266,8 +1351,9 @@ export class PdfWorkspace extends LitElement {
         this.isDragging = true;
         this.interactionSnapshotTaken = false;
         this.interactionChanged = false;
-        const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-        const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+        const point = this.getPointFromEvent(e);
+        const clientX = point.x;
+        const clientY = point.y;
         const ann = this.annotations.find((a) => a.id === id);
         if (!ann) return;
         const rect = this.container.getBoundingClientRect();
@@ -1288,6 +1374,20 @@ export class PdfWorkspace extends LitElement {
     }
 
     handleGlobalMove = (e: MouseEvent | TouchEvent) => {
+        if (this.isMarqueeSelecting && !('touches' in e)) {
+            if (!this.container) return;
+            const rect = this.container.getBoundingClientRect();
+            const x = Math.max(0, Math.min(rect.width, (e as MouseEvent).clientX - rect.left));
+            const y = Math.max(0, Math.min(rect.height, (e as MouseEvent).clientY - rect.top));
+            this.marqueeCurrent = {x, y};
+            const left = Math.min(this.marqueeStart.x, this.marqueeCurrent.x);
+            const top = Math.min(this.marqueeStart.y, this.marqueeCurrent.y);
+            const width = Math.abs(this.marqueeStart.x - this.marqueeCurrent.x);
+            const height = Math.abs(this.marqueeStart.y - this.marqueeCurrent.y);
+            this.marqueeBox = {left, top, width, height};
+            this.updateMarqueeSelection(this.marqueeBaseIds.length > 0);
+            return;
+        }
         if (this.selectedIds.length === 0 || (!this.isDragging && !this.isResizing)) return;
         if (e.cancelable) e.preventDefault();
 
@@ -1351,6 +1451,15 @@ export class PdfWorkspace extends LitElement {
             clearTimeout(this.touchTimer);
             this.touchTimer = null;
         }
+        if (this.isMarqueeSelecting) {
+            this.isMarqueeSelecting = false;
+            this.marqueeBox = null;
+            this.marqueeBaseIds = [];
+        }
+        if (this.isTouchLongPressTriggered) {
+            this.isDragging = false;
+        }
+        this.isTouchLongPressTriggered = false;
         const changed = this.interactionChanged;
         this.isDragging = false;
         this.isResizing = false;
@@ -2343,12 +2452,20 @@ export class PdfWorkspace extends LitElement {
                 <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
                     ${this.renderWorkspaceTopControls()}
 
-                    <div class="page-container" data-testid="page-container">
+                    <div class="page-container" data-testid="page-container" @mousedown=${this.startMarqueeSelection}>
                         ${this.guideLines.map(guide => guide.axis === 'x' ? html`
                             <div class="guide-line-x" style=${styleMap(this.guideLineStyle(guide))}></div>
                         ` : html`
                             <div class="guide-line-y" style=${styleMap(this.guideLineStyle(guide))}></div>
                         `)}
+                        ${this.marqueeBox ? html`
+                            <div class="marquee-box" data-testid="marquee-box" style=${styleMap({
+                                left: `${this.marqueeBox.left}px`,
+                                top: `${this.marqueeBox.top}px`,
+                                width: `${this.marqueeBox.width}px`,
+                                height: `${this.marqueeBox.height}px`,
+                            })}></div>
+                        ` : ''}
                         <canvas id="pdf-canvas"></canvas>
                         ${this.annotations.filter(ann => ann.page === this.currentPage - 1).map(ann => {
                             const isSelected = this.selectedIds.includes(ann.id);
@@ -2357,6 +2474,7 @@ export class PdfWorkspace extends LitElement {
                             return html`
                                 <div class="draggable ${isSelected ? 'selected' : ''} ${isLocked ? 'locked' : ''}"
                                      data-testid="annotation-${ann.id}"
+                                     data-ann-id=${ann.id}
                                      data-locked="${isLocked ? 'true' : 'false'}"
                                      role="group"
                                      aria-label="${ann.type} ${i18n.t('annotation')}"

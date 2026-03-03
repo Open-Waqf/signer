@@ -597,7 +597,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1);
     });
 
-    test('9. Workflow: Batch Operations (Multi-select & Delete)', async ({page}) => {
+    test('9. Workflow: Batch Operations (Desktop marquee + Delete)', async ({page}) => {
         await page.goto('/');
         
         const fileChooserPromise = page.waitForEvent('filechooser');
@@ -616,25 +616,105 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const ws = page.locator('pdf-workspace');
 
         // Add 3 dates
-        for (let i=0; i<3; i++) {
+        for (let i = 0; i < 3; i++) {
             await ws.getByTestId('btn-add-date').click();
             await page.waitForTimeout(100);
         }
 
         await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(3);
 
-        const annotations = ws.locator('[data-testid^="annotation-"]');
-        const ann1 = annotations.nth(0);
-        const ann2 = annotations.nth(1);
+        await ws.evaluate((el) => {
+            const comp = el as any;
+            comp.annotations = comp.annotations.map((a: any, i: number) => ({
+                ...a,
+                xPct: 0.1 + (i * 0.22),
+                yPct: 0.12 + (i * 0.08),
+            }));
+            comp.requestUpdate();
+        });
 
-        await ann1.evaluate((el) => el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
-        await ann2.evaluate((el) => el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, shiftKey: true })));
+        const pageContainer = ws.getByTestId('page-container');
+        const box = await pageContainer.boundingBox();
+        if (!box) throw new Error('Missing page container');
 
-        await expect(ann1).toHaveClass(/selected/);
-        await expect(ann2).toHaveClass(/selected/);
+        const startX = box.x + box.width * 0.04;
+        const startY = box.y + box.height * 0.04;
+        const endX = box.x + box.width * 0.38;
+        const endY = box.y + box.height * 0.29;
+        await page.mouse.move(startX, startY);
+        await page.mouse.down();
+        await page.mouse.move(endX, endY);
+        await page.mouse.up();
+
+        const selected = ws.locator('.draggable.selected');
+        await expect(selected).toHaveCount(2);
 
         await page.keyboard.press('Delete');
         await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+    });
+
+    test('9.1 Workflow: Mobile long-press enables multi-select tap-add', async ({page}) => {
+        await page.goto('/');
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'touch_batch_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer),
+        });
+
+        const ws = page.locator('pdf-workspace');
+        await expect(ws).toBeVisible();
+        await ws.getByTestId('btn-add-date').click();
+        await ws.getByTestId('btn-add-date').click();
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(2);
+
+        await ws.evaluate((el) => {
+            const comp = el as any;
+            comp.annotations = comp.annotations.map((a: any, i: number) => ({
+                ...a,
+                xPct: 0.14 + (i * 0.3),
+                yPct: 0.18 + (i * 0.16),
+            }));
+            comp.requestUpdate();
+        });
+
+        const anns = ws.locator('[data-testid^="annotation-"]');
+        const ann1 = anns.nth(0);
+        const ann2 = anns.nth(1);
+
+        await ann1.evaluate((node) => {
+            const rect = (node as HTMLElement).getBoundingClientRect();
+            const event = new Event('touchstart', {bubbles: true, cancelable: true});
+            Object.defineProperty(event, 'touches', {
+                value: [{clientX: rect.left + 5, clientY: rect.top + 5}],
+            });
+            node.dispatchEvent(event);
+        });
+        await page.waitForTimeout(620);
+        await page.evaluate(() => {
+            const endEvent = new Event('touchend', {bubbles: true, cancelable: true});
+            Object.defineProperty(endEvent, 'changedTouches', {value: []});
+            window.dispatchEvent(endEvent);
+        });
+
+        await ann2.evaluate((node) => {
+            const rect = (node as HTMLElement).getBoundingClientRect();
+            const event = new Event('touchstart', {bubbles: true, cancelable: true});
+            Object.defineProperty(event, 'touches', {
+                value: [{clientX: rect.left + 5, clientY: rect.top + 5}],
+            });
+            node.dispatchEvent(event);
+        });
+        await page.evaluate(() => {
+            const endEvent = new Event('touchend', {bubbles: true, cancelable: true});
+            Object.defineProperty(endEvent, 'changedTouches', {value: []});
+            window.dispatchEvent(endEvent);
+        });
+
+        await expect(ws.locator('.draggable.selected')).toHaveCount(2);
     });
 
     test('10. REQ-19 TC-01: Sequential chain happy path', async ({page}) => {
