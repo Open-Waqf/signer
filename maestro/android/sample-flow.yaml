@@ -1,0 +1,22 @@
+appId: org.openwaqf.signer
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "No file? Try with a sample PDF"
+    commands:
+      - tapOn: "No file? Try with a sample PDF"
+- runFlow:
+    when:
+      visible: "ليس لديك ملف؟ جرب نموذج PDF"
+    commands:
+      - tapOn: "ليس لديك ملف؟ جرب نموذج PDF"
+- runFlow:
+    when:
+      visible: "Pas de fichier ? Essayez avec un PDF d'exemple"
+    commands:
+      - tapOn: "Pas de fichier ? Essayez avec un PDF d'exemple"
+- waitForAnimationToEnd
+- takeScreenshot: "after-sample-click"

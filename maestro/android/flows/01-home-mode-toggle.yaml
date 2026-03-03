@@ -1,0 +1,15 @@
+appId: org.openwaqf.signer
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- assertVisible:
+    id: "btn-sign-mode"
+- assertVisible:
+    id: "btn-verify-mode"
+- tapOn:
+    id: "btn-verify-mode"
+- waitForAnimationToEnd
+- tapOn:
+    id: "btn-sign-mode"
+- waitForAnimationToEnd

@@ -1,0 +1,26 @@
+appId: org.openwaqf.signer
+---
+- waitForAnimationToEnd
+- assertVisible:
+    id: "btn-verify-mode"
+- tapOn:
+    id: "btn-verify-mode"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Select PDF to Verify"
+    commands:
+      - assertVisible: "Select PDF to Verify"
+- runFlow:
+    when:
+      visible: "اختر ملف للتحقق"
+    commands:
+      - assertVisible: "اختر ملف للتحقق"
+- runFlow:
+    when:
+      visible: "Choisir un PDF à vérifier"
+    commands:
+      - assertVisible: "Choisir un PDF à vérifier"
+- tapOn:
+    id: "btn-sign-mode"
+- waitForAnimationToEnd

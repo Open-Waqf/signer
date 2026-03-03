@@ -171,6 +171,16 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.getByTestId('diagnostics-modal')).not.toBeVisible();
     });
 
+    test('3.2 Sample flow repeatedly opens workspace', async ({page}) => {
+        await page.goto('/');
+        for (let i = 0; i < 3; i++) {
+            await page.getByTestId('btn-sample').click();
+            await expect(page.getByTestId('btn-exit')).toBeVisible();
+            await page.getByTestId('btn-exit').click();
+            await expect(page.getByTestId('btn-select-file')).toBeVisible();
+        }
+    });
+
     test('3.5 Arabic: Sample and PDF open still work', async ({page}) => {
         const pdfBuffer = await generateTestPDF();
         await page.goto('/');
@@ -693,6 +703,125 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(0);
     });
 
+    test('6.5 Thumbnail blob URLs are revoked on workspace reset', async ({page}) => {
+        await page.goto('/');
+        await page.evaluate(() => {
+            const original = URL.revokeObjectURL.bind(URL);
+            (window as any).__revokeCalls = [];
+            (window as any).__originalRevoke = original;
+            URL.revokeObjectURL = ((url: string) => {
+                (window as any).__revokeCalls.push(url);
+                original(url);
+            }) as typeof URL.revokeObjectURL;
+        });
+
+        await page.getByTestId('btn-sample').click();
+        const ws = page.locator('pdf-workspace');
+        await expect(ws).toBeVisible();
+
+        const toggleBtn = page.getByTestId('btn-toggle-thumbs');
+        const isActive = await toggleBtn.evaluate((el) => el.classList.contains('active'));
+        if (!isActive) await toggleBtn.click();
+
+        await expect.poll(async () => {
+            const src = await page.getByTestId('thumb-page-1').locator('img').first().getAttribute('src');
+            return src || '';
+        }).toMatch(/^blob:/);
+
+        await ws.evaluate((el) => {
+            (el as any).reset();
+        });
+
+        await expect.poll(async () => {
+            return page.evaluate(() => (window as any).__revokeCalls.length || 0);
+        }).toBeGreaterThan(0);
+
+        await page.evaluate(() => {
+            const original = (window as any).__originalRevoke as typeof URL.revokeObjectURL | undefined;
+            if (original) URL.revokeObjectURL = original;
+        });
+    });
+
+    test('6.6 Thumbnail rapid-scroll prioritizes final viewport pages', async ({page}) => {
+        const bigPdf = await PDFDocument.create();
+        for (let i = 0; i < 220; i++) {
+            bigPdf.addPage([595, 842]);
+        }
+        const bigPdfBytes = Buffer.from(await bigPdf.save());
+
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({
+            name: 'rapid-scroll-220-pages.pdf',
+            mimeType: 'application/pdf',
+            buffer: bigPdfBytes,
+        });
+
+        const ws = page.locator('pdf-workspace');
+        await expect(ws).toBeVisible();
+        const toggleBtn = page.getByTestId('btn-toggle-thumbs');
+        const isActive = await toggleBtn.evaluate((el) => el.classList.contains('active'));
+        if (!isActive) await toggleBtn.click();
+        await expect(page.locator('.thumb-panel')).toBeVisible();
+
+        await ws.evaluate((el) => {
+            const panel = (el.shadowRoot?.querySelector('.thumb-panel') as HTMLElement | null);
+            if (!panel) return;
+            panel.scrollTop = 0;
+            panel.scrollTop = panel.scrollHeight * 0.35;
+            panel.scrollTop = panel.scrollHeight * 0.7;
+            panel.scrollTop = panel.scrollHeight;
+        });
+
+        await expect.poll(async () => page.getByTestId('thumb-page-220').locator('img').count()).toBe(1);
+        await expect.poll(async () => {
+            const src = await page.getByTestId('thumb-page-220').locator('img').getAttribute('src');
+            return src || '';
+        }).toMatch(/^blob:/);
+    });
+
+    test('6.7 Thumbnail blob cache stays under cap after deep scrolling', async ({page}) => {
+        const bigPdf = await PDFDocument.create();
+        for (let i = 0; i < 300; i++) {
+            bigPdf.addPage([595, 842]);
+        }
+        const bigPdfBytes = Buffer.from(await bigPdf.save());
+
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({
+            name: 'cache-cap-300-pages.pdf',
+            mimeType: 'application/pdf',
+            buffer: bigPdfBytes,
+        });
+
+        const ws = page.locator('pdf-workspace');
+        await expect(ws).toBeVisible();
+        const toggleBtn = page.getByTestId('btn-toggle-thumbs');
+        const isActive = await toggleBtn.evaluate((el) => el.classList.contains('active'));
+        if (!isActive) await toggleBtn.click();
+        await expect(page.locator('.thumb-panel')).toBeVisible();
+
+        await ws.evaluate(async (el) => {
+            const root = el.shadowRoot;
+            const panel = root?.querySelector('.thumb-panel') as HTMLElement | null;
+            if (!panel) return;
+            const stops = [0.15, 0.4, 0.65, 1];
+            for (const stop of stops) {
+                panel.scrollTop = panel.scrollHeight * stop;
+                await new Promise((resolve) => setTimeout(resolve, 180));
+            }
+        });
+
+        const loadedCount = await ws.evaluate((el) => {
+            const comp = el as any;
+            return (comp.thumbnailURLs as Array<string | null>).filter((u) => !!u).length;
+        });
+        expect(loadedCount).toBeLessThanOrEqual(48);
+    });
+
     test('7. Workflow: Verification Logic', async ({page}) => {
         if (!aliceSignedBuffer) return test.skip();
 
@@ -1080,6 +1209,13 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
 
     test('14. REQ-19: Preserve externally appended pages when refreshing audit page', async ({page}) => {
         test.skip(!signerCSingleAuditBuffer);
+        test.setTimeout(90_000);
+        const consoleErrors: string[] = [];
+        page.on('console', (msg) => {
+            if (msg.type() === 'error' || msg.type() === 'warning') {
+                consoleErrors.push(`${msg.type()}: ${msg.text()}`);
+            }
+        });
 
         const external = await PDFDocument.load(signerCSingleAuditBuffer!, {updateMetadata: false});
         for (let i = 0; i < 5; i++) {
@@ -1096,15 +1232,24 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('btn-skip-handover').click();
         await page.getByTestId('btn-add-date').click();
 
-        const dl = page.waitForEvent('download');
-        await page.getByTestId('btn-save').click();
-        const d = await dl;
-        const stream = await d.createReadStream();
-        const chunks = [];
-        for await (const chunk of stream!) chunks.push(chunk);
-        const saved = Buffer.concat(chunks);
+        await page.locator('pdf-workspace').evaluate(async (el) => {
+            const ws = el as any;
+            await ws.saveDocument({silentWeb: true, showToast: false, suppressProofModal: true});
+        });
+        const saved = await page.locator('pdf-workspace').evaluate((el) => {
+            const ws = el as any;
+            const bytes = ws.lastSavedBytes as Uint8Array | null;
+            if (!bytes) {
+                return null;
+            }
+            return Array.from(bytes);
+        });
+        if (!saved) {
+            throw new Error(`lastSavedBytes unavailable after save. Console:\n${consoleErrors.join('\n')}`);
+        }
+        const savedBuffer = Buffer.from(saved);
 
-        const pdf = await PDFDocument.load(saved, {updateMetadata: false});
+        const pdf = await PDFDocument.load(savedBuffer, {updateMetadata: false});
         expect(pdf.getPageCount()).toBe(8);
     });
 

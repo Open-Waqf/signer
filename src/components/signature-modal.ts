@@ -475,7 +475,7 @@ export class SignatureModal extends LitElement {
         this.showSaveNameRow = true;
     }
 
-    private confirmSavePreset() {
+    private async confirmSavePreset() {
         const name = this.saveNameValue.trim();
         if (!name) return;
 
@@ -485,8 +485,8 @@ export class SignatureModal extends LitElement {
         HapticService.success();
         const preset: SignaturePreset = {id: Date.now().toString(), name, dataURL: dataUrl};
         const updated = [...this.presets, preset];
+        await persistPresetsToDb(this.mode, updated);
         this.presets = updated;
-        void persistPresetsToDb(this.mode, updated);
         this.showSaveNameRow = false;
         this.saveNameValue = '';
     }

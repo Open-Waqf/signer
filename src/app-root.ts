@@ -81,6 +81,39 @@ export class AppRoot extends LitElement {
         onError: () => this.showToast(i18n.t('sharedOpenFailed')),
     });
 
+    private async resolveWorkspace(retries = 8, delayMs = 40) {
+        try {
+            await customElements.whenDefined('pdf-workspace');
+        } catch {
+            // ignore and continue retry loop
+        }
+        for (let i = 0; i <= retries; i++) {
+            await this.updateComplete;
+            const candidate = this.workspace ?? this.querySelector('pdf-workspace');
+            if (candidate && typeof (candidate as any).loadPdf === 'function') return candidate as any;
+            if (i < retries) await new Promise(r => setTimeout(r, delayMs));
+        }
+        return null;
+    }
+
+    private serializeError(error: unknown): string {
+        if (error instanceof Error) return `${error.name}: ${error.message}`;
+        try {
+            return JSON.stringify(error);
+        } catch {
+            return String(error);
+        }
+    }
+
+    private logMarker(marker: string) {
+        if (isNativePlatform()) {
+            // Capacitor logcat consistently captures console.error for automation assertions.
+            console.error(marker);
+            return;
+        }
+        console.info(marker);
+    }
+
     createRenderRoot() {
         return this;
     }
@@ -248,7 +281,7 @@ export class AppRoot extends LitElement {
 
     async startPendingVerification() {
         this.showVerifyModal = false;
-        await this.openFile();
+        await this.openFile('verify-modal');
     }
 
     async handleFile(data: Uint8Array, name: string) {
@@ -262,9 +295,13 @@ export class AppRoot extends LitElement {
 
         try {
             this.mode = 'workspace';
-            await this.updateComplete;
-            if (this.workspace) await this.workspace.loadPdf(data, name);
+            const workspace = await this.resolveWorkspace();
+            if (!workspace) throw new Error('Workspace component not ready');
+            await workspace.loadPdf(data, name);
+            this.logMarker('[OWQ][WORKSPACE_LOADED]');
         } catch (e) {
+            this.logMarker('[OWQ][WORKSPACE_LOAD_FAILED]');
+            console.error('Error loading file into workspace:', this.serializeError(e), e);
             this.showToast(i18n.t('errorLoading'));
             this.mode = 'home';
         } finally {
@@ -275,6 +312,21 @@ export class AppRoot extends LitElement {
     async loadSamplePdf() {
         this.setLoading(true);
         try {
+            this.logMarker('[OWQ][SAMPLE_START]');
+            // Prefer bundled sample to avoid runtime generation issues in some Android WebViews.
+            try {
+                const sampleUrl = new URL('sample_document.pdf', new URL(import.meta.env.BASE_URL, window.location.href)).toString();
+                const response = await fetch(sampleUrl, {cache: 'no-store'});
+                if (response.ok) {
+                    const buffer = await response.arrayBuffer();
+                    this.logMarker('[OWQ][SAMPLE_LOADED][STATIC]');
+                    await this.handleFile(new Uint8Array(buffer), 'sample_document.pdf');
+                    return;
+                }
+            } catch {
+                // Fallback to in-memory generation below.
+            }
+
             const pdfDoc = await PDFDocument.create();
             const page = pdfDoc.addPage([595.28, 841.89]);
             const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -285,31 +337,28 @@ export class AppRoot extends LitElement {
             const sampleText1 = /[^\x00-\x7F]/.test(sampleText1Localized) ? resources.en.sampleDocText1 : sampleText1Localized;
             const sampleText2 = /[^\x00-\x7F]/.test(sampleText2Localized) ? resources.en.sampleDocText2 : sampleText2Localized;
             page.drawText(sampleTitle, {x: 50, y: 750, size: 24, font, color: rgb(0, 0.33, 0.71)});
-            page.drawText(sampleText1, {
-                x: 50,
-                y: 700,
-                size: 12,
-                font
-            });
-            page.drawText(sampleText2, {
-                x: 50,
-                y: 680,
-                size: 12,
-                font
-            });
-
+            page.drawText(sampleText1, {x: 50, y: 700, size: 12, font});
+            page.drawText(sampleText2, {x: 50, y: 680, size: 12, font});
             const pdfBytes = await pdfDoc.save();
-            this.mode = 'workspace';
-            await this.updateComplete;
-            await this.workspace.loadPdf(pdfBytes, 'sample_document.pdf');
+            this.logMarker('[OWQ][SAMPLE_LOADED][GENERATED]');
+            await this.handleFile(pdfBytes, 'sample_document.pdf');
         } catch (e) {
+            console.error('Error generating sample PDF:', this.serializeError(e), e);
             this.showToast(i18n.t('errorSamplePdf'));
         } finally {
             this.setLoading(false);
         }
     }
 
-    async openFile() {
+    onSampleClick(e: Event) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.logMarker('[OWQ][SAMPLE_CLICK]');
+        void this.loadSamplePdf();
+    }
+
+    async openFile(source = 'unknown') {
+        this.logMarker(`[OWQ][OPEN_FILE][${source}]`);
         try {
             const {data, name} = await fileService.openPdf();
             if (this.verifyMode) {
@@ -318,7 +367,7 @@ export class AppRoot extends LitElement {
                 await this.handleFile(data, name);
             }
         } catch (e) {
-            console.error('Error opening file:', e);
+            console.error('Error opening file:', this.serializeError(e), e);
         }
     }
 
@@ -676,7 +725,7 @@ export class AppRoot extends LitElement {
 
                         ${this.renderModeToggle()}
 
-                        <div id="drop-area" data-testid="drop-area" class="drop-area-visual" @click=${this.openFile}>
+                        <div id="drop-area" data-testid="drop-area" class="drop-area-visual" @click=${() => this.openFile('home-drop')}>
                             <button class="btn btn-primary" data-testid="btn-select-file">
                                 ${this.verifyMode ? i18n.t('selectFileVerify') : i18n.t('selectFile')}
                             </button>
@@ -695,7 +744,7 @@ export class AppRoot extends LitElement {
                         </div>
 
                         ${!this.verifyMode ? html`
-                            <button id="btn-sample" data-testid="btn-sample" class="text-link sample-link" @click=${this.loadSamplePdf}>
+                            <button id="btn-sample" type="button" data-testid="btn-sample" class="text-link sample-link" @click=${this.onSampleClick}>
                                 ${i18n.t('trySample')}
                             </button>
                         ` : ''}
@@ -878,7 +927,8 @@ export class AppRoot extends LitElement {
 
             ${this.chainStatus.status === 'success' ? html`
                 <div class="alert-box alert-success alert-top-gap" data-testid="chain-success"
-                     .innerHTML=${i18n.t('chainValidated').replace('{count}', String(this.chainStatus.total || 0))}></div>
+                     .innerHTML=${i18n.t(this.integrityStatus === 'success' ? 'chainValidated' : 'chainValidatedPreliminary')
+                         .replace('{count}', String(this.chainStatus.total || 0))}></div>
             ` : ''}
             ${this.chainStatus.status === 'fail' ? html`
                 <div class="alert-box alert-error alert-top-gap" data-testid="chain-fail"

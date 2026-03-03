@@ -203,6 +203,24 @@ Compiles TypeScript to optimized, offline-ready JS in `dist/`.
 npm run build
 ```
 
+### 5. Android E2E (Maestro)
+
+For Android emulator/device workflow parity, run the PowerShell smoke runner from Windows:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File "<PRJOECT_PATH>\signer\scripts\android-smoke.ps1" `
+  -AssembleApk 1 `
+  -InstallApk 1 `
+  -RunMaestro 1 `
+  -AssertSampleFlow 1 `
+  -JavaHome "<JDK21_PATH>"
+```
+
+This runs the Maestro suite at `maestro/android/full-e2e.yaml` and writes artifacts under:
+
+`test-results/android-smoke/`
+
 ### Cloudflare Worker Relay (GitHub Pages Hosting)
 
 If the app is hosted on GitHub Pages, deploy the TSA relay as a separate Cloudflare Worker:

@@ -1,0 +1,60 @@
+appId: org.openwaqf.signer
+---
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "btn-sign-mode"
+    commands:
+      - tapOn:
+          id: "btn-sign-mode"
+- runFlow:
+    when:
+      visible:
+        id: "btn-sample"
+    commands:
+      - tapOn:
+          id: "btn-sample"
+- runFlow:
+    when:
+      visible: "No file? Try with a sample PDF"
+    commands:
+      - tapOn: "No file? Try with a sample PDF"
+- runFlow:
+    when:
+      visible: "ليس لديك ملف؟ جرب نموذج PDF"
+    commands:
+      - tapOn: "ليس لديك ملف؟ جرب نموذج PDF"
+- runFlow:
+    when:
+      visible: "Pas de fichier ? Essayez avec un PDF d'exemple"
+    commands:
+      - tapOn: "Pas de fichier ? Essayez avec un PDF d'exemple"
+- waitForAnimationToEnd
+- tapOn:
+    id: "btn-add-date"
+- waitForAnimationToEnd
+- tapOn:
+    id: "btn-save"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "hardware-prompt-modal"
+    commands:
+      - tapOn:
+          id: "btn-hw-cancel"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "btn-save"
+- tapOn:
+    id: "btn-exit"
+- runFlow:
+    when:
+      visible:
+        id: "btn-confirm-exit"
+    commands:
+      - tapOn:
+          id: "btn-confirm-exit"
+- waitForAnimationToEnd
+

@@ -1,6 +1,6 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
-import pdfWorker from 'pdfjs-dist/build/pdf.worker?url';
+import pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
 import {Annotation, CertificateSigningConfig, SignaturePayload} from '../types';
 import {WebAuthnService} from './webauthn-service';
 import {appendAuditPage, getHexToRgb, removeTrailingAuditPages, textToImage} from './pdf/audit-page-service';
@@ -20,6 +20,15 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 export class PdfEngine {
     private pdfDoc: any = null;
     private pdfBytes: Uint8Array | null = null;
+
+    private describeError(error: unknown): string {
+        if (error instanceof Error) return `${error.name}: ${error.message}`;
+        try {
+            return JSON.stringify(error);
+        } catch {
+            return String(error);
+        }
+    }
 
     getSixDigitCode(hash: string): string {
         return getSixDigitCode(hash);
@@ -44,22 +53,59 @@ export class PdfEngine {
         const base = new URL(import.meta.env.BASE_URL, window.location.href);
         const cMapUrl = new URL('cmaps/', base).toString();
         const standardFontDataUrl = new URL('standard_fonts/', base).toString();
+        const attempts: Array<Record<string, unknown>> = [
+            {
+                cMapUrl,
+                cMapPacked: true,
+                standardFontDataUrl,
+                useSystemFonts: true,
+                disableFontFace: false,
+            },
+            {
+                cMapUrl,
+                cMapPacked: true,
+                useSystemFonts: true,
+                disableFontFace: true,
+            },
+            {
+                useSystemFonts: true,
+                disableFontFace: true,
+            },
+        ];
 
-        const loadingTask = pdfjsLib.getDocument({
-            data: new Uint8Array(data),
-            cMapUrl,
-            cMapPacked: true,
-            standardFontDataUrl,
-            useSystemFonts: true,
-            disableFontFace: false
-        });
-        this.pdfDoc = await loadingTask.promise;
-        return this.pdfDoc.numPages;
+        let lastError: unknown = null;
+        for (let i = 0; i < attempts.length; i++) {
+            try {
+                const loadingTask = pdfjsLib.getDocument({
+                    // PDF.js may transfer/detach ArrayBuffer internally on some Android WebViews.
+                    // Re-create a fresh copy for each attempt.
+                    data: new Uint8Array(data),
+                    ...attempts[i],
+                });
+                this.pdfDoc = await loadingTask.promise;
+                return this.pdfDoc.numPages;
+            } catch (error) {
+                lastError = error;
+                console.error(`[OWQ][PDF_LOAD_FAIL][attempt:${i + 1}] ${this.describeError(error)}`);
+            }
+        }
+        throw new Error(`Failed to load PDF document: ${this.describeError(lastError)}`);
     }
 
-    async renderPage(pageNumber: number, canvas: HTMLCanvasElement, scale = 1.5) {
+    async renderPage(
+        pageNumber: number,
+        canvas: HTMLCanvasElement,
+        scale = 1.5,
+        opts?: { signal?: AbortSignal }
+    ) {
         if (!this.pdfDoc) throw new Error('No PDF loaded');
+        if (opts?.signal?.aborted) {
+            throw new DOMException('Render aborted', 'AbortError');
+        }
         const page = await this.pdfDoc.getPage(pageNumber);
+        if (opts?.signal?.aborted) {
+            throw new DOMException('Render aborted', 'AbortError');
+        }
         const viewport = page.getViewport({scale});
         canvas.height = viewport.height;
         canvas.width = viewport.width;
@@ -68,7 +114,24 @@ export class PdfEngine {
         if ('direction' in canvasContext) {
             (canvasContext as CanvasRenderingContext2D & { direction?: CanvasDirection }).direction = 'ltr';
         }
-        await page.render({canvasContext, viewport}).promise;
+        const renderTask = page.render({canvasContext, viewport});
+        if (opts?.signal) {
+            const onAbort = () => {
+                try {
+                    renderTask.cancel();
+                } catch {
+                    // Ignore cancellation races.
+                }
+            };
+            opts.signal.addEventListener('abort', onAbort, {once: true});
+            try {
+                await renderTask.promise;
+            } finally {
+                opts.signal.removeEventListener('abort', onAbort);
+            }
+            return;
+        }
+        await renderTask.promise;
     }
 
     async saveProfessional(

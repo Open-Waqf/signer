@@ -1,0 +1,13 @@
+appId: org.openwaqf.signer
+---
+- waitForAnimationToEnd
+- assertVisible:
+    id: "link-privacy"
+- tapOn:
+    id: "link-privacy"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "btn-close-privacy"
+- tapOn:
+    id: "btn-close-privacy"
+- waitForAnimationToEnd

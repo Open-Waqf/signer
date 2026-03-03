@@ -1,0 +1,16 @@
+appId: org.openwaqf.signer
+---
+- runFlow: flows/01-home-mode-toggle.yaml
+- runFlow: flows/02-sample-open-exit.yaml
+- runFlow: flows/03-sample-tools.yaml
+- runFlow: flows/04-verify-mode-toggle.yaml
+- runFlow: flows/05-airgap-modal.yaml
+- runFlow: flows/06-dirty-exit-confirm.yaml
+- runFlow: flows/07-privacy-modal.yaml
+- runFlow: flows/08-sample-save-cycle.yaml
+- runFlow: flows/09-custom-text-prompt.yaml
+- runFlow: flows/10-advanced-tools-toggle.yaml
+- runFlow: flows/11-save-hardware-prompt.yaml
+- runFlow: flows/12-save-proof-modal.yaml
+- runFlow: flows/13-repeat-sample-stability.yaml
+- takeScreenshot: "full-e2e-finished"

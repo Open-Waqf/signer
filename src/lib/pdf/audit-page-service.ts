@@ -1,4 +1,5 @@
 import {PageSizes, PDFDocument, rgb, StandardFonts} from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import QRCode from 'qrcode';
 import {SignaturePayload} from '../../types';
 import {AppConfig} from '../../config';
@@ -10,9 +11,6 @@ function pageContainsAuditMarker(pageText: string): boolean {
 
 export async function removeTrailingAuditPages(pdfDoc: PDFDocument, sourceBytes: Uint8Array): Promise<boolean> {
     if (pdfDoc.getPageCount() <= 1) return false;
-    const pdfjsLib = typeof window === 'undefined'
-        ? await import('pdfjs-dist/legacy/build/pdf.mjs')
-        : await import('pdfjs-dist');
     const loadingTask = pdfjsLib.getDocument({data: new Uint8Array(sourceBytes)});
     const srcDoc = await loadingTask.promise;
     const lastPage = await srcDoc.getPage(srcDoc.numPages);

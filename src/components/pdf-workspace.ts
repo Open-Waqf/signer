@@ -102,11 +102,18 @@ export class PdfWorkspace extends LitElement {
     private thumbVisiblePages = new Set<number>();
     private thumbQueuedPages = new Set<number>();
     private thumbRenderingPages = new Set<number>();
+    private thumbRenderAbortController: AbortController | null = null;
     private thumbQueueTimer: number | null = null;
+    private thumbObserverRefreshTimer: number | null = null;
     private thumbRenderToken = 0;
     private readonly thumbScale = 0.18;
+    private readonly maxThumbnailBlobUrls = 48;
+    private readonly thumbVirtualItemHeight = 84;
+    private readonly thumbVirtualOverscan = 8;
     private readonly maxStampUploadBytes = 5 * 1024 * 1024;
     private readonly maxStampImagePixels = 12_000_000;
+    private readonly maxStampPresetCount = 30;
+    private readonly maxStampPresetTotalBytes = 25 * 1024 * 1024;
 
     private loadedBytes: Uint8Array | null = null;
     @state() isVerified = false;
@@ -120,7 +127,8 @@ export class PdfWorkspace extends LitElement {
 
     @state() activeSidebar: 'thumbnails' | 'annotations' | null = preferences.getActiveSidebar();
     @state() thumbnailURLs: Array<string | null> = [];
-    @state() isGeneratingThumbs = false;
+    @state() thumbPanelScrollTop = 0;
+    @state() thumbPanelClientHeight = 0;
     @state() uiMode: 'basic' | 'advanced' = preferences.getUiMode();
 
     @state() customPrompt: {
@@ -237,6 +245,14 @@ export class PdfWorkspace extends LitElement {
             box-shadow: var(--shadow-flat);
         }
 
+        @media (max-width: 768px) {
+            header {
+                height: auto;
+                min-height: calc(56px + max(env(safe-area-inset-top), 0px) + 8px);
+                padding-top: calc(max(env(safe-area-inset-top), 0px) + 8px);
+            }
+        }
+
         .brand {
             font-weight: 700;
             color: var(--text-main);
@@ -338,7 +354,7 @@ export class PdfWorkspace extends LitElement {
             display: none; /* Desktop hidden */
             background: var(--bg-surface);
             border-top: 1px solid var(--border);
-            padding: 8px 8px env(safe-area-inset-bottom);
+            padding: 8px 8px calc(max(env(safe-area-inset-bottom), 12px) + 8px);
             z-index: 200;
             box-shadow: var(--workspace-bottom-bar-shadow);
             justify-content: flex-start;
@@ -361,7 +377,7 @@ export class PdfWorkspace extends LitElement {
             }
 
             .viewport {
-                padding-bottom: 100px; /* Space for bottom bar */
+                padding-bottom: calc(100px + max(env(safe-area-inset-bottom), 12px)); /* Space for bottom bar + system nav area */
             }
 
             .brand .brand-title {
@@ -500,19 +516,6 @@ export class PdfWorkspace extends LitElement {
             box-shadow: var(--shadow-raised);
         }
 
-        .thumb-loading {
-            display: flex;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .thumb-loading .spinner {
-            width: 24px;
-            height: 24px;
-            border-width: 2px;
-            margin-bottom: 0;
-        }
-
         .thumb-image {
             width: 100%;
             display: block;
@@ -540,6 +543,12 @@ export class PdfWorkspace extends LitElement {
             color: var(--workspace-thumb-index);
             text-align: center;
             padding: 2px 0;
+        }
+
+        .thumb-spacer {
+            width: 100%;
+            flex-shrink: 0;
+            pointer-events: none;
         }
 
         .thumb-has-annotations {
@@ -1099,7 +1108,14 @@ export class PdfWorkspace extends LitElement {
         this.clearCertificateSession();
         this.pdfName = name;
         this.loadedBytes = file;
-        this.openedDocumentHash = await pdfEngine.getIntegrityAnchorHash(file);
+        try {
+            this.openedDocumentHash = await pdfEngine.getIntegrityAnchorHash(file);
+        } catch (error) {
+            // Some Android WebView/PDF edge cases fail deterministic normalization.
+            // Fall back to direct SHA-256 so the document can still be opened/signed.
+            console.error('[OWQ][INTEGRITY_HASH_FALLBACK]', error);
+            this.openedDocumentHash = await pdfEngine.getFileHash(file);
+        }
         this.previousHashManuallyVerified = true;
         this.isVerified = false;
         this.validationMsg = null;
@@ -1185,7 +1201,7 @@ export class PdfWorkspace extends LitElement {
                 : i18n.t('handoverMismatchMsg');
         this.validationMsg = validationBase.replace('{ref}', this.detectedRefId);
         if (result.appendHardwareVerifiedSuffix) {
-            this.validationMsg += ' + Hardware Sign Verified';
+            this.validationMsg += ` + ${i18n.t('hardwareSignVerifiedSuffix')}`;
         }
 
         if (result.shouldAutoClose) {
@@ -1207,15 +1223,14 @@ export class PdfWorkspace extends LitElement {
         if (this.thumbnailURLs.length !== this.totalPages) {
             this.thumbnailURLs = new Array(this.totalPages).fill(null);
         }
-        this.isGeneratingThumbs = false;
         this.setupThumbnailObserver();
         this.queueVisibleThumbnailsNow();
     }
 
     updated(changed: Map<string, unknown>) {
         if (changed.has('currentPage') && this.activeSidebar === 'thumbnails') {
-            this.shadowRoot?.querySelector('.thumb-item.active')
-                ?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+            this.ensureThumbPageVisible(this.currentPage);
+            this.scheduleThumbObserverRefresh();
         }
         if (changed.has('activeSidebar')) {
             if (this.activeSidebar === 'thumbnails') {
@@ -1224,6 +1239,9 @@ export class PdfWorkspace extends LitElement {
             } else {
                 this.disconnectThumbnailObserver();
             }
+        }
+        if (changed.has('thumbPanelScrollTop') || changed.has('thumbPanelClientHeight')) {
+            this.scheduleThumbObserverRefresh();
         }
         if (changed.has('annotations') && this.activeSidebar === 'annotations' && this.annotations.length === 0) {
             this.activeSidebar = 'thumbnails';
@@ -1238,6 +1256,9 @@ export class PdfWorkspace extends LitElement {
         if (this.activeSidebar !== 'thumbnails' || this.totalPages === 0) return;
         const panel = this.shadowRoot?.querySelector('.thumb-panel');
         if (!panel) return;
+        if (this.thumbPanelClientHeight !== (panel as HTMLElement).clientHeight) {
+            this.thumbPanelClientHeight = (panel as HTMLElement).clientHeight;
+        }
 
         this.disconnectThumbnailObserver();
         this.thumbVisiblePages.clear();
@@ -1270,6 +1291,10 @@ export class PdfWorkspace extends LitElement {
             this.thumbObserver.disconnect();
             this.thumbObserver = null;
         }
+        if (this.thumbRenderAbortController) {
+            this.thumbRenderAbortController.abort();
+            this.thumbRenderAbortController = null;
+        }
         if (this.thumbQueueTimer != null) {
             window.clearTimeout(this.thumbQueueTimer);
             this.thumbQueueTimer = null;
@@ -1277,7 +1302,23 @@ export class PdfWorkspace extends LitElement {
         this.thumbVisiblePages.clear();
         this.thumbQueuedPages.clear();
         this.thumbRenderingPages.clear();
+        if (this.thumbObserverRefreshTimer != null) {
+            window.clearTimeout(this.thumbObserverRefreshTimer);
+            this.thumbObserverRefreshTimer = null;
+        }
         this.thumbRenderToken++;
+    }
+
+    private scheduleThumbObserverRefresh() {
+        if (this.activeSidebar !== 'thumbnails') return;
+        if (this.thumbObserverRefreshTimer != null) {
+            window.clearTimeout(this.thumbObserverRefreshTimer);
+        }
+        this.thumbObserverRefreshTimer = window.setTimeout(() => {
+            this.thumbObserverRefreshTimer = null;
+            this.setupThumbnailObserver();
+            this.queueVisibleThumbnailsNow();
+        }, 40);
     }
 
     private scheduleThumbnailQueueFlush() {
@@ -1292,18 +1333,34 @@ export class PdfWorkspace extends LitElement {
 
     private queueVisibleThumbnailsNow() {
         if (this.activeSidebar !== 'thumbnails' || this.totalPages === 0) return;
-        const focused = this.thumbVisiblePages.size > 0
-            ? Array.from(this.thumbVisiblePages).sort((a, b) => a - b)
-            : [this.currentPage];
+        let focused: number[] = [];
+        if (this.thumbVisiblePages.size > 0) {
+            focused = Array.from(this.thumbVisiblePages).sort((a, b) => a - b);
+        } else {
+            const windowed = this.getThumbVirtualWindow();
+            if (windowed.endPage >= windowed.startPage) {
+                const winCount = windowed.endPage - windowed.startPage + 1;
+                focused = Array.from({length: winCount}, (_, i) => windowed.startPage + i);
+            } else {
+                focused = [this.currentPage];
+            }
+        }
         const targets = new Set<number>(focused);
         for (const page of focused) {
             if (page > 1) targets.add(page - 1);
             if (page < this.totalPages) targets.add(page + 1);
         }
+        const panelHeight = this.thumbPanelClientHeight || 500;
+        const approxTotalHeight = this.totalPages * this.thumbVirtualItemHeight;
+        const nearBottom = (this.thumbPanelScrollTop + panelHeight) >= (approxTotalHeight - (this.thumbVirtualItemHeight * 2));
         const pages = Array.from(targets)
             .filter((page) => !this.thumbnailURLs[page - 1])
-            .sort((a, b) => a - b);
+            .sort((a, b) => nearBottom ? b - a : a - b);
         this.thumbQueuedPages = new Set(pages);
+        if (this.thumbRenderAbortController) {
+            this.thumbRenderAbortController.abort();
+            this.thumbRenderAbortController = null;
+        }
         this.thumbRenderToken++;
         void this.processThumbnailQueue(this.thumbRenderToken);
     }
@@ -1316,8 +1373,10 @@ export class PdfWorkspace extends LitElement {
             if (this.thumbnailURLs[page - 1]) continue;
             this.thumbQueuedPages.delete(page);
             this.thumbRenderingPages.add(page);
+            const abortController = new AbortController();
+            this.thumbRenderAbortController = abortController;
             try {
-                const url = await this.renderThumbnailBlobUrl(page);
+                const url = await this.renderThumbnailBlobUrl(page, abortController.signal);
                 if (token !== this.thumbRenderToken) {
                     URL.revokeObjectURL(url);
                     return;
@@ -1326,26 +1385,112 @@ export class PdfWorkspace extends LitElement {
                 if (prev) URL.revokeObjectURL(prev);
                 const next = [...this.thumbnailURLs];
                 next[page - 1] = url;
-                this.thumbnailURLs = next;
-            } catch {
-                // Keep placeholder if rendering fails.
+                this.thumbnailURLs = this.trimThumbnailCache(next);
+            } catch (error) {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    // Keep placeholder if rendering fails.
+                }
             } finally {
+                if (this.thumbRenderAbortController === abortController) {
+                    this.thumbRenderAbortController = null;
+                }
                 this.thumbRenderingPages.delete(page);
             }
             await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
         }
     }
 
-    private async renderThumbnailBlobUrl(page: number): Promise<string> {
+    private async renderThumbnailBlobUrl(page: number, signal?: AbortSignal): Promise<string> {
         const offscreen = document.createElement('canvas');
-        await pdfEngine.renderPage(page, offscreen, this.thumbScale);
+        await pdfEngine.renderPage(page, offscreen, this.thumbScale, {signal});
         const blob = await new Promise<Blob>((resolve, reject) => {
-            offscreen.toBlob((result) => {
-                if (result) resolve(result);
-                else reject(new Error('thumb-blob-failed'));
-            }, 'image/jpeg', 0.75);
+            if (typeof offscreen.toBlob === 'function') {
+                offscreen.toBlob((result) => {
+                    if (result) {
+                        resolve(result);
+                        return;
+                    }
+                    try {
+                        const dataUrl = offscreen.toDataURL('image/jpeg', 0.75);
+                        resolve(this.dataUrlToBlob(dataUrl));
+                    } catch (error) {
+                        reject(error);
+                    }
+                }, 'image/jpeg', 0.75);
+                return;
+            }
+            try {
+                const dataUrl = offscreen.toDataURL('image/jpeg', 0.75);
+                resolve(this.dataUrlToBlob(dataUrl));
+            } catch (error) {
+                reject(error);
+            }
         });
         return URL.createObjectURL(blob);
+    }
+
+    private dataUrlToBlob(dataUrl: string): Blob {
+        const parts = dataUrl.split(',');
+        if (parts.length !== 2) throw new Error('thumb-data-url-invalid');
+        const header = parts[0];
+        const payload = parts[1];
+        const mimeMatch = header.match(/data:(.*?);base64/);
+        const mime = mimeMatch?.[1] || 'image/jpeg';
+        const binary = atob(payload);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return new Blob([bytes], {type: mime});
+    }
+
+    private trimThumbnailCache(urls: Array<string | null>): Array<string | null> {
+        const loadedPages: number[] = [];
+        for (let i = 0; i < urls.length; i++) {
+            if (urls[i]) loadedPages.push(i + 1);
+        }
+        if (loadedPages.length <= this.maxThumbnailBlobUrls) return urls;
+
+        const keepPages = new Set<number>();
+        const pinPage = (p: number) => {
+            if (p >= 1 && p <= this.totalPages) keepPages.add(p);
+        };
+        pinPage(this.currentPage);
+        pinPage(this.currentPage - 1);
+        pinPage(this.currentPage + 1);
+        pinPage(this.currentPage - 2);
+        pinPage(this.currentPage + 2);
+        for (const p of this.thumbVisiblePages) {
+            pinPage(p);
+            pinPage(p - 1);
+            pinPage(p + 1);
+        }
+
+        const distanceToFocus = (page: number) => {
+            if (keepPages.has(page)) return -1;
+            const anchors = [this.currentPage, ...Array.from(this.thumbVisiblePages)];
+            let min = Number.POSITIVE_INFINITY;
+            for (const anchor of anchors) {
+                min = Math.min(min, Math.abs(anchor - page));
+            }
+            return min;
+        };
+
+        const evictable = loadedPages
+            .filter((p) => !keepPages.has(p))
+            .sort((a, b) => distanceToFocus(b) - distanceToFocus(a));
+
+        let loadedCount = loadedPages.length;
+        for (const page of evictable) {
+            if (loadedCount <= this.maxThumbnailBlobUrls) break;
+            const idx = page - 1;
+            const current = urls[idx];
+            if (!current) continue;
+            URL.revokeObjectURL(current);
+            urls[idx] = null;
+            loadedCount--;
+        }
+        return urls;
     }
 
     private revokeThumbnailUrls() {
@@ -1358,7 +1503,46 @@ export class PdfWorkspace extends LitElement {
         this.disconnectThumbnailObserver();
         this.revokeThumbnailUrls();
         this.thumbnailURLs = [];
-        this.isGeneratingThumbs = false;
+        this.thumbPanelScrollTop = 0;
+        this.thumbPanelClientHeight = 0;
+    }
+
+    private onThumbPanelScroll = (e: Event) => {
+        const panel = e.currentTarget as HTMLElement;
+        this.thumbPanelScrollTop = panel.scrollTop;
+        this.thumbPanelClientHeight = panel.clientHeight;
+        this.scheduleThumbnailQueueFlush();
+    };
+
+    private ensureThumbPageVisible(page: number) {
+        const panel = this.shadowRoot?.querySelector('.thumb-panel') as HTMLElement | null;
+        if (!panel) return;
+        const top = (page - 1) * this.thumbVirtualItemHeight;
+        const bottom = top + this.thumbVirtualItemHeight;
+        const viewTop = panel.scrollTop;
+        const viewBottom = viewTop + panel.clientHeight;
+        if (top < viewTop) {
+            panel.scrollTo({top, behavior: 'smooth'});
+        } else if (bottom > viewBottom) {
+            panel.scrollTo({top: bottom - panel.clientHeight, behavior: 'smooth'});
+        }
+    }
+
+    private getThumbVirtualWindow() {
+        if (this.totalPages === 0) {
+            return {startPage: 1, endPage: 0, topSpacer: 0, bottomSpacer: 0};
+        }
+        const panelHeight = this.thumbPanelClientHeight || 500;
+        const firstVisible = Math.floor(this.thumbPanelScrollTop / this.thumbVirtualItemHeight);
+        const startIndex = Math.max(0, firstVisible - this.thumbVirtualOverscan);
+        const visibleCount = Math.ceil(panelHeight / this.thumbVirtualItemHeight) + (this.thumbVirtualOverscan * 2);
+        const endIndex = Math.min(this.totalPages - 1, startIndex + visibleCount - 1);
+        return {
+            startPage: startIndex + 1,
+            endPage: endIndex + 1,
+            topSpacer: startIndex * this.thumbVirtualItemHeight,
+            bottomSpacer: Math.max(0, (this.totalPages - 1 - endIndex) * this.thumbVirtualItemHeight),
+        };
     }
 
     changePage(offset: number) {
@@ -1933,6 +2117,7 @@ export class PdfWorkspace extends LitElement {
             this.toast(i18n.t('noChanges'));
             return;
         }
+        console.error('[OWQ][SAVE_START]');
 
         const hasVisualSig = this.annotations.some(a => a.type !== 'biometric');
 
@@ -1978,7 +2163,9 @@ export class PdfWorkspace extends LitElement {
                 console.warn('Hardware proof fallback: browser could not embed WebAuthn public key proof; saving as visual-only.');
             }
             await this.finishSave(executed.result, opts);
+            console.error('[OWQ][SAVE_SUCCESS]');
         } catch (e: any) {
+            console.error('[OWQ][SAVE_FAILED]');
             console.error('Save Error', e);
             this.toast(e.message.includes('OOM') ? i18n.t('outOfMemory') : `${i18n.t('errorSaving')}: ${e.message}`);
             this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
@@ -2074,6 +2261,11 @@ export class PdfWorkspace extends LitElement {
         img.onerror = () => this.toast(i18n.t('errorReadingFile'));
         img.onload = () => {
             if (img.width <= 0 || img.height <= 0) return;
+            const pixels = img.width * img.height;
+            if (pixels > this.maxStampImagePixels) {
+                this.toast(i18n.t('stampImageTooLarge'));
+                return;
+            }
             this.addAnnotation('stamp', preset.dataURL, img.height / img.width);
             this.showStampLibraryModal = false;
         };
@@ -2089,12 +2281,32 @@ export class PdfWorkspace extends LitElement {
             const cleanName = fileName.replace(/\.[^.]+$/, '').slice(0, 30) || i18n.t('addStamp');
             const existing = this.stampPresets.find((p) => p.dataURL === dataURL);
             if (!existing) {
+                if (this.stampPresets.length >= this.maxStampPresetCount) {
+                    this.toast(i18n.t('stampPresetLimitReached').replace('{count}', String(this.maxStampPresetCount)));
+                    this.showStampLibraryModal = false;
+                    return;
+                }
+                const nextTotalBytes = this.estimateStampPresetsBytes([...this.stampPresets, {id: 'next', name: cleanName, dataURL}]);
+                if (nextTotalBytes > this.maxStampPresetTotalBytes) {
+                    this.toast(i18n.t('stampPresetStorageFull'));
+                    this.showStampLibraryModal = false;
+                    return;
+                }
                 const next = [...this.stampPresets, {id: this.generateId(), name: cleanName, dataURL}];
                 await this.persistStampPresets(next);
             }
             this.showStampLibraryModal = false;
         };
         img.src = dataURL;
+    }
+
+    private estimateStampPresetsBytes(presets: Array<{ id: string; name: string; dataURL: string }>): number {
+        let total = 0;
+        for (const preset of presets) {
+            const payload = preset.dataURL.split(',')[1] || '';
+            total += Math.floor((payload.length * 3) / 4);
+        }
+        return total;
     }
 
     private openStampLibrary() {
@@ -2520,9 +2732,15 @@ export class PdfWorkspace extends LitElement {
 
     private renderWorkspaceSidebar() {
         if (this.activeSidebar === 'thumbnails' && this.totalPages > 0) {
+            const windowed = this.getThumbVirtualWindow();
+            const pages = Array.from(
+                {length: Math.max(0, windowed.endPage - windowed.startPage + 1)},
+                (_, i) => windowed.startPage + i
+            );
             return html`
-                <div class="thumb-panel">
-                    ${Array.from({length: this.totalPages}, (_, i) => i + 1).map((page) => {
+                <div class="thumb-panel" @scroll=${this.onThumbPanelScroll}>
+                    ${windowed.topSpacer > 0 ? html`<div class="thumb-spacer" style="height:${windowed.topSpacer}px"></div>` : ''}
+                    ${pages.map((page) => {
                         const url = this.thumbnailURLs[page - 1];
                         const i = page - 1;
                         return html`
@@ -2543,6 +2761,7 @@ export class PdfWorkspace extends LitElement {
                         </div>
                     `;
                     })}
+                    ${windowed.bottomSpacer > 0 ? html`<div class="thumb-spacer" style="height:${windowed.bottomSpacer}px"></div>` : ''}
                 </div>
             `;
         }

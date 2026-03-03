@@ -1,0 +1,75 @@
+appId: org.openwaqf.signer
+---
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "btn-sample"
+    commands:
+      - tapOn:
+          id: "btn-sample"
+- runFlow:
+    when:
+      visible: "No file? Try with a sample PDF"
+    commands:
+      - tapOn: "No file? Try with a sample PDF"
+- runFlow:
+    when:
+      visible: "ليس لديك ملف؟ جرب نموذج PDF"
+    commands:
+      - tapOn: "ليس لديك ملف؟ جرب نموذج PDF"
+- runFlow:
+    when:
+      visible: "Pas de fichier ? Essayez avec un PDF d'exemple"
+    commands:
+      - tapOn: "Pas de fichier ? Essayez avec un PDF d'exemple"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Air-Gap QR Transfer"
+    commands:
+      - tapOn: "Air-Gap QR Transfer"
+- runFlow:
+    when:
+      visible: "نقل QR بدون شبكة"
+    commands:
+      - tapOn: "نقل QR بدون شبكة"
+- runFlow:
+    when:
+      visible: "Transfert QR air-gap"
+    commands:
+      - tapOn: "Transfert QR air-gap"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Receive Document"
+    commands:
+      - assertVisible: "Receive Document"
+- runFlow:
+    when:
+      visible: "استقبال مستند"
+    commands:
+      - assertVisible: "استقبال مستند"
+- runFlow:
+    when:
+      visible: "Recevoir un document"
+    commands:
+      - assertVisible: "Recevoir un document"
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- runFlow:
+    when:
+      visible: "إغلاق"
+    commands:
+      - tapOn: "إغلاق"
+- runFlow:
+    when:
+      visible: "Fermer"
+    commands:
+      - tapOn: "Fermer"
+- waitForAnimationToEnd
+- tapOn:
+    id: "btn-exit"
