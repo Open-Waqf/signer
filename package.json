@@ -1,7 +1,7 @@
 {
   "name": "signer",
   "private": true,
-  "version": "0.30",
+  "version": "0.40.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
