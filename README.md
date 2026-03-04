@@ -209,7 +209,7 @@ For Android emulator/device workflow parity, run the PowerShell smoke runner fro
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass `
-  -File "<PRJOECT_PATH>\signer\scripts\android-smoke.ps1" `
+  -File "<PROJECT_PATH>\signer\scripts\android-smoke.ps1" `
   -AssembleApk 1 `
   -InstallApk 1 `
   -RunMaestro 1 `
@@ -220,6 +220,39 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 This runs the Maestro suite at `maestro/android/full-e2e.yaml` and writes artifacts under:
 
 `test-results/android-smoke/`
+
+### 6. Windows Temp Staging Sync (WSL → Windows)
+
+When building from Windows tooling while the project lives in WSL, you can mirror Android sources to a Windows temp
+staging folder:
+
+```bash
+# Sync Android + capacitor plugin modules into Windows temp stage folder
+npm run android:sync:win
+
+# Sync and open staged Android project in Android Studio
+npm run android:open:win
+```
+
+### 7. Build/Install APK from Windows (staged temp flow)
+
+If you want a release-prep build/install cycle from Windows PowerShell (without opening Android Studio), run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File "PATH_TO_PROJECTS\signer\scripts\android-smoke.ps1" `
+  -EmulatorSerial "YOUR_DEVICE_OR_EMULATOR_SERIAL" `
+  -AssembleApk 1 `
+  -InstallApk 1 `
+  -RunMaestro 0 `
+  -AssertSampleFlow 0 `
+  -JavaHome "C:\Program Files\Microsoft\jdk-21.0.10.7-hotspot"
+```
+
+Notes:
+* With `-AssembleApk 1`, the script stages Android sources under Windows temp (`%TEMP%\owq-signer-build`) and builds there.
+* `-InstallApk 1` pushes the generated APK to the selected device via `adb`.
+* Set `-RunMaestro 1` only when you want full automated UI flow execution.
 
 ### Cloudflare Worker Relay (GitHub Pages Hosting)
 
