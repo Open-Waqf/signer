@@ -11,6 +11,8 @@ param(
     [int]$SampleTapAttempts = 4,
     [int]$SampleTapStepY = 90,
     [object]$RunMaestro = $false,
+    [object]$MaestroContinueOnFailure = $false,
+    [int]$MaestroMaxFlowSeconds = 120,
     [string]$MaestroFlow = "$PSScriptRoot/../maestro/android/full-e2e.yaml",
     [object]$AssertSampleFlow = $false,
     [object]$AssembleApk = $true,
@@ -19,9 +21,47 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$scriptStartedAt = Get-Date
 
 function Step($msg) {
     Write-Host "`n==> $msg" -ForegroundColor Cyan
+}
+
+function Format-Duration([TimeSpan]$ts) {
+    return "{0:00}:{1:00}:{2:00}" -f [int]$ts.TotalHours, $ts.Minutes, $ts.Seconds
+}
+
+function Invoke-MaestroFlow([string]$maestroPath, [string]$serial, [string]$flowPath, [int]$timeoutSeconds, [string]$appendFilePath) {
+    $tmpOut = Join-Path $env:TEMP ("owq-maestro-out-" + [guid]::NewGuid().ToString("N") + ".log")
+    $tmpErr = Join-Path $env:TEMP ("owq-maestro-err-" + [guid]::NewGuid().ToString("N") + ".log")
+    $args = @("test", "--device", $serial, $flowPath)
+    $proc = Start-Process -FilePath $maestroPath -ArgumentList $args -NoNewWindow -PassThru -RedirectStandardOutput $tmpOut -RedirectStandardError $tmpErr
+    $timedOut = $false
+
+    if (-not $proc.WaitForExit($timeoutSeconds * 1000)) {
+        $timedOut = $true
+        try {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        } catch {}
+        try {
+            $proc.WaitForExit()
+        } catch {}
+    }
+
+    $stdout = if (Test-Path $tmpOut) { Get-Content -Path $tmpOut -Raw } else { "" }
+    $stderr = if (Test-Path $tmpErr) { Get-Content -Path $tmpErr -Raw } else { "" }
+    $combined = "$stdout`n$stderr"
+    if ($combined) {
+        $combined | Out-File -FilePath $appendFilePath -Encoding utf8 -Append
+    }
+    if (Test-Path $tmpOut) { Remove-Item -Force $tmpOut -ErrorAction SilentlyContinue }
+    if (Test-Path $tmpErr) { Remove-Item -Force $tmpErr -ErrorAction SilentlyContinue }
+
+    return [PSCustomObject]@{
+        Output = $combined
+        ExitCode = if ($timedOut) { 124 } else { $proc.ExitCode }
+        TimedOut = $timedOut
+    }
 }
 
 function To-Bool([object]$value) {
@@ -36,6 +76,21 @@ function Resolve-Tool($toolName, $fallback) {
     $cmd = Get-Command $toolName -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Path }
     return $fallback
+}
+
+function Resolve-AndroidSdkPath() {
+    $candidates = @()
+    if ($env:ANDROID_HOME) { $candidates += $env:ANDROID_HOME }
+    if ($env:ANDROID_SDK_ROOT) { $candidates += $env:ANDROID_SDK_ROOT }
+    if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA "Android\Sdk") }
+    $candidates += "C:\Android\Sdk"
+    foreach ($sdk in ($candidates | Select-Object -Unique)) {
+        if (-not $sdk) { continue }
+        if (Test-Path (Join-Path $sdk "platform-tools")) {
+            return $sdk
+        }
+    }
+    return $null
 }
 
 function Ensure-DeviceReady([string]$adbPath, [string]$serial, [int]$timeoutSeconds = 45) {
@@ -106,6 +161,33 @@ function Resolve-Java21Home([string]$requestedJavaHome) {
         "C:\Program Files\Eclipse Adoptium\jdk-21.0.6.7-hotspot",
         "C:\Program Files\Microsoft\jdk-21.0.7.6-hotspot"
     )
+
+    # Scan common installation roots for JDK 21+ folders (handles patch-version drift).
+    $scanRoots = @(
+        "C:\Program Files\Microsoft",
+        "C:\Program Files\Java",
+        "C:\Program Files\Eclipse Adoptium",
+        "C:\Program Files\Zulu",
+        "C:\Program Files\Amazon Corretto",
+        "C:\Program Files\BellSoft",
+        "C:\Users\$env:USERNAME\.jdks"
+    )
+    foreach ($root in $scanRoots | Select-Object -Unique) {
+        if (-not (Test-Path $root)) { continue }
+        try {
+            $dirs = Get-ChildItem -Path $root -Directory -ErrorAction SilentlyContinue
+            foreach ($dir in $dirs) {
+                $name = $dir.Name
+                if ($name -match '^jdk-([0-9]+)' -or $name -match 'jbr-?([0-9]+)') {
+                    $major = [int]$Matches[1]
+                    if ($major -ge 21) {
+                        $candidates += $dir.FullName
+                    }
+                }
+            }
+        } catch {}
+    }
+
     foreach ($jdkHome in $candidates | Select-Object -Unique) {
         $javaExe = Join-Path $jdkHome "bin\java.exe"
         if (Test-Path $javaExe) {
@@ -115,6 +197,49 @@ function Resolve-Java21Home([string]$requestedJavaHome) {
             }
         }
     }
+
+    # Fallback: resolve java from PATH (useful when -NoProfile omits JAVA_HOME).
+    try {
+        $javaPathCandidates = @()
+        $javaCmds = @(Get-Command java -CommandType Application -ErrorAction SilentlyContinue)
+        foreach ($cmd in $javaCmds) {
+            if ($cmd.Path) {
+                $javaPathCandidates += "$($cmd.Path)".Trim()
+            } elseif ($cmd.Source) {
+                $javaPathCandidates += "$($cmd.Source)".Trim()
+            }
+        }
+        foreach ($line in @(& where.exe java 2>$null)) {
+            $candidate = "$line".Trim()
+            if ($candidate) {
+                $javaPathCandidates += $candidate
+            }
+        }
+
+        foreach ($javaExePath in ($javaPathCandidates | Where-Object { $_ } | Select-Object -Unique)) {
+            if (-not (Test-Path $javaExePath)) { continue }
+            $major = Get-JavaMajorVersion $javaExePath
+            if ($major -lt 21) { continue }
+
+            $javaProps = (& $javaExePath -XshowSettings:properties -version 2>&1 | Out-String)
+            $javaHomeMatch = [regex]::Match($javaProps, '(?m)^\s*java\.home\s*=\s*(.+?)\s*$')
+            $javaHome = if ($javaHomeMatch.Success) { $javaHomeMatch.Groups[1].Value.Trim() } else { "" }
+
+            if (-not $javaHome) {
+                $binDir = Split-Path $javaExePath -Parent
+                $javaHome = Split-Path $binDir -Parent
+            }
+            if ($javaHome -match '\\jre$') {
+                $javaHome = Split-Path $javaHome -Parent
+            }
+
+            $homeJavaExe = Join-Path $javaHome "bin\java.exe"
+            if (Test-Path $homeJavaExe) {
+                return $javaHome
+            }
+        }
+    } catch {}
+
     return $null
 }
 
@@ -134,6 +259,7 @@ if (-not (Test-Path $adb)) {
 
 $AutoTapSample = To-Bool $AutoTapSample
 $RunMaestro = To-Bool $RunMaestro
+$MaestroContinueOnFailure = To-Bool $MaestroContinueOnFailure
 $AssertSampleFlow = To-Bool $AssertSampleFlow
 $AssembleApk = To-Bool $AssembleApk
 $InstallApk = To-Bool $InstallApk
@@ -185,6 +311,15 @@ if ($isUncRoot) {
             New-Item -ItemType Directory -Path $dst -Force | Out-Null
             robocopy $src $dst /MIR /NFL /NDL /NJH /NJS /NC /NS | Out-Null
         }
+    }
+
+    # Ensure staged Gradle build has an SDK path when running from UNC/WSL staging.
+    $sdkPath = Resolve-AndroidSdkPath
+    if ($sdkPath) {
+        $localProps = Join-Path $androidDir "local.properties"
+        "sdk.dir=$($sdkPath -replace '\\','\\\\')" | Out-File -FilePath $localProps -Encoding ascii
+    } else {
+        Write-Host "Android SDK path could not be auto-detected for staged build. Set ANDROID_HOME or ANDROID_SDK_ROOT." -ForegroundColor Yellow
     }
 }
 
@@ -295,21 +430,142 @@ if ($RunMaestro) {
 
     $maestroOutFile = Join-Path $outDir "maestro-output.txt"
     New-Item -ItemType Directory -Path (Split-Path -Parent $maestroOutFile) -Force | Out-Null
-    $maestroOutput = (& $maestro test $flowToRun 2>&1 | Out-String)
-    $maestroOutput | Out-File -FilePath $maestroOutFile -Encoding utf8
+    if (Test-Path $maestroOutFile) {
+        Remove-Item -Force $maestroOutFile
+    }
+    Write-Host "- Maestro target device: $EmulatorSerial" -ForegroundColor DarkGray
+    Write-Host "- Maestro max seconds per flow: $MaestroMaxFlowSeconds" -ForegroundColor DarkGray
+    Write-Host "- Connected adb devices:" -ForegroundColor DarkGray
+    & $adb devices -l
+
+    $maestroStartedAt = Get-Date
+    [TimeSpan]$maestroFlowsElapsed = [TimeSpan]::Zero
+    $maestroPerFlowDurations = @()
+    $maestroOutput = ""
     $expectedFlowCount = 1
-    if (Test-Path $flowToRun) {
-        $expectedFlowCount = [Math]::Max(1, ([regex]::Matches((Get-Content -Path $flowToRun -Raw), '^\s*-\s*runFlow\s*:', [System.Text.RegularExpressions.RegexOptions]::Multiline)).Count)
+    $failedFlows = @()
+
+    if ($MaestroContinueOnFailure) {
+        $flowRaw = Get-Content -Path $flowToRun -Raw
+        $runFlowMatches = [regex]::Matches($flowRaw, '(?m)^\s*-\s*runFlow\s*:\s*(.+?)\s*$')
+        $expectedFlowCount = [Math]::Max(1, $runFlowMatches.Count)
+
+        if ($runFlowMatches.Count -gt 0) {
+            $flowBaseDir = Split-Path -Parent $flowToRun
+            $outputBuilder = New-Object System.Text.StringBuilder
+            [void]$outputBuilder.AppendLine("Running on $EmulatorSerial")
+            [void]$outputBuilder.AppendLine(" > Flow $flowToRun")
+            $outputBuilder.ToString() | Out-File -FilePath $maestroOutFile -Encoding utf8
+
+            foreach ($m in $runFlowMatches) {
+                $flowRel = $m.Groups[1].Value.Trim()
+                if (($flowRel.StartsWith('"') -and $flowRel.EndsWith('"')) -or ($flowRel.StartsWith("'") -and $flowRel.EndsWith("'"))) {
+                    $flowRel = $flowRel.Substring(1, $flowRel.Length - 2)
+                }
+                $subFlowPath = if ([System.IO.Path]::IsPathRooted($flowRel)) { $flowRel } else { Join-Path $flowBaseDir $flowRel }
+                $subFlowPath = [System.IO.Path]::GetFullPath($subFlowPath)
+                $subFlowPathYaml = $subFlowPath.Replace('\', '/')
+                $wrapperFlowPath = Join-Path $env:TEMP ("owq-maestro-wrapper-" + [System.IO.Path]::GetFileNameWithoutExtension($subFlowPath) + ".yaml")
+                @"
+appId: $PackageName
+---
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+- runFlow: $subFlowPathYaml
+"@ | Out-File -FilePath $wrapperFlowPath -Encoding utf8
+
+                $runHeader = "Run $flowRel..."
+                [void]$outputBuilder.AppendLine($runHeader)
+                $runHeader | Out-File -FilePath $maestroOutFile -Encoding utf8 -Append
+                $runStartedAt = Get-Date
+                $runResult = Invoke-MaestroFlow -maestroPath $maestro -serial $EmulatorSerial -flowPath $wrapperFlowPath -timeoutSeconds $MaestroMaxFlowSeconds -appendFilePath $maestroOutFile
+                $runOutput = $runResult.Output
+                $runExit = $runResult.ExitCode
+                $runElapsed = (Get-Date) - $runStartedAt
+                $maestroFlowsElapsed = $maestroFlowsElapsed.Add($runElapsed)
+                $maestroPerFlowDurations += [PSCustomObject]@{ Name = $flowRel; Duration = $runElapsed }
+                $runTiming = "- Flow duration [$flowRel]: $(Format-Duration $runElapsed)"
+                Write-Host $runTiming -ForegroundColor DarkGray
+                $runTiming | Out-File -FilePath $maestroOutFile -Encoding utf8 -Append
+                if ($runResult.TimedOut) {
+                    $timeoutMsg = "Flow timed out after $MaestroMaxFlowSeconds seconds: $flowRel"
+                    Write-Host "- $timeoutMsg" -ForegroundColor Yellow
+                    $timeoutMsg | Out-File -FilePath $maestroOutFile -Encoding utf8 -Append
+                }
+                [void]$outputBuilder.Append($runOutput)
+                if ($runExit -ne 0) {
+                    $failedFlows += $flowRel
+                }
+            }
+            $maestroOutput = $outputBuilder.ToString()
+        } else {
+            # No runFlow entries found; fallback to single flow execution.
+            "Running on $EmulatorSerial" | Out-File -FilePath $maestroOutFile -Encoding utf8
+            " > Flow $flowToRun" | Out-File -FilePath $maestroOutFile -Encoding utf8 -Append
+            $runStartedAt = Get-Date
+            $runResult = Invoke-MaestroFlow -maestroPath $maestro -serial $EmulatorSerial -flowPath $flowToRun -timeoutSeconds $MaestroMaxFlowSeconds -appendFilePath $maestroOutFile
+            $maestroOutput = $runResult.Output
+            $runElapsed = (Get-Date) - $runStartedAt
+            $maestroFlowsElapsed = $maestroFlowsElapsed.Add($runElapsed)
+            $maestroPerFlowDurations += [PSCustomObject]@{ Name = [System.IO.Path]::GetFileName($flowToRun); Duration = $runElapsed }
+            $runTiming = "- Flow duration [$([System.IO.Path]::GetFileName($flowToRun))]: $(Format-Duration $runElapsed)"
+            Write-Host $runTiming -ForegroundColor DarkGray
+            $runTiming | Out-File -FilePath $maestroOutFile -Encoding utf8 -Append
+            if ($runResult.TimedOut) {
+                $timeoutMsg = "Flow timed out after $MaestroMaxFlowSeconds seconds: $flowToRun"
+                Write-Host "- $timeoutMsg" -ForegroundColor Yellow
+                $timeoutMsg | Out-File -FilePath $maestroOutFile -Encoding utf8 -Append
+            }
+            if ($runResult.ExitCode -ne 0) {
+                $failedFlows += $flowToRun
+            }
+        }
+    } else {
+        # Default behavior: execute the aggregate flow and stop on first failure.
+        "Running on $EmulatorSerial" | Out-File -FilePath $maestroOutFile -Encoding utf8
+        " > Flow $flowToRun" | Out-File -FilePath $maestroOutFile -Encoding utf8 -Append
+        $runStartedAt = Get-Date
+        $runResult = Invoke-MaestroFlow -maestroPath $maestro -serial $EmulatorSerial -flowPath $flowToRun -timeoutSeconds $MaestroMaxFlowSeconds -appendFilePath $maestroOutFile
+        $maestroOutput = $runResult.Output
+        $runElapsed = (Get-Date) - $runStartedAt
+        $maestroFlowsElapsed = $maestroFlowsElapsed.Add($runElapsed)
+        $maestroPerFlowDurations += [PSCustomObject]@{ Name = [System.IO.Path]::GetFileName($flowToRun); Duration = $runElapsed }
+        $runTiming = "- Flow duration [$([System.IO.Path]::GetFileName($flowToRun))]: $(Format-Duration $runElapsed)"
+        Write-Host $runTiming -ForegroundColor DarkGray
+        $runTiming | Out-File -FilePath $maestroOutFile -Encoding utf8 -Append
+        if ($runResult.TimedOut) {
+            $timeoutMsg = "Flow timed out after $MaestroMaxFlowSeconds seconds: $flowToRun"
+            Write-Host "- $timeoutMsg" -ForegroundColor Yellow
+            $timeoutMsg | Out-File -FilePath $maestroOutFile -Encoding utf8 -Append
+        }
+        if (Test-Path $flowToRun) {
+            $expectedFlowCount = [Math]::Max(1, ([regex]::Matches((Get-Content -Path $flowToRun -Raw), '^\s*-\s*runFlow\s*:', [System.Text.RegularExpressions.RegexOptions]::Multiline)).Count)
+        }
+        if ($runResult.ExitCode -ne 0) {
+            $failedFlows += $flowToRun
+        }
+    }
+
+    if (-not (Test-Path $maestroOutFile)) {
+        $maestroOutput | Out-File -FilePath $maestroOutFile -Encoding utf8
     }
     $maestroCompleted = ([regex]::Matches($maestroOutput, '\.\.\. COMPLETED')).Count
     $maestroSkipped = ([regex]::Matches($maestroOutput, '\.\.\. SKIPPED')).Count
     $maestroFailed = ([regex]::Matches($maestroOutput, '\.\.\. FAILED')).Count
+    $maestroElapsed = (Get-Date) - $maestroStartedAt
     Write-Host "- Maestro flow: $flowToRun" -ForegroundColor DarkGray
     Write-Host "- Maestro expected runFlow count: $expectedFlowCount" -ForegroundColor DarkGray
     Write-Host "- Maestro steps: completed=$maestroCompleted skipped=$maestroSkipped failed=$maestroFailed" -ForegroundColor DarkGray
+    Write-Host "- Maestro test time (sum of flows): $(Format-Duration $maestroFlowsElapsed)" -ForegroundColor DarkGray
+    Write-Host "- Maestro total wall time: $(Format-Duration $maestroElapsed)" -ForegroundColor DarkGray
+    if ($MaestroContinueOnFailure) {
+        Write-Host "- Maestro continue-on-failure mode: enabled" -ForegroundColor DarkGray
+    }
     Write-Host "- Maestro output: $maestroOutFile" -ForegroundColor DarkGray
-    if ($LASTEXITCODE -ne 0) {
-        throw "Maestro flow failed (exit=$LASTEXITCODE). See $maestroOutFile"
+    if ($failedFlows.Count -gt 0) {
+        $failedList = ($failedFlows | Select-Object -Unique) -join ", "
+        throw "Maestro flow failed in $($failedFlows.Count) item(s): $failedList. See $maestroOutFile"
     }
 } elseif ($AutoTapSample) {
     Step "Auto tap sample button after ${SampleTapDelaySeconds}s (x=$SampleTapX, y=$SampleTapY, attempts=$SampleTapAttempts, stepY=$SampleTapStepY)"
@@ -380,9 +636,11 @@ if ($AssertSampleFlow) {
 }
 
 Step "Smoke summary"
+$scriptElapsed = (Get-Date) - $scriptStartedAt
 Write-Host "- App launched on $EmulatorSerial" -ForegroundColor Green
 Write-Host "- Logs saved to: $outDir" -ForegroundColor Green
 if ($RunMaestro) {
     Write-Host "- Maestro summary saved in: $outDir\\maestro-output.txt" -ForegroundColor Green
 }
+Write-Host "- Total script runtime: $(Format-Duration $scriptElapsed)" -ForegroundColor Green
 Write-Host "- Share files from this folder so I can analyze failures/perf: logcat.txt, meminfo.txt, screenshot.png, window-dump.xml, maestro-output.txt" -ForegroundColor Green

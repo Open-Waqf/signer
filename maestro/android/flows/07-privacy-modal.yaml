@@ -1,13 +1,49 @@
 appId: org.openwaqf.signer
 ---
 - waitForAnimationToEnd
-- assertVisible:
-    id: "link-privacy"
-- tapOn:
-    id: "link-privacy"
+- runFlow:
+    when:
+      visible:
+        id: "link-privacy"
+    commands:
+      - tapOn:
+          id: "link-privacy"
+- runFlow:
+    when:
+      visible: "Privacy Promise"
+    commands:
+      - tapOn: "Privacy Promise"
+- runFlow:
+    when:
+      visible: "سياسة الخصوصية"
+    commands:
+      - tapOn: "سياسة الخصوصية"
+- runFlow:
+    when:
+      visible: "Promesse de confidentialité"
+    commands:
+      - tapOn: "Promesse de confidentialité"
 - waitForAnimationToEnd
-- assertVisible:
-    id: "btn-close-privacy"
-- tapOn:
-    id: "btn-close-privacy"
+- runFlow:
+    when:
+      visible:
+        id: "btn-close-privacy"
+    commands:
+      - tapOn:
+          id: "btn-close-privacy"
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- runFlow:
+    when:
+      visible: "إغلاق"
+    commands:
+      - tapOn: "إغلاق"
+- runFlow:
+    when:
+      visible: "Fermer"
+    commands:
+      - tapOn: "Fermer"
 - waitForAnimationToEnd

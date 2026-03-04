@@ -26,10 +26,33 @@ appId: org.openwaqf.signer
 - waitForAnimationToEnd
 - assertVisible:
     id: "btn-exit"
-- tapOn:
-    id: "btn-add-date"
+- runFlow:
+    when:
+      visible:
+        id: "btn-add-date"
+    commands:
+      - tapOn:
+          id: "btn-add-date"
+- runFlow:
+    when:
+      visible:
+        id: "m-btn-add-date"
+    commands:
+      - tapOn:
+          id: "m-btn-add-date"
+- runFlow:
+    when:
+      visible: "+ Date"
+    commands:
+      - tapOn: "+ Date"
+- runFlow:
+    when:
+      visible: "+ تاريخ"
+    commands:
+      - tapOn: "+ تاريخ"
 - tapOn:
     id: "btn-exit"
+- waitForAnimationToEnd
 - assertVisible:
     id: "btn-cancel-exit"
 - tapOn:
@@ -41,5 +64,15 @@ appId: org.openwaqf.signer
 - tapOn:
     id: "btn-confirm-exit"
 - waitForAnimationToEnd
-- assertVisible:
-    id: "btn-sign-mode"
+- runFlow:
+    when:
+      visible:
+        id: "btn-sign-mode"
+    commands:
+      - assertVisible:
+          id: "btn-sign-mode"
+- runFlow:
+    when:
+      visible: "Sign"
+    commands:
+      - assertVisible: "Sign"

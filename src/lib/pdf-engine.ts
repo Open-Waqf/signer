@@ -222,7 +222,17 @@ export class PdfEngine {
                     x: x + 5, y: y + 2, size: 5, font, color: textColor,
                 });
             } else if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
-                const imgBuffer = await textToImage(ann.data, ann.fontSize || 12, ann.fontWeight === 'bold', ann.fontFamily || 'Amiri', ann.color || '#000000');
+                const normalized = ann.data.replace(/\u200E/g, '').trim();
+                const isDateLike = /^\d{2}\/\d{2}\/\d{4}$/.test(normalized);
+                const textDirection: CanvasDirection = isDateLike ? 'ltr' : 'inherit';
+                const imgBuffer = await textToImage(
+                    ann.data,
+                    ann.fontSize || 12,
+                    ann.fontWeight === 'bold',
+                    ann.fontFamily || 'Amiri',
+                    ann.color || '#000000',
+                    textDirection
+                );
                 const pngImage = await pdfDoc.embedPng(imgBuffer);
                 const scaleFactor = 0.75;
                 const w = (pngImage.width / 3) * scaleFactor;

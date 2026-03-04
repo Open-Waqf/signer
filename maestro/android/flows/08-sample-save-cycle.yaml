@@ -26,8 +26,25 @@ appId: org.openwaqf.signer
 - waitForAnimationToEnd
 - assertVisible:
     id: "btn-exit"
-- tapOn:
-    id: "btn-add-date"
+- runFlow:
+    when:
+      visible:
+        id: "btn-add-date"
+    commands:
+      - tapOn:
+          id: "btn-add-date"
+- runFlow:
+    when:
+      visible:
+        id: "m-btn-add-date"
+    commands:
+      - tapOn:
+          id: "m-btn-add-date"
+- runFlow:
+    when:
+      visible: "+ Date"
+    commands:
+      - tapOn: "+ Date"
 - waitForAnimationToEnd
 - tapOn:
     id: "btn-save"

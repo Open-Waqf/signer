@@ -2,10 +2,34 @@
 export class WebAuthnService {
     private static STORAGE_KEY = 'signer_webauthn_credential';
 
+    static async getAvailabilityStatus(): Promise<{ available: boolean; reason: string }> {
+        if (!window.isSecureContext) {
+            return {available: false, reason: 'insecure-context'};
+        }
+        if (!('PublicKeyCredential' in window) || !window.PublicKeyCredential) {
+            return {available: false, reason: 'no-public-key-credential'};
+        }
+        const uvpaCheck = (window.PublicKeyCredential as any).isUserVerifyingPlatformAuthenticatorAvailable;
+        if (typeof uvpaCheck !== 'function') {
+            return {available: false, reason: 'no-uvpa-check'};
+        }
+        if (!navigator.credentials || typeof navigator.credentials.get !== 'function' || typeof navigator.credentials.create !== 'function') {
+            return {available: false, reason: 'no-credentials-api'};
+        }
+        try {
+            const hasPlatformAuthenticator = await uvpaCheck.call(window.PublicKeyCredential);
+            if (!hasPlatformAuthenticator) {
+                return {available: false, reason: 'no-platform-authenticator'};
+            }
+        } catch {
+            return {available: false, reason: 'uvpa-check-failed'};
+        }
+        return {available: true, reason: 'ok'};
+    }
+
     static async isAvailable(): Promise<boolean> {
-        return !!(window.PublicKeyCredential && 
-               await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable() &&
-               window.isSecureContext);
+        const status = await this.getAvailabilityStatus();
+        return status.available;
     }
 
     private static bufferToBase64(buffer: ArrayBuffer): string {

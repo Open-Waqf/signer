@@ -13,4 +13,5 @@ appId: org.openwaqf.signer
 - runFlow: flows/11-save-hardware-prompt.yaml
 - runFlow: flows/12-save-proof-modal.yaml
 - runFlow: flows/13-repeat-sample-stability.yaml
+- runFlow: flows/14-signature-functional.yaml
 - takeScreenshot: "full-e2e-finished"

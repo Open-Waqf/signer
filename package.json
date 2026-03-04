@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "npx playwright test",
-    "check-i18n": "node check-i18n.js"
+    "check-i18n": "node check-i18n.js",
+    "android:sync:win": "node scripts/sync-android-win.mjs",
+    "android:open:win": "node scripts/sync-android-win.mjs --open"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

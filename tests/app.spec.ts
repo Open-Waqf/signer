@@ -593,19 +593,27 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
     });
 
     test('6.2 Stamp presets persist across reload via IndexedDB', async ({page}) => {
-        const openStampLibrary = async () => {
-            await page.locator('pdf-workspace').evaluate((el) => {
-                const ws = el as any;
-                ws.uiMode = 'advanced';
-                ws.showStampLibraryModal = true;
-                ws.requestUpdate();
-            });
+        const ensureAdvancedToolsVisible = async () => {
+            if (await page.getByTestId('btn-add-stamp').count()) return;
+            await page.getByTestId('btn-toggle-advanced').click();
+            await expect(page.getByTestId('btn-add-stamp')).toBeVisible();
         };
 
         await page.goto('/');
         await page.getByTestId('btn-sample').click();
         await expect(page.locator('pdf-workspace')).toBeVisible();
-        await openStampLibrary();
+
+        await expect(page.getByTestId('btn-add-stamp')).toHaveCount(0);
+        await ensureAdvancedToolsVisible();
+        const hwPrefCount = await page.getByTestId('btn-hw-pref').count();
+        expect(hwPrefCount).toBeLessThanOrEqual(1);
+
+        await page.getByTestId('btn-add-stamp').click();
+        await expect(page.getByTestId('stamp-library-modal')).toBeVisible();
+        await page.getByTestId('btn-close-stamp-library').click();
+        await expect(page.getByTestId('stamp-library-modal')).not.toBeVisible();
+
+        await page.getByTestId('btn-add-stamp').click();
         await expect(page.getByTestId('stamp-library-modal')).toBeVisible();
 
         const chooser = page.waitForEvent('filechooser');
@@ -619,17 +627,15 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.getByTestId('stamp-library-modal')).not.toBeVisible();
         await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1);
 
-        await openStampLibrary();
+        await page.getByTestId('btn-add-stamp').click();
         await expect(page.locator('[data-testid^="stamp-preset-"]')).toHaveCount(1);
-        await page.locator('pdf-workspace').evaluate((el) => {
-            (el as any).showStampLibraryModal = false;
-            (el as any).requestUpdate();
-        });
+        await page.getByTestId('btn-close-stamp-library').click();
 
         await page.reload();
         await page.getByTestId('btn-sample').click();
         await expect(page.locator('pdf-workspace')).toBeVisible();
-        await openStampLibrary();
+        await ensureAdvancedToolsVisible();
+        await page.getByTestId('btn-add-stamp').click();
         await expect(page.locator('[data-testid^="stamp-preset-"]')).toHaveCount(1);
     });
 
@@ -989,7 +995,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(ws.locator('.draggable.selected')).toHaveCount(2);
     });
 
-    test('9.2 Workflow: snap guideline haptic is transition-based (no spam)', async ({page}) => {
+    test('9.2 Workflow: snap guideline movement does not vibrate', async ({page}) => {
         await page.goto('/');
         const fileChooserPromise = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
@@ -1038,8 +1044,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.mouse.up();
 
         const calls = await page.evaluate(() => (window as any).__vibrateCalls || 0);
-        expect(calls).toBeGreaterThan(0);
-        expect(calls).toBeLessThanOrEqual(3);
+        expect(calls).toBe(0);
 
         await page.evaluate(() => {
             const original = (window as any).__originalVibrate;

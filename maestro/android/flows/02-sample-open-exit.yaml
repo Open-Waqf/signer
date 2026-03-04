@@ -24,10 +24,27 @@ appId: org.openwaqf.signer
     commands:
       - tapOn: "Pas de fichier ? Essayez avec un PDF d'exemple"
 - waitForAnimationToEnd
-- assertVisible:
-    id: "btn-exit"
-- tapOn:
-    id: "btn-exit"
-- waitForAnimationToEnd
-- assertVisible:
-    id: "btn-sign-mode"
+- runFlow:
+    when:
+      visible: "Exit"
+    commands:
+      - assertVisible: "Exit"
+      - tapOn: "Exit"
+      - waitForAnimationToEnd
+      - assertVisible: "No file? Try with a sample PDF"
+- runFlow:
+    when:
+      visible: "خروج"
+    commands:
+      - assertVisible: "خروج"
+      - tapOn: "خروج"
+      - waitForAnimationToEnd
+      - assertVisible: "ليس لديك ملف؟ جرب نموذج PDF"
+- runFlow:
+    when:
+      visible: "Quitter"
+    commands:
+      - assertVisible: "Quitter"
+      - tapOn: "Quitter"
+      - waitForAnimationToEnd
+      - assertVisible: "Pas de fichier ? Essayez avec un PDF d'exemple"

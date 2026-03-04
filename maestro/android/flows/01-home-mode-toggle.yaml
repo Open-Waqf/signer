@@ -1,15 +1,51 @@
 appId: org.openwaqf.signer
 ---
 - launchApp:
-    clearState: false
+    clearState: true
 - waitForAnimationToEnd
-- assertVisible:
-    id: "btn-sign-mode"
-- assertVisible:
-    id: "btn-verify-mode"
-- tapOn:
-    id: "btn-verify-mode"
-- waitForAnimationToEnd
-- tapOn:
-    id: "btn-sign-mode"
-- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Exit"
+    commands:
+      - tapOn: "Exit"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "خروج"
+    commands:
+      - tapOn: "خروج"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Quitter"
+    commands:
+      - tapOn: "Quitter"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Sign"
+    commands:
+      - assertVisible: "Verify"
+      - tapOn: "Verify"
+      - waitForAnimationToEnd
+      - tapOn: "Sign"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "توقيع"
+    commands:
+      - assertVisible: "تحقق"
+      - tapOn: "تحقق"
+      - waitForAnimationToEnd
+      - tapOn: "توقيع"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Signer"
+    commands:
+      - assertVisible: "Vérifier"
+      - tapOn: "Vérifier"
+      - waitForAnimationToEnd
+      - tapOn: "Signer"
+      - waitForAnimationToEnd
+- assertVisible: "No file? Try with a sample PDF"

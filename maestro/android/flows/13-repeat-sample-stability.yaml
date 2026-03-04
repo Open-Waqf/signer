@@ -1,8 +1,24 @@
 appId: org.openwaqf.signer
 ---
-- launchApp:
-    clearState: false
 - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Exit"
+    commands:
+      - tapOn: "Exit"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "خروج"
+    commands:
+      - tapOn: "خروج"
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Quitter"
+    commands:
+      - tapOn: "Quitter"
+      - waitForAnimationToEnd
 
 - runFlow:
     when:
@@ -26,6 +42,13 @@ appId: org.openwaqf.signer
       visible: "Pas de fichier ? Essayez avec un PDF d'exemple"
     commands:
       - tapOn: "Pas de fichier ? Essayez avec un PDF d'exemple"
+- runFlow:
+    when:
+      visible:
+        id: "btn-sign-mode"
+    commands:
+      - tapOn:
+          id: "btn-sign-mode"
 - waitForAnimationToEnd
 - assertVisible:
     id: "btn-exit"
@@ -57,6 +80,13 @@ appId: org.openwaqf.signer
       visible: "Pas de fichier ? Essayez avec un PDF d'exemple"
     commands:
       - tapOn: "Pas de fichier ? Essayez avec un PDF d'exemple"
+- runFlow:
+    when:
+      visible:
+        id: "btn-sign-mode"
+    commands:
+      - tapOn:
+          id: "btn-sign-mode"
 - waitForAnimationToEnd
 - assertVisible:
     id: "btn-exit"
@@ -65,4 +95,3 @@ appId: org.openwaqf.signer
 - waitForAnimationToEnd
 - assertVisible:
     id: "btn-sign-mode"
-

@@ -4,13 +4,6 @@ appId: org.openwaqf.signer
 - runFlow:
     when:
       visible:
-        id: "btn-sign-mode"
-    commands:
-      - tapOn:
-          id: "btn-sign-mode"
-- runFlow:
-    when:
-      visible:
         id: "btn-sample"
     commands:
       - tapOn:
@@ -34,23 +27,35 @@ appId: org.openwaqf.signer
 - runFlow:
     when:
       visible:
-        id: "btn-add-date"
+        id: "btn-add-sig"
     commands:
       - tapOn:
-          id: "btn-add-date"
+          id: "btn-add-sig"
 - runFlow:
     when:
       visible:
-        id: "m-btn-add-date"
+        id: "m-btn-add-sig"
     commands:
       - tapOn:
-          id: "m-btn-add-date"
-- runFlow:
-    when:
-      visible: "+ Date"
-    commands:
-      - tapOn: "+ Date"
+          id: "m-btn-add-sig"
 - waitForAnimationToEnd
+- assertVisible:
+    id: "signature-pad"
+- swipe:
+    from:
+      id: "signature-pad"
+    direction: RIGHT
+    duration: 700
+- swipe:
+    from:
+      id: "signature-pad"
+    direction: LEFT
+    duration: 700
+- tapOn:
+    id: "btn-save-sig"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "btn-save"
 - tapOn:
     id: "btn-save"
 - waitForAnimationToEnd
@@ -60,17 +65,19 @@ appId: org.openwaqf.signer
         id: "hardware-prompt-modal"
     commands:
       - tapOn:
-          id: "btn-hw-cancel"
+          id: "btn-hw-no"
 - waitForAnimationToEnd
 - assertVisible:
-    id: "btn-save"
+    id: "proof-modal"
+- assertVisible:
+    id: "saved-doc-id"
+- assertVisible:
+    id: "saved-doc-hash"
+- assertVisible:
+    id: "saved-handover-code"
+- tapOn:
+    id: "btn-close-proof"
+- waitForAnimationToEnd
 - tapOn:
     id: "btn-exit"
-- runFlow:
-    when:
-      visible:
-        id: "btn-confirm-exit"
-    commands:
-      - tapOn:
-          id: "btn-confirm-exit"
 - waitForAnimationToEnd

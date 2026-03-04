@@ -31,22 +31,39 @@ appId: org.openwaqf.signer
     commands:
       - tapOn: "Pas de fichier ? Essayez avec un PDF d'exemple"
 - waitForAnimationToEnd
-- assertVisible:
-    id: "btn-toggle-advanced"
-- tapOn:
-    id: "btn-toggle-advanced"
-- assertVisible:
-    id: "btn-add-initials"
-- assertVisible:
-    id: "btn-add-stamp"
-- assertVisible:
-    id: "btn-cert-sign"
-- tapOn:
-    id: "btn-toggle-advanced"
+- runFlow:
+    when:
+      visible:
+        id: "btn-toggle-advanced"
+    commands:
+      - tapOn:
+          id: "btn-toggle-advanced"
+      - assertVisible:
+          id: "btn-add-initials"
+      - assertVisible:
+          id: "btn-add-stamp"
+      - assertVisible:
+          id: "btn-cert-sign"
+      - tapOn:
+          id: "btn-toggle-advanced"
+- runFlow:
+    when:
+      visible:
+        id: "m-btn-toggle-advanced"
+    commands:
+      - tapOn:
+          id: "m-btn-toggle-advanced"
+      - assertVisible:
+          id: "m-btn-add-initials"
+      - assertVisible:
+          id: "m-btn-add-stamp"
+      - assertVisible:
+          id: "m-btn-cert-sign"
+      - tapOn:
+          id: "m-btn-toggle-advanced"
 - waitForAnimationToEnd
 - assertVisible:
     id: "btn-save"
 - tapOn:
     id: "btn-exit"
 - waitForAnimationToEnd
-

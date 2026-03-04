@@ -19,11 +19,6 @@ export function computeDragMove(input: {
     nextXPct: number;
     nextYPct: number;
 } {
-    const newX = input.clientX - input.rect.left - input.dragOffset.x;
-    const newY = input.clientY - input.rect.top - input.dragOffset.y;
-    let nextXPct = Math.max(0, Math.min(0.95, newX / input.rect.width));
-    let nextYPct = Math.max(0, Math.min(0.95, newY / input.rect.height));
-
     let visualWidthPct = input.ann.widthPct || 0.1;
     let visualHeightPct = visualWidthPct * (input.ann.aspectRatio || 1);
     if (input.visualSize) {
@@ -31,17 +26,22 @@ export function computeDragMove(input: {
         visualHeightPct = input.visualSize.heightPct;
     }
 
+    const newX = input.clientX - input.rect.left - input.dragOffset.x;
+    const newY = input.clientY - input.rect.top - input.dragOffset.y;
+    const maxXPct = Math.max(0, 1 - visualWidthPct);
+    const maxYPct = Math.max(0, 1 - visualHeightPct);
+    let nextXPct = Math.max(0, Math.min(maxXPct, newX / input.rect.width));
+    let nextYPct = Math.max(0, Math.min(maxYPct, newY / input.rect.height));
+
     const centerX = nextXPct + visualWidthPct / 2;
     const centerY = nextYPct + visualHeightPct / 2;
-    const SNAP_THRESHOLD = 0.015;
+    const SNAP_THRESHOLD = 0.007;
     const guideLines: GuideLine[] = [];
 
     if (Math.abs(centerX - 0.5) < SNAP_THRESHOLD) {
-        nextXPct = 0.5 - visualWidthPct / 2;
         guideLines.push({axis: 'x', pos: 0.5});
     }
     if (Math.abs(centerY - 0.5) < SNAP_THRESHOLD) {
-        nextYPct = 0.5 - visualHeightPct / 2;
         guideLines.push({axis: 'y', pos: 0.5});
     }
 
@@ -53,25 +53,11 @@ export function computeDragMove(input: {
         const otherCenterY = other.yPct + otherHeightPct / 2;
 
         if (Math.abs(centerX - otherCenterX) < SNAP_THRESHOLD) {
-            nextXPct = otherCenterX - visualWidthPct / 2;
             guideLines.push({axis: 'x', pos: otherCenterX});
-        } else if (Math.abs(nextXPct - other.xPct) < SNAP_THRESHOLD) {
-            nextXPct = other.xPct;
-            guideLines.push({axis: 'x', pos: other.xPct});
-        } else if (Math.abs(nextXPct + visualWidthPct - (other.xPct + otherWidthPct)) < SNAP_THRESHOLD) {
-            nextXPct = other.xPct + otherWidthPct - visualWidthPct;
-            guideLines.push({axis: 'x', pos: other.xPct + otherWidthPct});
         }
 
         if (Math.abs(centerY - otherCenterY) < SNAP_THRESHOLD) {
-            nextYPct = otherCenterY - visualHeightPct / 2;
             guideLines.push({axis: 'y', pos: otherCenterY});
-        } else if (Math.abs(nextYPct - other.yPct) < SNAP_THRESHOLD) {
-            nextYPct = other.yPct;
-            guideLines.push({axis: 'y', pos: other.yPct});
-        } else if (Math.abs(nextYPct + visualHeightPct - (other.yPct + otherHeightPct)) < SNAP_THRESHOLD) {
-            nextYPct = other.yPct + otherHeightPct - visualHeightPct;
-            guideLines.push({axis: 'y', pos: other.yPct + otherHeightPct});
         }
     }
 
@@ -121,4 +107,3 @@ export function computeResizeWidthPct(input: {
         widthPct: nextWidthPct,
     };
 }
-

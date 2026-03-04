@@ -36,7 +36,14 @@ export function getHexToRgb() {
     return hexToRgb;
 }
 
-export async function textToImage(text: string, fontSize: number = 12, isBold: boolean = false, fontFamily: string = 'Amiri', color: string = '#000000'): Promise<Uint8Array> {
+export async function textToImage(
+    text: string,
+    fontSize: number = 12,
+    isBold: boolean = false,
+    fontFamily: string = 'Amiri',
+    color: string = '#000000',
+    direction: CanvasDirection = 'inherit'
+): Promise<Uint8Array> {
     let canvas: HTMLCanvasElement | null = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas context not available');
@@ -55,7 +62,7 @@ export async function textToImage(text: string, fontSize: number = 12, isBold: b
     ctx.font = font;
     ctx.fillStyle = color;
     ctx.textBaseline = 'middle';
-    ctx.direction = 'inherit';
+    ctx.direction = direction;
     ctx.fillText(text, 0, height / 2);
 
     return new Promise((resolve, reject) => {

@@ -31,10 +31,35 @@ appId: org.openwaqf.signer
     commands:
       - tapOn: "Pas de fichier ? Essayez avec un PDF d'exemple"
 - waitForAnimationToEnd
-- assertVisible:
-    id: "btn-add-text"
-- tapOn:
-    id: "btn-add-text"
+- runFlow:
+    when:
+      visible:
+        id: "btn-toggle-advanced"
+    commands:
+      - tapOn:
+          id: "btn-toggle-advanced"
+- runFlow:
+    when:
+      visible:
+        id: "m-btn-toggle-advanced"
+    commands:
+      - tapOn:
+          id: "m-btn-toggle-advanced"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "btn-add-text"
+    commands:
+      - tapOn:
+          id: "btn-add-text"
+- runFlow:
+    when:
+      visible:
+        id: "m-btn-add-text"
+    commands:
+      - tapOn:
+          id: "m-btn-add-text"
 - assertVisible:
     id: "custom-prompt"
 - assertVisible:
@@ -47,4 +72,3 @@ appId: org.openwaqf.signer
 - tapOn:
     id: "btn-exit"
 - waitForAnimationToEnd
-

@@ -244,9 +244,6 @@ export class SignatureModal extends LitElement {
 
         this._resizeHandler = () => {
             this.resizeCanvas();
-            if (!this.isDirty && this.originalData) {
-                this.drawFromData(this.originalData);
-            }
         };
         window.addEventListener('resize', this._resizeHandler!);
         this.setupEvents();
@@ -331,8 +328,21 @@ export class SignatureModal extends LitElement {
         const rect = this.canvas.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
             const ratio = 3;
-            this.canvas.width = rect.width * ratio;
-            this.canvas.height = rect.height * ratio;
+            const nextWidth = Math.round(rect.width * ratio);
+            const nextHeight = Math.round(rect.height * ratio);
+            if (this.canvas.width === nextWidth && this.canvas.height === nextHeight) return;
+
+            // Preserve current drawing across viewport resizes (mobile URL/status bar changes).
+            const snapshot = document.createElement('canvas');
+            const hadPixels = this.canvas.width > 0 && this.canvas.height > 0;
+            if (hadPixels) {
+                snapshot.width = this.canvas.width;
+                snapshot.height = this.canvas.height;
+                snapshot.getContext('2d')?.drawImage(this.canvas, 0, 0);
+            }
+
+            this.canvas.width = nextWidth;
+            this.canvas.height = nextHeight;
 
             if (this.ctx) {
                 this.ctx.lineJoin = 'round';
@@ -340,6 +350,11 @@ export class SignatureModal extends LitElement {
                 this.ctx.lineWidth = 4 * ratio;
                 this.ctx.fillStyle = this.inkColor;
                 this.ctx.strokeStyle = this.inkColor;
+                if (hadPixels) {
+                    this.ctx.drawImage(snapshot, 0, 0, nextWidth, nextHeight);
+                } else if (this.originalData) {
+                    this.drawFromData(this.originalData);
+                }
             }
         }
     }
@@ -492,16 +507,58 @@ export class SignatureModal extends LitElement {
     }
 
     private exportCanvas(): string | null {
+        const srcW = this.canvas.width;
+        const srcH = this.canvas.height;
+        if (srcW <= 0 || srcH <= 0) return null;
+
+        const srcCtx = this.canvas.getContext('2d');
+        if (!srcCtx) return null;
+        const data = srcCtx.getImageData(0, 0, srcW, srcH).data;
+        let minX = srcW;
+        let minY = srcH;
+        let maxX = -1;
+        let maxY = -1;
+        for (let y = 0; y < srcH; y++) {
+            for (let x = 0; x < srcW; x++) {
+                const a = data[(y * srcW + x) * 4 + 3];
+                if (a > 8) {
+                    if (x < minX) minX = x;
+                    if (y < minY) minY = y;
+                    if (x > maxX) maxX = x;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+
         const exportCanvas = document.createElement('canvas');
-        const MAX_WIDTH = 600;
-        let [w, h] = [this.canvas.width, this.canvas.height];
+        if (maxX < minX || maxY < minY) {
+            exportCanvas.width = srcW;
+            exportCanvas.height = srcH;
+            const exportCtx = exportCanvas.getContext('2d');
+            if (!exportCtx) return null;
+            exportCtx.drawImage(this.canvas, 0, 0);
+            return exportCanvas.toDataURL('image/png');
+        }
+
+        const padding = 18;
+        const cropX = Math.max(0, minX - padding);
+        const cropY = Math.max(0, minY - padding);
+        const cropW = Math.min(srcW - cropX, (maxX - minX + 1) + padding * 2);
+        const cropH = Math.min(srcH - cropY, (maxY - minY + 1) + padding * 2);
+        const MAX_WIDTH = 2000;
+        let w = cropW;
+        let h = cropH;
         if (w > MAX_WIDTH) {
-            h = (MAX_WIDTH / w) * h;
+            h = Math.round((MAX_WIDTH / w) * h);
             w = MAX_WIDTH;
         }
         exportCanvas.width = w;
         exportCanvas.height = h;
-        exportCanvas.getContext('2d')?.drawImage(this.canvas, 0, 0, w, h);
+        const exportCtx = exportCanvas.getContext('2d');
+        if (!exportCtx) return null;
+        exportCtx.imageSmoothingEnabled = true;
+        exportCtx.imageSmoothingQuality = 'high';
+        exportCtx.drawImage(this.canvas, cropX, cropY, cropW, cropH, 0, 0, w, h);
         return exportCanvas.toDataURL('image/png');
     }
 

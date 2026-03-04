@@ -31,8 +31,25 @@ appId: org.openwaqf.signer
     commands:
       - tapOn: "Pas de fichier ? Essayez avec un PDF d'exemple"
 - waitForAnimationToEnd
-- tapOn:
-    id: "btn-add-date"
+- runFlow:
+    when:
+      visible:
+        id: "btn-add-date"
+    commands:
+      - tapOn:
+          id: "btn-add-date"
+- runFlow:
+    when:
+      visible:
+        id: "m-btn-add-date"
+    commands:
+      - tapOn:
+          id: "m-btn-add-date"
+- runFlow:
+    when:
+      visible: "+ Date"
+    commands:
+      - tapOn: "+ Date"
 - waitForAnimationToEnd
 - tapOn:
     id: "btn-save"
@@ -63,4 +80,3 @@ appId: org.openwaqf.signer
 - tapOn:
     id: "btn-exit"
 - waitForAnimationToEnd
-

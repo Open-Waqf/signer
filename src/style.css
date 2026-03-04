@@ -199,7 +199,7 @@ app-root {
     text-align: center;
     width: min(440px, calc(100% - 40px));
     flex-shrink: 0;
-    margin-block: auto;
+    margin-block: 12px 0;
     margin-inline: auto;
     transition: var(--transition-base);
 }
@@ -694,6 +694,7 @@ app-root {
     .drop-card {
         padding: 26px 16px;
         width: calc(100% - 20px);
+        margin-top: 8px;
     }
 
     .drop-card h1 {

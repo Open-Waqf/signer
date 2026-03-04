@@ -97,7 +97,6 @@ export class PdfWorkspace extends LitElement {
     private marqueeStart = {x: 0, y: 0};
     private marqueeCurrent = {x: 0, y: 0};
     private marqueeBaseIds: string[] = [];
-    private hadSnapGuides = false;
     private thumbObserver: IntersectionObserver | null = null;
     private thumbVisiblePages = new Set<number>();
     private thumbQueuedPages = new Set<number>();
@@ -248,8 +247,8 @@ export class PdfWorkspace extends LitElement {
         @media (max-width: 768px) {
             header {
                 height: auto;
-                min-height: calc(56px + max(env(safe-area-inset-top), 0px) + 8px);
-                padding-top: calc(max(env(safe-area-inset-top), 0px) + 8px);
+                min-height: 64px;
+                padding-top: 8px;
             }
         }
 
@@ -438,6 +437,10 @@ export class PdfWorkspace extends LitElement {
             background-image: radial-gradient(var(--border) 1px, transparent 1px);
             background-size: 24px 24px;
             touch-action: pan-x pan-y;
+        }
+
+        .viewport.drag-active {
+            touch-action: none;
         }
 
         .page-container {
@@ -710,6 +713,7 @@ export class PdfWorkspace extends LitElement {
             border: 2px solid transparent;
             border-radius: 4px;
             transition: border-color 0.2s;
+            touch-action: none;
         }
 
         .draggable.selected {
@@ -851,6 +855,10 @@ export class PdfWorkspace extends LitElement {
             margin: 10px 0 14px 0;
         }
 
+        .stamp-library-close-actions {
+            margin-top: 10px;
+        }
+
         .stamp-preset {
             position: relative;
             width: 84px;
@@ -968,7 +976,16 @@ export class PdfWorkspace extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
-        WebAuthnService.isAvailable().then(avail => this.hasHardwareSupport = avail);
+        WebAuthnService.getAvailabilityStatus()
+            .then((status) => {
+                this.hasHardwareSupport = status.available;
+                if (!status.available) {
+                    console.info('[OWQ][HARDWARE_SIGN_UNAVAILABLE]', status.reason);
+                }
+            })
+            .catch(() => {
+                this.hasHardwareSupport = false;
+            });
         void this.loadStampPresets();
         if (this.activeSidebar === 'annotations' && this.annotations.length === 0) {
             this.activeSidebar = 'thumbnails';
@@ -982,6 +999,7 @@ export class PdfWorkspace extends LitElement {
         window.addEventListener('touchmove', this.handleGlobalMove as any, {passive: false});
         window.addEventListener('mouseup', this.stopInteraction);
         window.addEventListener('touchend', this.stopInteraction);
+        window.addEventListener('touchcancel', this.stopInteraction);
         window.addEventListener('keydown', this.handleKeyboard);
     }
 
@@ -993,6 +1011,7 @@ export class PdfWorkspace extends LitElement {
         window.removeEventListener('touchmove', this.handleGlobalMove as any);
         window.removeEventListener('mouseup', this.stopInteraction);
         window.removeEventListener('touchend', this.stopInteraction);
+        window.removeEventListener('touchcancel', this.stopInteraction);
         window.removeEventListener('keydown', this.handleKeyboard);
     }
 
@@ -1650,6 +1669,7 @@ export class PdfWorkspace extends LitElement {
 
     private touchTimer: ReturnType<typeof setTimeout> | null = null;
     private isTouchLongPressTriggered = false;
+    private touchDragStart: { x: number; y: number } | null = null;
 
     private getPointFromEvent(e: MouseEvent | TouchEvent) {
         if ('touches' in e) {
@@ -1744,6 +1764,8 @@ export class PdfWorkspace extends LitElement {
             }
             // Touch device: start a long-press timer for multi-select
             applySelection(false); // Default to single select initially
+            const startPoint = this.getPointFromEvent(e);
+            this.touchDragStart = {x: startPoint.x, y: startPoint.y};
             this.touchTimer = setTimeout(() => {
                 this.isTouchLongPressTriggered = true;
                 this.isMultiSelectMode = true;
@@ -1784,6 +1806,14 @@ export class PdfWorkspace extends LitElement {
     }
 
     handleGlobalMove = (e: MouseEvent | TouchEvent) => {
+        if ('touches' in e && this.touchTimer && this.touchDragStart && e.touches.length > 0) {
+            const dx = e.touches[0].clientX - this.touchDragStart.x;
+            const dy = e.touches[0].clientY - this.touchDragStart.y;
+            if ((dx * dx + dy * dy) > (12 * 12)) {
+                clearTimeout(this.touchTimer);
+                this.touchTimer = null;
+            }
+        }
         if (this.isMarqueeSelecting && !('touches' in e)) {
             if (!this.container) return;
             const rect = this.container.getBoundingClientRect();
@@ -1833,11 +1863,6 @@ export class PdfWorkspace extends LitElement {
                     : undefined,
             });
             this.guideLines = move.guideLines;
-            const hasSnapGuides = move.guideLines.length > 0;
-            if (hasSnapGuides && !this.hadSnapGuides) {
-                void HapticService.selection();
-            }
-            this.hadSnapGuides = hasSnapGuides;
 
             if (move.changed) {
                 takeSnapshotIfNeeded();
@@ -1866,6 +1891,7 @@ export class PdfWorkspace extends LitElement {
             clearTimeout(this.touchTimer);
             this.touchTimer = null;
         }
+        this.touchDragStart = null;
         if (this.isMarqueeSelecting) {
             this.isMarqueeSelecting = false;
             this.marqueeBox = null;
@@ -1882,7 +1908,6 @@ export class PdfWorkspace extends LitElement {
         this.interactionChanged = false;
         if (changed) this.isDirty = true;
         this.guideLines = [];
-        this.hadSnapGuides = false;
     };
 
     openSignModal() {
@@ -1911,9 +1936,24 @@ export class PdfWorkspace extends LitElement {
 
     addDateStamp() {
         const now = new Date();
-        const dateStr = new Intl.DateTimeFormat(i18n.lang, {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-        }).format(now);
+        const parts = new Intl.DateTimeFormat(i18n.lang, {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            numberingSystem: 'latn',
+        }).formatToParts(now);
+        const day = parts.find((p) => p.type === 'day')?.value ?? '';
+        const month = parts.find((p) => p.type === 'month')?.value ?? '';
+        const year = parts.find((p) => p.type === 'year')?.value ?? '';
+        const lrm = '\u200E';
+        const dateStr = (day && month && year)
+            ? `${lrm}${day}/${month}/${year}${lrm}`
+            : new Intl.DateTimeFormat('en-GB', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                numberingSystem: 'latn',
+            }).format(now);
         this.addAnnotation('date', dateStr, 0.3);
     }
 
@@ -2669,6 +2709,12 @@ export class PdfWorkspace extends LitElement {
                 <button class="btn btn-primary" data-testid="btn-stamp-upload" @click=${this.openStampPicker}>
                     ${i18n.t('uploadStamp')}
                 </button>
+                <div class="modal-actions stamp-library-close-actions">
+                    <button class="btn modal-btn-flex" data-testid="btn-close-stamp-library"
+                            @click=${() => this.showStampLibraryModal = false}>
+                        ${i18n.t('close')}
+                    </button>
+                </div>
                 <div class="stamp-presets" data-testid="stamp-presets-list">
                     ${this.stampPresets.length === 0 ? html`
                         <p class="modal-copy">${i18n.t('noStampPresets')}</p>
@@ -2863,12 +2909,12 @@ export class PdfWorkspace extends LitElement {
                             @click=${this.addDateStamp}>
                         ${ICONS.date}<span class="btn-label">${i18n.t('addDate')}</span>
                     </button>
-                    <button data-testid="btn-toggle-advanced" class="btn"
-                            aria-label="${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}"
-                            @click=${this.toggleUIMode}>
-                        ${ICONS.cog}<span class="btn-label">${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
-                    </button>
-                    ${!this.isBasicMode ? html`
+                        <button data-testid="btn-toggle-advanced" class="btn"
+                                aria-label="${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}"
+                                @click=${this.toggleUIMode}>
+                            ${ICONS.cog}<span class="btn-label">${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
+                        </button>
+                        ${!this.isBasicMode ? html`
                         <button data-testid="btn-add-initials" class="btn" aria-label="${i18n.t('addInitials')}"
                                 @click=${this.openInitialsModal}>
                             ${ICONS.text}<span class="btn-label">${i18n.t('addInitials')}</span>
@@ -2881,20 +2927,22 @@ export class PdfWorkspace extends LitElement {
                                 aria-label="${i18n.t('addIdentity')}" @click=${this.addIdentity}>
                             ${ICONS.identity}<span class="btn-label">${i18n.t('addIdentity')}</span>
                         </button>
-                        <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
-                                @click=${this.openStampLibrary}>
-                            ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
-                        </button>
                         <button data-testid="btn-cert-sign"
                                 class="btn ${this.certificateReady ? 'toggle active' : ''}"
                                 aria-label="${i18n.t('signWithCertificate')}"
                                 @click=${this.openCertificatePicker}>
                             ${ICONS.certificate}<span class="btn-label">${i18n.t('signWithCertificate')}</span>
                         </button>
-                        <button data-testid="btn-hw-pref" class="btn" aria-label="Hardware Sign Preference"
-                                @click=${this.toggleHardwarePref}>
-                            ${this.getHardwareIcon()}<span class="btn-label">${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}</span>
+                        <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
+                                @click=${this.openStampLibrary}>
+                            ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
                         </button>
+                        ${this.hasHardwareSupport ? html`
+                            <button data-testid="btn-hw-pref" class="btn" aria-label="${i18n.t('hardwareSign')}"
+                                    @click=${this.toggleHardwarePref}>
+                                ${this.getHardwareIcon()}<span class="btn-label">${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}</span>
+                            </button>
+                        ` : ''}
                     ` : ''}
                 </div>
 
@@ -2976,12 +3024,6 @@ export class PdfWorkspace extends LitElement {
                         @click=${this.toggleUIMode}>
                     ${ICONS.cog} <span>${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}</span>
                 </button>
-                ${(this.hasHardwareSupport && !this.isBasicMode) ? html`
-                    <button data-testid="m-btn-hw-pref" class="btn btn-tool" aria-label="Hardware Sign Preference"
-                            @click=${this.toggleHardwarePref}>
-                        ${this.getHardwareIcon()} <span>${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}</span>
-                    </button>
-                ` : ''}
                 ${!this.isBasicMode ? html`
                     <button data-testid="m-btn-add-initials" class="btn btn-tool" aria-label="${i18n.t('addInitials')}"
                             @click=${this.openInitialsModal}>
@@ -2995,23 +3037,29 @@ export class PdfWorkspace extends LitElement {
                             aria-label="${i18n.t('addIdentity')}" @click=${this.addIdentity}>
                         ${ICONS.identity} <span>${i18n.t('addIdentity')}</span>
                     </button>
-                    <button data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
-                            @click=${this.openStampLibrary}>
-                        ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
-                    </button>
                     <button data-testid="m-btn-cert-sign"
                             class="btn btn-tool ${this.certificateReady ? 'active' : ''}"
                             aria-label="${i18n.t('signWithCertificate')}"
                             @click=${this.openCertificatePicker}>
                         ${ICONS.certificate} <span>${i18n.t('signWithCertificate')}</span>
                     </button>
+                    <button data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
+                            @click=${this.openStampLibrary}>
+                        ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
+                    </button>
+                    ${this.hasHardwareSupport ? html`
+                        <button data-testid="m-btn-hw-pref" class="btn btn-tool" aria-label="${i18n.t('hardwareSign')}"
+                                @click=${this.toggleHardwarePref}>
+                            ${this.getHardwareIcon()} <span>${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}</span>
+                        </button>
+                    ` : ''}
                 ` : ''}
             </div>
 
             <div class="workspace-area">
                 ${this.renderWorkspaceSidebar()}
 
-                <div class="viewport" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
+                <div class="viewport ${this.isDragging ? 'drag-active' : ''}" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
                     ${this.renderWorkspaceTopControls()}
 
                     <div class="page-container" data-testid="page-container" @mousedown=${this.startMarqueeSelection}>
