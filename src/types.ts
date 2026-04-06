@@ -20,6 +20,14 @@ export interface Annotation {
     lockedByChain?: boolean;
 }
 
+export interface DrawnSignaturePayload {
+    dataUrl: string;
+    cropWidth: number;
+    cropHeight: number;
+    padWidth: number;
+    padHeight: number;
+}
+
 export interface SignaturePayload {
     signerIndex: number;
     challengeHash: string;

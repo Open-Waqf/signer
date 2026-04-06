@@ -8,6 +8,7 @@ export function createCenteredAnnotation(input: {
     type: AnnotationType;
     data: string;
     aspectRatio?: number;
+    widthPct?: number;
     currentPage: number;
     pageRect: DOMRect;
     viewportRect: DOMRect;
@@ -20,7 +21,7 @@ export function createCenteredAnnotation(input: {
     const relativeY = screenCenterY - input.pageRect.top;
     const xPct = Math.max(0.1, Math.min(0.8, relativeX / input.pageRect.width));
     const yPct = Math.max(0.1, Math.min(0.8, relativeY / input.pageRect.height));
-    const widthPct = input.type === 'initials' ? 0.15 : 0.25;
+    const widthPct = input.widthPct ?? (input.type === 'initials' ? 0.15 : 0.25);
 
     return {
         id: input.generateId(),
@@ -77,4 +78,3 @@ export function applyToAllPages(input: {
         addedCount: newAnnotations.length,
     };
 }
-

@@ -4,7 +4,7 @@ import {styleMap} from 'lit/directives/style-map.js';
 import {pdfEngine} from '../lib/pdf-engine';
 import {fileService} from '../lib/file-service';
 import {i18n} from '../lib/i18n-service';
-import {Annotation, AnnotationType, SignaturePayload} from '../types';
+import {Annotation, AnnotationType, DrawnSignaturePayload, SignaturePayload} from '../types';
 import './signature-modal';
 import './owq-modal';
 import {ICONS} from '../lib/icons';
@@ -1602,13 +1602,14 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
-    addAnnotation(type: AnnotationType, data: string, aspectRatio = 1) {
+    addAnnotation(type: AnnotationType, data: string, aspectRatio = 1, widthPct?: number) {
         this.snapshot();
         HapticService.impact();
         const newAnn = createCenteredAnnotation({
             type,
             data,
             aspectRatio,
+            widthPct,
             currentPage: this.currentPage,
             pageRect: this.container.getBoundingClientRect(),
             viewportRect: this.viewport.getBoundingClientRect(),
@@ -1918,18 +1919,31 @@ export class PdfWorkspace extends LitElement {
         this._triggerModal('initials');
     }
 
+    private resolveDrawnAnnotationWidthPct(mode: 'signature' | 'initials', payload: DrawnSignaturePayload): number {
+        const baseWidthPct = mode === 'initials' ? 0.15 : 0.25;
+        const minWidthPct = mode === 'initials' ? 0.07 : 0.12;
+        const maxWidthPct = mode === 'initials' ? 0.18 : 0.3;
+        const widthScale = payload.padWidth > 0 ? payload.cropWidth / payload.padWidth : 1;
+        return Math.min(maxWidthPct, Math.max(minWidthPct, baseWidthPct * widthScale));
+    }
+
     _triggerModal(mode: 'signature' | 'initials') {
         const modal = document.createElement('signature-modal') as any;
         modal.mode = mode;
-        modal.addEventListener('signed', (e: any) => {
+        modal.addEventListener('signed', (e: CustomEvent<string | DrawnSignaturePayload>) => {
+            const detail = e.detail;
+            const dataUrl = typeof detail === 'string' ? detail : detail.dataUrl;
             const img = new Image();
             img.onload = () => {
                 if (img.width > 0 && img.height > 0) {
-                    this.addAnnotation(mode, e.detail, img.height / img.width);
+                    const widthPct = typeof detail === 'string'
+                        ? undefined
+                        : this.resolveDrawnAnnotationWidthPct(mode, detail);
+                    this.addAnnotation(mode, dataUrl, img.height / img.width, widthPct);
                 }
             };
             img.onerror = () => console.error('Failed to load signature image');
-            img.src = e.detail;
+            img.src = dataUrl;
         });
         document.body.appendChild(modal);
     }

@@ -4,6 +4,7 @@ import {i18n} from '../lib/i18n-service';
 import {sharedStyles} from '../styles/shared-styles';
 import {TranslationKey} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
+import type {DrawnSignaturePayload} from '../types';
 import {
     clearLastUsed,
     loadLastUsed,
@@ -322,8 +323,51 @@ export class SignatureModal extends LitElement {
 
     drawFromData(dataUrl: string) {
         const img = new Image();
-        img.onload = () => this.ctx?.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+        img.onload = () => {
+            if (!this.ctx) return;
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+            const {drawWidth, drawHeight, offsetX, offsetY} = this.getFittedImageLayout(img.width, img.height);
+
+            this.ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+        };
         img.src = dataUrl;
+    }
+
+    private getFittedImageLayout(imageWidth: number, imageHeight: number) {
+        const maxWidth = this.canvas.width * 0.9;
+        const maxHeight = this.canvas.height * 0.9;
+        const fitScale = Math.min(
+            maxWidth / Math.max(1, imageWidth),
+            maxHeight / Math.max(1, imageHeight),
+            1
+        );
+        const drawWidth = imageWidth * fitScale;
+        const drawHeight = imageHeight * fitScale;
+        return {
+            drawWidth,
+            drawHeight,
+            offsetX: (this.canvas.width - drawWidth) / 2,
+            offsetY: (this.canvas.height - drawHeight) / 2,
+        };
+    }
+
+    private async buildPayloadFromDataUrl(dataUrl: string): Promise<DrawnSignaturePayload | null> {
+        const img = new Image();
+        const loaded = await new Promise<boolean>((resolve) => {
+            img.onload = () => resolve(true);
+            img.onerror = () => resolve(false);
+            img.src = dataUrl;
+        });
+        if (!loaded) return null;
+        const {drawWidth, drawHeight} = this.getFittedImageLayout(img.width, img.height);
+        return {
+            dataUrl,
+            cropWidth: drawWidth,
+            cropHeight: drawHeight,
+            padWidth: this.canvas.width,
+            padHeight: this.canvas.height,
+        };
     }
 
     resizeCanvas() {
@@ -513,11 +557,11 @@ export class SignatureModal extends LitElement {
         const name = this.saveNameValue.trim();
         if (!name) return;
 
-        const dataUrl = this.exportCanvas();
-        if (!dataUrl) return;
+        const exportPayload = this.exportCanvas();
+        if (!exportPayload) return;
 
         HapticService.success();
-        const preset: SignaturePreset = {id: Date.now().toString(), name, dataURL: dataUrl};
+        const preset: SignaturePreset = {id: Date.now().toString(), name, dataURL: exportPayload.dataUrl};
         const updated = [...this.presets, preset];
         await persistPresetsToDb(this.mode, updated);
         this.presets = updated;
@@ -525,7 +569,7 @@ export class SignatureModal extends LitElement {
         this.saveNameValue = '';
     }
 
-    private exportCanvas(): string | null {
+    private exportCanvas(): DrawnSignaturePayload | null {
         const srcW = this.canvas.width;
         const srcH = this.canvas.height;
         if (srcW <= 0 || srcH <= 0) return null;
@@ -556,7 +600,13 @@ export class SignatureModal extends LitElement {
             const exportCtx = exportCanvas.getContext('2d');
             if (!exportCtx) return null;
             exportCtx.drawImage(this.canvas, 0, 0);
-            return exportCanvas.toDataURL('image/png');
+            return {
+                dataUrl: exportCanvas.toDataURL('image/png'),
+                cropWidth: srcW,
+                cropHeight: srcH,
+                padWidth: srcW,
+                padHeight: srcH,
+            };
         }
 
         const padding = 18;
@@ -578,13 +628,22 @@ export class SignatureModal extends LitElement {
         exportCtx.imageSmoothingEnabled = true;
         exportCtx.imageSmoothingQuality = 'high';
         exportCtx.drawImage(this.canvas, cropX, cropY, cropW, cropH, 0, 0, w, h);
-        return exportCanvas.toDataURL('image/png');
+        return {
+            dataUrl: exportCanvas.toDataURL('image/png'),
+            cropWidth: cropW,
+            cropHeight: cropH,
+            padWidth: srcW,
+            padHeight: srcH,
+        };
     }
 
-    save() {
+    async save() {
         if (!this.isDirty && this.originalData) {
             HapticService.impact();
-            this.dispatchEvent(new CustomEvent('signed', {detail: this.originalData}));
+            const originalPayload = await this.buildPayloadFromDataUrl(this.originalData);
+            this.dispatchEvent(new CustomEvent<DrawnSignaturePayload | string>('signed', {
+                detail: originalPayload ?? this.originalData
+            }));
             this.remove();
             return;
         }
@@ -593,11 +652,11 @@ export class SignatureModal extends LitElement {
             return;
         }
 
-        const dataUrl = this.exportCanvas();
-        if (!dataUrl) return;
+        const exportPayload = this.exportCanvas();
+        if (!exportPayload) return;
         HapticService.success();
-        void persistLastUsed(this.mode, dataUrl);
-        this.dispatchEvent(new CustomEvent('signed', {detail: dataUrl}));
+        void persistLastUsed(this.mode, exportPayload.dataUrl);
+        this.dispatchEvent(new CustomEvent<DrawnSignaturePayload>('signed', {detail: exportPayload}));
         this.remove();
     }
 

@@ -639,6 +639,154 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         expect(drawnAlphaPixels).toBeGreaterThan(0);
     });
 
+    test('6.1.2 Drawn signature width scales down for compact strokes', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing signature pad bounds');
+
+        await page.mouse.move(box.x + 44, box.y + 72);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 78, box.y + 80);
+        await page.mouse.up();
+        await page.getByTestId('btn-save-sig').click();
+
+        await expect.poll(async () => {
+            return page.locator('pdf-workspace').evaluate((el) => {
+                const ws = el as any;
+                return ws.annotations[0]?.widthPct ?? null;
+            });
+        }).not.toBeNull();
+        const widthPct = await page.locator('pdf-workspace').evaluate((el) => {
+            const ws = el as any;
+            return ws.annotations[0]?.widthPct ?? null;
+        });
+        expect(widthPct).toBeLessThan(0.25);
+    });
+
+    test('6.1.3 Drawn initials width scales down for compact strokes', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        if (await page.getByTestId('btn-add-initials').count() === 0) {
+            await page.getByTestId('btn-toggle-advanced').click();
+        }
+        await page.getByTestId('btn-add-initials').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing initials pad bounds');
+
+        await page.mouse.move(box.x + 44, box.y + 68);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 70, box.y + 72);
+        await page.mouse.up();
+        await page.getByTestId('btn-save-sig').click();
+
+        await expect.poll(async () => {
+            return page.locator('pdf-workspace').evaluate((el) => {
+                const ws = el as any;
+                return ws.annotations[0]?.widthPct ?? null;
+            });
+        }).not.toBeNull();
+        const widthPct = await page.locator('pdf-workspace').evaluate((el) => {
+            const ws = el as any;
+            return ws.annotations[0]?.widthPct ?? null;
+        });
+        expect(widthPct).toBeLessThan(0.15);
+    });
+
+    test('6.1.4 Reopened initials preview keeps compact scale', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        if (await page.getByTestId('btn-add-initials').count() === 0) {
+            await page.getByTestId('btn-toggle-advanced').click();
+        }
+        await page.getByTestId('btn-add-initials').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing initials pad bounds');
+
+        await page.mouse.move(box.x + 44, box.y + 68);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 70, box.y + 72);
+        await page.mouse.up();
+        await page.getByTestId('btn-save-sig').click();
+
+        await page.getByTestId('btn-add-initials').click();
+        const reopenedPad = page.getByTestId('signature-pad');
+        await expect(reopenedPad).toBeVisible();
+
+        const previewRatio = await reopenedPad.evaluate((canvas) => {
+            const ctx = (canvas as HTMLCanvasElement).getContext('2d');
+            if (!ctx) return 1;
+            const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let minX = canvas.width;
+            let maxX = -1;
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const alpha = data[(y * canvas.width + x) * 4 + 3];
+                    if (alpha > 8) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                    }
+                }
+            }
+            if (maxX < minX) return 0;
+            return (maxX - minX + 1) / canvas.width;
+        });
+
+        expect(previewRatio).toBeLessThan(0.5);
+    });
+
+    test('6.1.5 Reused signature keeps compact placement after reopening modal', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing signature pad bounds');
+
+        await page.mouse.move(box.x + 44, box.y + 72);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 78, box.y + 80);
+        await page.mouse.up();
+        await page.getByTestId('btn-save-sig').click();
+
+        await expect.poll(async () => {
+            return page.locator('pdf-workspace').evaluate((el) => {
+                const ws = el as any;
+                return ws.annotations.length;
+            });
+        }).toBe(1);
+
+        await page.getByTestId('btn-add-sig').click();
+        await expect(page.getByTestId('signature-pad')).toBeVisible();
+        await page.getByTestId('btn-save-sig').click();
+
+        await expect.poll(async () => {
+            return page.locator('pdf-workspace').evaluate((el) => {
+                const ws = el as any;
+                return ws.annotations.length;
+            });
+        }).toBe(2);
+
+        const widthPct = await page.locator('pdf-workspace').evaluate((el) => {
+            const ws = el as any;
+            return ws.annotations[1]?.widthPct ?? null;
+        });
+        expect(widthPct).not.toBeNull();
+        expect(widthPct).toBeLessThan(0.25);
+    });
+
     test('6.2 Stamp presets persist across reload via IndexedDB', async ({page}) => {
         const ensureAdvancedToolsVisible = async () => {
             if (await page.getByTestId('btn-add-stamp').count()) return;
