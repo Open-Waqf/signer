@@ -21,6 +21,7 @@ const INK_COLORS: Array<{ value: string; labelKey: TranslationKey }> = [
 ];
 
 const MAX_PRESETS = 5;
+const MIN_STROKE_DISTANCE = 6;
 
 interface SignaturePreset {
     id: string;
@@ -40,6 +41,7 @@ export class SignatureModal extends LitElement {
     private isDrawing = false;
     private ctx: CanvasRenderingContext2D | null = null;
     private points: { x: number, y: number }[] = [];
+    private hasCommittedStroke = false;
     private _resizeHandler: (() => void) | null = null;
     private _pointerDownHandler: ((e: PointerEvent) => void) | null = null;
     private _pointerMoveHandler: ((e: PointerEvent) => void) | null = null;
@@ -400,7 +402,7 @@ export class SignatureModal extends LitElement {
 
     start(e: { clientX: number, clientY: number }) {
         this.isDrawing = true;
-        this.isDirty = true;
+        this.hasCommittedStroke = false;
         this.points = [];
         if (this.ctx) {
             this.ctx.fillStyle = this.inkColor;
@@ -408,14 +410,30 @@ export class SignatureModal extends LitElement {
         }
         const pos = this.getMousePos(e);
         this.points.push(pos);
-        this.ctx?.beginPath();
-        this.ctx?.arc(pos.x, pos.y, this.ctx!.lineWidth / 2, 0, Math.PI * 2);
-        this.ctx?.fill();
     }
 
     draw(e: { clientX: number, clientY: number }) {
         if (!this.isDrawing || !this.ctx) return;
         const pos = this.getMousePos(e);
+        if (!this.hasCommittedStroke) {
+            const origin = this.points[0];
+            if (!origin) return;
+            const dx = pos.x - origin.x;
+            const dy = pos.y - origin.y;
+            if ((dx * dx) + (dy * dy) < MIN_STROKE_DISTANCE * MIN_STROKE_DISTANCE) {
+                return;
+            }
+
+            this.hasCommittedStroke = true;
+            this.isDirty = true;
+            this.points.push(pos);
+            this.ctx.beginPath();
+            this.ctx.moveTo(origin.x, origin.y);
+            this.ctx.lineTo(pos.x, pos.y);
+            this.ctx.stroke();
+            return;
+        }
+
         this.points.push(pos);
         if (this.points.length > 2) {
             const [p1, p2, p3] = this.points.slice(-3);
@@ -431,6 +449,7 @@ export class SignatureModal extends LitElement {
     stop() {
         this.isDrawing = false;
         this.points = [];
+        this.hasCommittedStroke = false;
     }
 
     clear() {

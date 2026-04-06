@@ -592,6 +592,53 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.locator('.preset-item[title=\"E2E IndexedDB Preset\"]')).toHaveCount(1);
     });
 
+    test('6.1.1 Signature pad does not draw a dot on pointer down without movement', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing signature pad bounds');
+
+        await page.mouse.move(box.x + 48, box.y + 48);
+        await page.mouse.down();
+        await page.mouse.up();
+
+        await expect(page.getByTestId('btn-save-preset')).toHaveCount(0);
+
+        const blankAlphaPixels = await sigPad.evaluate((canvas) => {
+            const ctx = (canvas as HTMLCanvasElement).getContext('2d');
+            if (!ctx) return -1;
+            const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let inkPixels = 0;
+            for (let i = 3; i < data.length; i += 4) {
+                if (data[i] > 8) inkPixels++;
+            }
+            return inkPixels;
+        });
+        expect(blankAlphaPixels).toBe(0);
+
+        await page.mouse.move(box.x + 48, box.y + 48);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 132, box.y + 92);
+        await page.mouse.up();
+
+        await expect(page.getByTestId('btn-save-preset')).toBeVisible();
+        const drawnAlphaPixels = await sigPad.evaluate((canvas) => {
+            const ctx = (canvas as HTMLCanvasElement).getContext('2d');
+            if (!ctx) return -1;
+            const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let inkPixels = 0;
+            for (let i = 3; i < data.length; i += 4) {
+                if (data[i] > 8) inkPixels++;
+            }
+            return inkPixels;
+        });
+        expect(drawnAlphaPixels).toBeGreaterThan(0);
+    });
+
     test('6.2 Stamp presets persist across reload via IndexedDB', async ({page}) => {
         const ensureAdvancedToolsVisible = async () => {
             if (await page.getByTestId('btn-add-stamp').count()) return;
