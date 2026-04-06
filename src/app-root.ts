@@ -26,6 +26,7 @@ import {
 import {groupedHashPreview} from './domain/hash';
 import {preferences} from './lib/preferences';
 import {isNativeOrSmallViewport, isNativePlatform} from './lib/runtime-platform';
+import {requestStoragePersistence} from './lib/storage-persistence';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -154,6 +155,7 @@ export class AppRoot extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
+        void requestStoragePersistence();
         if (isNativePlatform()) {
             StatusBar.setStyle({style: Style.Light}).catch(console.error);
             StatusBar.setBackgroundColor({color: '#ffffff'}).catch(console.error);
