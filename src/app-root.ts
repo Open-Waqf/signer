@@ -59,6 +59,38 @@ export class AppRoot extends LitElement {
     @state() airGapReceiveActive = false;
     @state() airGapStatus = '';
 
+    @state() globalError: Error | null = null;
+    @state() globalErrorContext: string = '';
+
+    private readonly onGlobalError = (e: ErrorEvent) => {
+        this.globalError = e.error || new Error(e.message);
+        this.globalErrorContext = 'Window Error';
+    };
+
+    private readonly onUnhandledRejection = (e: PromiseRejectionEvent) => {
+        this.globalError = e.reason instanceof Error ? e.reason : new Error(String(e.reason));
+        this.globalErrorContext = 'Unhandled Promise Rejection';
+    };
+
+    private downloadDebugInfo = () => {
+        const debugInfo = {
+            userAgent: navigator.userAgent,
+            timestamp: new Date().toISOString(),
+            error: this.serializeError(this.globalError),
+            context: this.globalErrorContext,
+            mode: this.mode,
+            url: window.location.href,
+            lang: i18n.lang
+        };
+        const blob = new Blob([JSON.stringify(debugInfo, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `owq-signer-debug-${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     private updateSW: ((reload: boolean) => void) | undefined;
     private backButtonListener: Promise<{ remove: () => Promise<void> }> | null = null;
     private readonly onLangChanged = () => this.requestUpdate();
@@ -173,6 +205,8 @@ export class AppRoot extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        window.removeEventListener('error', this.onGlobalError);
+        window.removeEventListener('unhandledrejection', this.onUnhandledRejection);
         window.removeEventListener('lang-changed', this.onLangChanged);
         this.stopAirGapSendLoop();
         this.stopAirGapScanner();
@@ -1056,6 +1090,26 @@ export class AppRoot extends LitElement {
     }
 
     render() {
+        if (this.globalError) {
+            return html`
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:var(--bg-app);color:var(--text-main);padding:24px;text-align:center;">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="var(--danger)" stroke-width="2" style="margin-bottom:16px;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <h2 style="margin-bottom:8px;font-size:1.5rem;">Something went wrong</h2>
+                    <p style="margin-bottom:24px;color:var(--text-sub);max-width:400px;">
+                        An unexpected error caused the application to crash. You can download a debug log to help us investigate the issue.
+                    </p>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+                        <button class="btn" @click=${() => window.location.reload()}>Reload App</button>
+                        <button class="btn btn-primary" @click=${this.downloadDebugInfo}>Download Debug Info</button>
+                    </div>
+                </div>
+            `;
+        }
+
         return html`
             ${this.renderLoaderOverlay()}
 
