@@ -1,4 +1,4 @@
-import {PDFArray, PDFDict, PDFDocument, PDFName} from 'pdf-lib';
+import {PDFArray, PDFDict, PDFDocument, PDFName, PDFHexString, PDFString} from 'pdf-lib';
 import {SignaturePayload} from '../../types';
 import {CHAIN_META_PREFIX} from './constants';
 
@@ -49,7 +49,15 @@ export function setSignaturesSubject(pdfDoc: PDFDocument, signatures: SignatureP
         ...payload,
         signerIndex: idx + 1,
     }));
-    pdfDoc.setSubject(`${CHAIN_META_PREFIX}${JSON.stringify({version: 1, signatures: safe})}`);
+    const payloadStr = `${CHAIN_META_PREFIX}${JSON.stringify({version: 1, signatures: safe})}`;
+    pdfDoc.setSubject(payloadStr);
+
+    try {
+        const infoDict = (pdfDoc as any).getInfoDict();
+        infoDict.set(PDFName.of('OpenWaqfChain'), PDFHexString.fromText(payloadStr));
+    } catch (e) {
+        console.warn('[OWQ] Failed to set redundant metadata block', e);
+    }
 }
 
 function hasStandardCmsSignature(pdfDoc: PDFDocument): boolean {
@@ -103,7 +111,20 @@ export async function readMetadataID(fileData: Uint8Array): Promise<{ id: string
             }
         }
 
-        const signatures = parseSignaturesFromSubject(pdfDoc.getSubject() || '');
+        let signaturesStr = pdfDoc.getSubject() || '';
+        if (!signaturesStr || !signaturesStr.startsWith(CHAIN_META_PREFIX)) {
+            try {
+                const infoDict = (pdfDoc as any).getInfoDict();
+                const customVal = infoDict.get(PDFName.of('OpenWaqfChain'));
+                if (customVal instanceof PDFHexString || customVal instanceof PDFString) {
+                    signaturesStr = customVal.decodeText();
+                }
+            } catch (e) {
+                console.warn('[OWQ] Failed to recover redundant metadata block', e);
+            }
+        }
+
+        const signatures = parseSignaturesFromSubject(signaturesStr);
         const hasStandardSignature = hasStandardCmsSignature(pdfDoc);
         return {id, assertions, signatures, hasStandardSignature};
     } catch (e) {
