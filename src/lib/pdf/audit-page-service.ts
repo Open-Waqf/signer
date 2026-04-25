@@ -110,10 +110,13 @@ export async function appendAuditPage(
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const drawLabel = async (text: string, x: number, y: number, size = 10, bold = false) => {
+    const primaryColor = rgb(0.05, 0.2, 0.45); // Official Navy Blue
+    const secondaryColor = rgb(0.3, 0.3, 0.3);
+
+    const drawLabel = async (text: string, x: number, y: number, size = 10, bold = false, color = rgb(0, 0, 0)) => {
         const hasNonAscii = /[^\x00-\x7F]/.test(text);
         if (!hasNonAscii) {
-            page.drawText(text, {x, y, size, font: bold ? fontBold : font, color: rgb(0, 0, 0)});
+            page.drawText(text, {x, y, size, font: bold ? fontBold : font, color});
             return;
         }
 
@@ -131,78 +134,116 @@ export async function appendAuditPage(
         });
     };
 
+    // Draw borders
+    const m = 24;
+    page.drawRectangle({
+        x: m, y: m, width: width - m * 2, height: height - m * 2,
+        borderWidth: 2, borderColor: primaryColor
+    });
+    page.drawRectangle({
+        x: m + 3, y: m + 3, width: width - (m + 3) * 2, height: height - (m + 3) * 2,
+        borderWidth: 0.5, borderColor: primaryColor
+    });
+
+    // Header Background
+    page.drawRectangle({
+        x: m + 3, y: height - 110, width: width - (m + 3) * 2, height: 110 - (m + 3),
+        color: rgb(0.96, 0.98, 1.0)
+    });
+
     await drawLabel(`${AUDIT_MARKER_PREFIX}${docId}`, 4, 4, 1, false);
 
-    let y = height - 50;
+    let y = height - 60;
     const dateStr = new Date().toLocaleString();
     const verifyUrl = `${AppConfig.website}/?id=${docId}`;
 
-    await drawLabel('OPEN WAQF AUDIT TRAIL', 50, y, 16, true);
+    await drawLabel('OPEN WAQF DIGITAL AUDIT TRAIL', 50, y, 18, true, primaryColor);
 
     const qrBytes = await generateQRCode(verifyUrl);
     if (qrBytes.length > 0) {
         const qrImg = await pdfDoc.embedPng(qrBytes);
-        const qrSize = 80;
-        const qrY = y - qrSize + 10;
-        page.drawImage(qrImg, {x: width - qrSize - 50, y: qrY, width: qrSize, height: qrSize});
-        await drawLabel(`Ref: ${docId}`, width - qrSize - 50, qrY - 15, 8);
+        const qrSize = 70;
+        const qrY = height - 95;
+        page.drawImage(qrImg, {x: width - qrSize - 40, y: qrY, width: qrSize, height: qrSize});
+        await drawLabel(`Ref: ${docId}`, width - qrSize - 40, qrY - 12, 7, false, secondaryColor);
     }
 
-    y -= 40;
-    await drawLabel('Document:', 50, y, 10, true);
-    await drawLabel(filename, 140, y, 10);
-    y -= 20;
-    await drawLabel('Date:', 50, y, 10, true);
-    await drawLabel(dateStr, 140, y, 10);
-    y -= 20;
-    await drawLabel('Validator:', 50, y, 10, true);
-    await drawLabel('Open Waqf Signer (Local/Offline)', 140, y, 10);
+    y -= 60; // Push below header
+    
+    // Document Info section
+    page.drawRectangle({
+        x: 50, y: y - 48, width: width - 100, height: 60,
+        color: rgb(0.98, 0.98, 0.98), borderWidth: 0.5, borderColor: rgb(0.8, 0.8, 0.8)
+    });
+    
+    y -= 15;
+    await drawLabel('Document:', 60, y, 10, true, primaryColor);
+    await drawLabel(filename, 150, y, 10, false, secondaryColor);
+    y -= 16;
+    await drawLabel('Date Generated:', 60, y, 10, true, primaryColor);
+    await drawLabel(dateStr, 150, y, 10, false, secondaryColor);
+    y -= 16;
+    await drawLabel('Validator Engine:', 60, y, 10, true, primaryColor);
+    await drawLabel('Open Waqf Signer (Local/Offline Verifier)', 150, y, 10, false, secondaryColor);
 
     y -= 40;
-    page.drawLine({start: {x: 50, y}, end: {x: width - 50, y}, thickness: 1, color: rgb(0.8, 0.8, 0.8)});
-    y -= 26;
-    await drawLabel('SIGNATURE CHAIN LOG', 50, y, 12, true);
-    y -= 20;
+    await drawLabel('CRYPTOGRAPHIC SIGNATURE LOG', 50, y, 14, true, primaryColor);
+    page.drawLine({start: {x: 50, y: y - 6}, end: {x: width - 50, y: y - 6}, thickness: 1, color: primaryColor});
+    y -= 30;
 
     if (validationLog) {
-        await drawLabel(`SECURITY NOTE: ${validationLog}`, 50, y, 9);
-        y -= 18;
+        await drawLabel(`SECURITY ALERT: ${validationLog}`, 50, y, 9, true, rgb(0.8, 0.1, 0.1));
+        y -= 20;
     }
 
     for (const sig of signatures) {
-        if (y < 95) break;
-        await drawLabel(`Signer ${sig.signerIndex}`, 50, y, 10, true);
-        y -= 14;
+        const boxHeight = 75 + (sig.signerIndex > 1 ? 25 : 0) + (sig.hardwareFallbackUsed ? 15 : 0);
+        if (y - boxHeight < 50) break; // Need enough space for the box
+        
+        y -= boxHeight;
+        
+        page.drawRectangle({
+            x: 50, y: y, width: width - 100, height: boxHeight,
+            borderWidth: 0.5, borderColor: rgb(0.8, 0.8, 0.8),
+            color: rgb(0.99, 0.99, 1.0)
+        });
+
+        // Header for signer
+        page.drawRectangle({
+            x: 50, y: y + boxHeight - 20, width: width - 100, height: 20,
+            color: rgb(0.94, 0.96, 0.98)
+        });
+        
+        let textY = y + boxHeight - 14;
+        await drawLabel(`SIGNATURE INDEX: ${sig.signerIndex}`, 60, textY, 10, true, primaryColor);
+        
+        textY -= 18;
         if (sig.signerIndex > 1) {
-            await drawLabel(`Opened Hash: ${sig.openedDocumentHash.slice(0, 16)}...`, 55, y, 8);
-            y -= 11;
-        }
-        await drawLabel(`Hardware Proof Embedded: ${sig.isHardwareBacked ? 'YES (Cryptographic Proof)' : 'NO (Visual Only)'}`, 55, y, 8);
-        y -= 11;
-        if (sig.tsaVerified) {
-            await drawLabel('Timestamp: RFC 3161 Cryptographic (Verified by FreeTSA)', 55, y, 8);
-        } else {
-            await drawLabel('Timestamp: Local Device Clock (Offline - Unverified)', 55, y, 8);
-        }
-        y -= 11;
-        await drawLabel(`Timestamp Value: ${sig.timestampIso || 'N/A'}`, 55, y, 8);
-        y -= 11;
-        if (sig.signerIndex > 1) {
-            await drawLabel(`Verified Previous: ${sig.previousHashManuallyVerified ? 'YES' : 'NO'}`, 55, y, 8);
-            y -= 14;
-        } else {
-            y -= 3;
-        }
-        if (sig.hardwareFallbackUsed) {
-            await drawLabel('WARNING: Hardware requested but proof could not be embedded. Saved as visual-only.', 55, y, 8);
-            y -= 14;
+            await drawLabel(`State Hash (Prior to Sign): ${sig.openedDocumentHash.slice(0, 32)}...`, 60, textY, 8, false, secondaryColor);
+            textY -= 12;
+            await drawLabel(`Prior Chain Verified: `, 60, textY, 8, true, secondaryColor);
+            await drawLabel(sig.previousHashManuallyVerified ? 'YES' : 'NO (WARNING)', 160, textY, 8, true, sig.previousHashManuallyVerified ? rgb(0.1, 0.6, 0.2) : rgb(0.8, 0.1, 0.1));
+            textY -= 14;
         }
 
-        if (!sig.previousHashManuallyVerified && sig.signerIndex > 1) {
-            await drawLabel(`WARNING: Signer ${sig.signerIndex} signed without manually verifying Signer ${sig.signerIndex - 1}. Prior-chain trust was not confirmed manually.`, 55, y, 8);
-            y -= 14;
+        await drawLabel(`Hardware Proof:`, 60, textY, 8, true, secondaryColor);
+        await drawLabel(sig.isHardwareBacked ? 'EMBEDDED (WebAuthn Cryptography)' : 'VISUAL ONLY', 160, textY, 8, true, sig.isHardwareBacked ? rgb(0.1, 0.6, 0.2) : secondaryColor);
+        textY -= 12;
+        
+        await drawLabel(`Timestamp:`, 60, textY, 8, true, secondaryColor);
+        await drawLabel(sig.tsaVerified ? 'RFC 3161 Cryptographic (Verified)' : 'Local Device Clock (Unverified)', 160, textY, 8, false, secondaryColor);
+        textY -= 12;
+        
+        await drawLabel(`Time Value:`, 60, textY, 8, true, secondaryColor);
+        await drawLabel(sig.timestampIso || 'N/A', 160, textY, 8, false, secondaryColor);
+
+        if (sig.hardwareFallbackUsed) {
+            textY -= 14;
+            await drawLabel('WARNING: Hardware proof was requested but could not be embedded.', 60, textY, 8, true, rgb(0.8, 0.4, 0));
         }
+
+        y -= 10; // Margin between boxes
     }
 
-    await drawLabel('Valid only if cryptographic chain remains intact.', 50, 40, 8);
+    await drawLabel('Valid only if the cryptographic chain and document hash remain intact.', 50, 35, 8, false, secondaryColor);
 }

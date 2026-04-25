@@ -205,21 +205,68 @@ export class PdfEngine {
 
             if (ann.type === 'biometric') {
                 const targetWidth = width * (ann.widthPct || 0.2);
-                const targetHeight = 25;
+                const targetHeight = 32;
                 const x = width * ann.xPct;
                 const y = height - (height * ann.yPct) - targetHeight;
 
-            const textColor = ann.color ? this.hexToRgb(ann.color) : rgb(0, 0, 0.5);
+                const baseColor = rgb(0.05, 0.2, 0.45); // Official Navy Blue
+                const textColor = ann.color ? this.hexToRgb(ann.color) : baseColor;
+                
+                // Shadow
+                page.drawRectangle({
+                    x: x + 2, y: y - 2, width: targetWidth, height: targetHeight,
+                    color: rgb(0.8, 0.8, 0.8),
+                    opacity: 0.5
+                });
+
+                // Main box
                 page.drawRectangle({
                     x, y, width: targetWidth, height: targetHeight,
-                    borderWidth: 1, borderColor: textColor,
-                    color: rgb(0.95, 0.95, 1)
+                    borderWidth: 1.5, borderColor: textColor,
+                    color: rgb(0.96, 0.98, 1.0)
                 });
+
+                const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+                // Add a visual "lock" marker on the left
+                page.drawRectangle({
+                    x: x + 4, y: y + 8, width: 14, height: 12,
+                    color: textColor
+                });
+                page.drawCircle({
+                    x: x + 11, y: y + 15, size: 1.5, color: rgb(1,1,1)
+                });
+                page.drawLine({
+                    start: {x: x+11, y: y+15},
+                    end: {x: x+11, y: y+11},
+                    thickness: 1.5, color: rgb(1,1,1)
+                });
+                // Lock shackle
+                page.drawRectangle({
+                    x: x + 6.5, y: y + 20, width: 9, height: 6,
+                    borderWidth: 1.5, borderColor: textColor
+                });
+                // Erase bottom of shackle so it blends into the base
+                page.drawLine({
+                    start: {x: x+6.5, y: y+20},
+                    end: {x: x+15.5, y: y+20},
+                    thickness: 2, color: rgb(0.96, 0.98, 1.0)
+                });
+
                 page.drawText('BIOMETRIC VERIFIED', {
-                    x: x + 5, y: y + 10, size: 7, font, color: textColor,
+                    x: x + 24, y: y + 19, size: 7.5, font: fontBold, color: textColor,
                 });
-                page.drawText(`ID: ${ann.id.substring(0, 8)}`, {
-                    x: x + 5, y: y + 2, size: 5, font, color: textColor,
+                
+                page.drawLine({
+                    start: {x: x + 24, y: y + 16},
+                    end: {x: x + targetWidth - 6, y: y + 16},
+                    thickness: 0.5,
+                    color: textColor,
+                    opacity: 0.5
+                });
+
+                page.drawText(`ID: ${ann.id.substring(0, 8).toUpperCase()}`, {
+                    x: x + 24, y: y + 7, size: 6, font, color: rgb(0.3, 0.3, 0.3),
                 });
             } else if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
                 const normalized = ann.data.replace(/\u200E/g, '').trim();
