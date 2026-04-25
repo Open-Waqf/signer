@@ -21,9 +21,9 @@ import {
     isAnnotationLocked as isAnnotationLockedStore,
     updateAnnotationById
 } from '../features/workspace/annotation-store';
-import {redoHistory, takeSnapshot, undoHistory} from '../features/workspace/history-store';
+import {HistoryController} from './controllers/history-controller';
+import {InteractionController} from './controllers/interaction-controller';
 import {runHandoverCheck} from '../features/workspace/handover-workflow';
-import {computeDragMove, computeResizeWidthPct} from '../features/workspace/interaction-controller';
 import {executeSave, finalizeSave, resolveHardwareUsage, shareLatestDocument} from '../features/workspace/save-workflow';
 import {isNativePlatform} from '../lib/runtime-platform';
 import {
@@ -38,6 +38,8 @@ import type {CertificateSigningConfig} from '../types';
 
 @customElement('pdf-workspace')
 export class PdfWorkspace extends LitElement {
+    private historyManager = new HistoryController(this);
+    private interactionManager = new InteractionController(this as any);
     @property() pdfName = '';
     @state() currentPage = 1;
     @state() totalPages = 0;
@@ -69,13 +71,6 @@ export class PdfWorkspace extends LitElement {
 
     @state() selectedIds: string[] = [];
     @state() isMultiSelectMode = false;
-    @state() isDragging = false;
-    @state() isResizing = false;
-    @state() dragOffset = {x: 0, y: 0};
-    @state() marqueeBox: { left: number; top: number; width: number; height: number } | null = null;
-
-    @state() history: Annotation[][] = [];
-    @state() future: Annotation[][] = [];
 
     @state() lastSaved: { filename: string; uri?: string } | null = null;
     private lastSavedBytes: Uint8Array | null = null;
@@ -91,12 +86,9 @@ export class PdfWorkspace extends LitElement {
     private pendingCertificateName = '';
 
     @state() public isDirty = false;
-    private interactionSnapshotTaken = false;
-    private interactionChanged = false;
-    private isMarqueeSelecting = false;
-    private marqueeStart = {x: 0, y: 0};
-    private marqueeCurrent = {x: 0, y: 0};
-    private marqueeBaseIds: string[] = [];
+    private touchTimer: ReturnType<typeof setTimeout> | null = null;
+
+    private touchDragStart: { x: number; y: number } | null = null;
     private thumbObserver: IntersectionObserver | null = null;
     private thumbVisiblePages = new Set<number>();
     private thumbQueuedPages = new Set<number>();
@@ -122,8 +114,6 @@ export class PdfWorkspace extends LitElement {
     @query('.viewport') viewport!: HTMLDivElement;
     @query('#cert-input') certInput!: HTMLInputElement;
 
-    @state() guideLines: { axis: 'x' | 'y', pos: number }[] = [];
-
     @state() activeSidebar: 'thumbnails' | 'annotations' | null = preferences.getActiveSidebar();
     @state() thumbnailURLs: Array<string | null> = [];
     @state() thumbPanelScrollTop = 0;
@@ -145,6 +135,16 @@ export class PdfWorkspace extends LitElement {
 
     private get isBasicMode(): boolean {
         return this.uiMode === 'basic';
+    }
+
+    annotationsChanged(next: Annotation[]) {
+        this.annotations = next;
+    }
+
+    updateAnnotation(id: string, updates: Partial<Annotation>) {
+        if (this.isAnnotationLocked(id)) return;
+        this.annotations = updateAnnotationById(this.annotations, id, updates);
+        this.isDirty = true;
     }
 
     private persistActiveSidebar() {
@@ -1093,29 +1093,17 @@ export class PdfWorkspace extends LitElement {
     };
 
     snapshot() {
-        const next = takeSnapshot({history: this.history, future: this.future}, this.annotations);
-        this.history = next.history;
-        this.future = next.future;
+        this.historyManager.snapshot(this.annotations);
     }
 
     undo() {
-        const result = undoHistory({history: this.history, future: this.future}, this.annotations);
-        if (!result.changed) return;
-        HapticService.impact();
-        this.history = result.state.history;
-        this.future = result.state.future;
-        this.annotations = result.annotations;
+        this.annotations = this.historyManager.undo(this.annotations);
         this.selectedIds = [];
         this.isDirty = true;
     }
 
     redo() {
-        const result = redoHistory({history: this.history, future: this.future}, this.annotations);
-        if (!result.changed) return;
-        HapticService.impact();
-        this.history = result.state.history;
-        this.future = result.state.future;
-        this.annotations = result.annotations;
+        this.annotations = this.historyManager.redo(this.annotations);
         this.selectedIds = [];
         this.isDirty = true;
     }
@@ -1174,8 +1162,7 @@ export class PdfWorkspace extends LitElement {
         this.isDirty = false;
         this.lastSaved = null;
         this.lastSavedBytes = null;
-        this.history = [];
-        this.future = [];
+        this.historyManager.reset();
 
         const cleanName = name.replace(/_signed_\d{4}-\d{2}-\d{2}(_\d{4})?.*$/, '').replace(/\.pdf$/i, '');
         const now = new Date();
@@ -1647,12 +1634,6 @@ export class PdfWorkspace extends LitElement {
         this.isDirty = true;
     }
 
-    updateAnnotation(id: string, updates: Partial<Annotation>) {
-        if (this.isAnnotationLocked(id)) return;
-        this.annotations = updateAnnotationById(this.annotations, id, updates);
-        this.isDirty = true;
-    }
-
     updateStyle(id: string, style: Partial<Annotation>) {
         if (this.isAnnotationLocked(id)) return;
         this.snapshot();
@@ -1667,10 +1648,6 @@ export class PdfWorkspace extends LitElement {
         this.isMultiSelectMode = false;
     }
 
-    private touchTimer: ReturnType<typeof setTimeout> | null = null;
-    private isTouchLongPressTriggered = false;
-    private touchDragStart: { x: number; y: number } | null = null;
-
     private getPointFromEvent(e: MouseEvent | TouchEvent) {
         if ('touches' in e) {
             const t = e.touches[0] || (e as TouchEvent).changedTouches?.[0];
@@ -1680,9 +1657,9 @@ export class PdfWorkspace extends LitElement {
         return {x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY};
     }
 
-    private updateMarqueeSelection(append: boolean) {
+    updateMarqueeSelection(append: boolean) {
         if (!this.container) return;
-        const box = this.marqueeBox;
+        const box = this.interactionManager.marqueeBox;
         if (!box) return;
         const left = box.left;
         const right = box.left + box.width;
@@ -1703,7 +1680,7 @@ export class PdfWorkspace extends LitElement {
         });
 
         if (append) {
-            this.selectedIds = Array.from(new Set([...this.marqueeBaseIds, ...hitIds]));
+            this.selectedIds = Array.from(new Set([...(this.interactionManager as any).marqueeBaseIds, ...hitIds]));
             return;
         }
         this.selectedIds = hitIds;
@@ -1718,12 +1695,7 @@ export class PdfWorkspace extends LitElement {
         const rect = this.container.getBoundingClientRect();
         const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
         const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-        this.isMarqueeSelecting = true;
-        this.marqueeStart = {x, y};
-        this.marqueeCurrent = {x, y};
-        this.marqueeBaseIds = e.shiftKey ? [...this.selectedIds] : [];
-        if (!e.shiftKey) this.selectedIds = [];
-        this.marqueeBox = {left: x, top: y, width: 0, height: 0};
+        this.interactionManager.startMarquee(x, y, e.shiftKey);
         e.preventDefault();
     }
 
@@ -1757,7 +1729,7 @@ export class PdfWorkspace extends LitElement {
         };
 
         if ('touches' in e) {
-            this.isTouchLongPressTriggered = false;
+
             if (this.isMultiSelectMode) {
                 applySelection(true);
                 return;
@@ -1767,9 +1739,8 @@ export class PdfWorkspace extends LitElement {
             const startPoint = this.getPointFromEvent(e);
             this.touchDragStart = {x: startPoint.x, y: startPoint.y};
             this.touchTimer = setTimeout(() => {
-                this.isTouchLongPressTriggered = true;
+
                 this.isMultiSelectMode = true;
-                this.isDragging = false;
                 HapticService.impact();
                 if (!this.selectedIds.includes(id)) {
                     this.selectedIds = [...this.selectedIds, id];
@@ -1780,29 +1751,17 @@ export class PdfWorkspace extends LitElement {
             applySelection(isShift);
         }
         
-        this.isDragging = true;
-        this.interactionSnapshotTaken = false;
-        this.interactionChanged = false;
-        const point = this.getPointFromEvent(e);
-        const clientX = point.x;
-        const clientY = point.y;
         const ann = this.annotations.find((a) => a.id === id);
-        if (!ann) return;
-        const rect = this.container.getBoundingClientRect();
-        this.dragOffset = {
-            x: clientX - rect.left - ann.xPct * rect.width,
-            y: clientY - rect.top - ann.yPct * rect.height
-        };
+        if (ann) {
+            this.interactionManager.startDragging(e, id, ann);
+        }
     }
 
     startResize(e: MouseEvent | TouchEvent, id: string) {
         if (this.isAnnotationLocked(id)) return;
         if (e.cancelable) e.preventDefault();
         e.stopPropagation();
-        this.isResizing = true;
-        this.selectedIds = [id]; // Resize only works on one item at a time for simplicity
-        this.interactionSnapshotTaken = false;
-        this.interactionChanged = false;
+        this.interactionManager.startResizing(id);
     }
 
     handleGlobalMove = (e: MouseEvent | TouchEvent) => {
@@ -1814,76 +1773,7 @@ export class PdfWorkspace extends LitElement {
                 this.touchTimer = null;
             }
         }
-        if (this.isMarqueeSelecting && !('touches' in e)) {
-            if (!this.container) return;
-            const rect = this.container.getBoundingClientRect();
-            const x = Math.max(0, Math.min(rect.width, (e as MouseEvent).clientX - rect.left));
-            const y = Math.max(0, Math.min(rect.height, (e as MouseEvent).clientY - rect.top));
-            this.marqueeCurrent = {x, y};
-            const left = Math.min(this.marqueeStart.x, this.marqueeCurrent.x);
-            const top = Math.min(this.marqueeStart.y, this.marqueeCurrent.y);
-            const width = Math.abs(this.marqueeStart.x - this.marqueeCurrent.x);
-            const height = Math.abs(this.marqueeStart.y - this.marqueeCurrent.y);
-            this.marqueeBox = {left, top, width, height};
-            this.updateMarqueeSelection(this.marqueeBaseIds.length > 0);
-            return;
-        }
-        if (this.selectedIds.length === 0 || (!this.isDragging && !this.isResizing)) return;
-        if (e.cancelable) e.preventDefault();
-
-        const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-        const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
-        const rect = this.container.getBoundingClientRect();
-        const primaryId = this.selectedIds[0];
-        const ann = this.annotations.find((a) => a.id === primaryId);
-        if (!ann) return;
-
-        const takeSnapshotIfNeeded = () => {
-            if (!this.interactionSnapshotTaken) {
-                this.snapshot();
-                this.interactionSnapshotTaken = true;
-            }
-        };
-
-        if (this.isDragging) {
-            const contentEl = this.shadowRoot?.querySelector('.draggable.selected img, .draggable.selected .text-content') as HTMLElement;
-            const move = computeDragMove({
-                clientX,
-                clientY,
-                rect,
-                ann,
-                annotations: this.annotations,
-                selectedIds: this.selectedIds,
-                dragOffset: this.dragOffset,
-                visualSize: contentEl && contentEl.offsetWidth > 0 && contentEl.offsetHeight > 0
-                    ? {
-                        widthPct: contentEl.offsetWidth / rect.width,
-                        heightPct: contentEl.offsetHeight / rect.height,
-                    }
-                    : undefined,
-            });
-            this.guideLines = move.guideLines;
-
-            if (move.changed) {
-                takeSnapshotIfNeeded();
-                this.interactionChanged = true;
-                this.annotations = move.nextAnnotations;
-                this.isDirty = true;
-                this.dragOffset = move.nextDragOffset;
-            }
-
-            // Collision detection for popup/delete
-            this.container.toggleAttribute('data-near-top', move.nextYPct < 0.1);
-            this.container.toggleAttribute('data-near-right', move.nextXPct > 0.85);
-
-        } else if (this.isResizing) {
-            const resized = computeResizeWidthPct({clientX, rect, ann});
-            if (resized.changed) {
-                takeSnapshotIfNeeded();
-                this.interactionChanged = true;
-                this.updateAnnotation(primaryId, {widthPct: resized.widthPct});
-            }
-        }
+        this.interactionManager.handleGlobalMove(e);
     };
 
     stopInteraction = () => {
@@ -1892,22 +1782,7 @@ export class PdfWorkspace extends LitElement {
             this.touchTimer = null;
         }
         this.touchDragStart = null;
-        if (this.isMarqueeSelecting) {
-            this.isMarqueeSelecting = false;
-            this.marqueeBox = null;
-            this.marqueeBaseIds = [];
-        }
-        if (this.isTouchLongPressTriggered) {
-            this.isDragging = false;
-        }
-        this.isTouchLongPressTriggered = false;
-        const changed = this.interactionChanged;
-        this.isDragging = false;
-        this.isResizing = false;
-        this.interactionSnapshotTaken = false;
-        this.interactionChanged = false;
-        if (changed) this.isDirty = true;
-        this.guideLines = [];
+        this.interactionManager.stopInteraction();
     };
 
     openSignModal() {
@@ -2144,8 +2019,7 @@ export class PdfWorkspace extends LitElement {
         this.clearCertificateSession();
         this.annotations = [];
         this.signaturesChain = [];
-        this.history = [];
-        this.future = [];
+        this.historyManager.reset();
         this.lastSaved = null;
         this.lastSavedBytes = null;
         this.pdfName = '';
@@ -2454,15 +2328,9 @@ export class PdfWorkspace extends LitElement {
         this.toast(`${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}`);
     }
 
-    private guideLineStyle(guide: { axis: 'x' | 'y'; pos: number }) {
-        return guide.axis === 'x'
-            ? {left: `${guide.pos * 100}%`}
-            : {top: `${guide.pos * 100}%`};
-    }
-
     private annotationStyle(ann: Annotation, isText: boolean) {
         return {
-            left: `${ann.xPct * 100}%`,
+            'inset-inline-start': `${ann.xPct * 100}%`,
             top: `${ann.yPct * 100}%`,
             width: isText ? 'auto' : (ann.widthPct ? `${ann.widthPct * 100}%` : 'auto'),
         };
@@ -2470,10 +2338,10 @@ export class PdfWorkspace extends LitElement {
 
     private textStyle(ann: Annotation) {
         return {
-            fontSize: `${ann.fontSize || 12}px`,
-            fontWeight: ann.fontWeight || 'normal',
-            fontFamily: ann.fontFamily || 'Amiri',
-            color: ann.color || 'black',
+            'font-size': `${ann.fontSize || 12}px`,
+            'font-weight': ann.fontWeight || 'normal',
+            'font-family': ann.fontFamily || 'Amiri',
+            'color': ann.color || 'black',
         };
     }
 
@@ -2963,11 +2831,11 @@ export class PdfWorkspace extends LitElement {
                     <div class="toolbar-group">
                         <button data-testid="btn-undo" class="btn toolbar-btn-compact"
                                 aria-label="${i18n.t('undo')}" @click=${this.undo}
-                                ?disabled=${this.history.length === 0}
+                                ?disabled=${!this.historyManager.canUndo}
                                 title="${i18n.t('undo')}">${ICONS.undo}
                         </button>
                         <button data-testid="btn-redo" class="btn toolbar-btn-compact"
-                                aria-label="${i18n.t('redo')}" @click=${this.redo} ?disabled=${this.future.length === 0}
+                                aria-label="${i18n.t('redo')}" @click=${this.redo} ?disabled=${!this.historyManager.canRedo}
                                 title="${i18n.t('redo')}">${ICONS.redo}
                         </button>
                         <div class="toolbar-divider"></div>
@@ -3072,21 +2940,20 @@ export class PdfWorkspace extends LitElement {
             <div class="workspace-area">
                 ${this.renderWorkspaceSidebar()}
 
-                <div class="viewport ${this.isDragging ? 'drag-active' : ''}" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
+                <div class="viewport ${this.interactionManager.isDragging ? 'drag-active' : ''}" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
                     ${this.renderWorkspaceTopControls()}
-
                     <div class="page-container" data-testid="page-container" @mousedown=${this.startMarqueeSelection}>
-                        ${this.guideLines.map(guide => guide.axis === 'x' ? html`
-                            <div class="guide-line-x" style=${styleMap(this.guideLineStyle(guide))}></div>
+                        ${this.interactionManager.guideLines.map(guide => guide.axis === 'x' ? html`
+                            <div class="guide-line-x" style="${`inset-inline-start: ${guide.pos * 100}%`}"></div>
                         ` : html`
-                            <div class="guide-line-y" style=${styleMap(this.guideLineStyle(guide))}></div>
+                            <div class="guide-line-y" style="${`top: ${guide.pos * 100}%`}"></div>
                         `)}
-                        ${this.marqueeBox ? html`
+                        ${this.interactionManager.marqueeBox ? html`
                             <div class="marquee-box" data-testid="marquee-box" style=${styleMap({
-                                left: `${this.marqueeBox.left}px`,
-                                top: `${this.marqueeBox.top}px`,
-                                width: `${this.marqueeBox.width}px`,
-                                height: `${this.marqueeBox.height}px`,
+                                'inset-inline-start': `${this.interactionManager.marqueeBox.left}px`,
+                                top: `${this.interactionManager.marqueeBox.top}px`,
+                                width: `${this.interactionManager.marqueeBox.width}px`,
+                                height: `${this.interactionManager.marqueeBox.height}px`,
                             })}></div>
                         ` : ''}
                         <canvas id="pdf-canvas"></canvas>
