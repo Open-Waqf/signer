@@ -181,8 +181,7 @@ export class SignatureModal extends LitElement {
             text-align: center;
             position: absolute;
             bottom: 0;
-            left: 0;
-            right: 0;
+            inset-inline: 0;
             background: color-mix(in srgb, var(--bg-surface, #fff), transparent 20%);
             padding: 1px 0;
             white-space: nowrap;

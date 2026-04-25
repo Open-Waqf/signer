@@ -417,8 +417,7 @@ app-root {
     margin-top: 40px;
     width: calc(100% - 40px);
     max-width: 800px;
-    margin-left: auto;
-    margin-right: auto;
+    margin-inline: auto;
     flex-shrink: 0;
 }
 
@@ -774,7 +773,7 @@ app-root {
     padding: 16px 24px;
     position: fixed;
     z-index: 210000; /* Highest z-index to always be visible */
-    left: 50%;
+    inset-inline-start: 50%;
     bottom: 30px;
     transform: translateX(-50%);
     font-size: 0.95rem;

@@ -461,7 +461,7 @@ export class PdfWorkspace extends LitElement {
         .thumb-panel {
             width: 80px;
             background: var(--workspace-sidebar-bg);
-            border-right: 1px solid var(--workspace-sidebar-border);
+            border-inline-end: 1px solid var(--workspace-sidebar-border);
             overflow-y: auto;
             flex-shrink: 0;
             padding: 12px 8px;
@@ -483,7 +483,7 @@ export class PdfWorkspace extends LitElement {
             padding: 12px;
             align-items: stretch;
             background: var(--bg-surface);
-            border-right: 1px solid var(--border);
+            border-inline-end: 1px solid var(--border);
         }
 
         @media (max-width: 1024px) {
@@ -689,8 +689,7 @@ export class PdfWorkspace extends LitElement {
 
         .guide-line-y {
             position: absolute;
-            left: 0;
-            right: 0;
+            inset-inline: 0;
             height: 1px;
             background: var(--primary);
             z-index: 50;
@@ -762,7 +761,7 @@ export class PdfWorkspace extends LitElement {
         .style-popup {
             position: absolute;
             top: -56px;
-            left: 50%;
+            inset-inline-start: 50%;
             transform: translateX(-50%);
             background: var(--workspace-style-popup-bg);
             border-radius: 8px;
@@ -814,7 +813,7 @@ export class PdfWorkspace extends LitElement {
         .resize-handle {
             position: absolute;
             bottom: -8px;
-            right: -8px;
+            inset-inline-end: -8px;
             width: 16px;
             height: 16px;
             background: var(--primary);
@@ -895,7 +894,7 @@ export class PdfWorkspace extends LitElement {
         .stamp-preset-delete {
             position: absolute;
             top: 2px;
-            right: 2px;
+            inset-inline-end: 2px;
             width: 18px;
             height: 18px;
             border: none;
