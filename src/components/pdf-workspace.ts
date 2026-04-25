@@ -86,6 +86,7 @@ export class PdfWorkspace extends LitElement {
     private pendingCertificateName = '';
 
     @state() public isDirty = false;
+    @state() isRendering = false;
     private touchTimer: ReturnType<typeof setTimeout> | null = null;
 
     private touchDragStart: { x: number; y: number } | null = null;
@@ -1219,8 +1220,13 @@ export class PdfWorkspace extends LitElement {
 
     async renderPage() {
         if (!this.canvas) return;
-        const renderScale = Math.min(3.0, 1.5 * this.scale);
-        await pdfEngine.renderPage(this.currentPage, this.canvas, renderScale);
+        this.isRendering = true;
+        try {
+            const renderScale = Math.min(3.0, 1.5 * this.scale);
+            await pdfEngine.renderPage(this.currentPage, this.canvas, renderScale);
+        } finally {
+            this.isRendering = false;
+        }
     }
 
     async generateThumbnails() {
@@ -2956,6 +2962,7 @@ export class PdfWorkspace extends LitElement {
                                 height: `${this.interactionManager.marqueeBox.height}px`,
                             })}></div>
                         ` : ''}
+                        ${this.isRendering ? html`<div class="canvas-skeleton"></div>` : ''}
                         <canvas id="pdf-canvas"></canvas>
                         ${this.annotations.filter(ann => ann.page === this.currentPage - 1).map(ann => {
                             const isSelected = this.selectedIds.includes(ann.id);
