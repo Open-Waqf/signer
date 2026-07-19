@@ -162,6 +162,13 @@ export class PdfWorkspace extends LitElement {
         this.handoverResult = 'idle';
     }
 
+    private closeCustomPrompt() {
+        // Reassign the object (not a nested mutation) so Lit re-renders and the
+        // modal actually closes — mutating this.customPrompt.show does not trigger
+        // an update, leaving the dialog stuck open on Cancel/Escape/backdrop.
+        this.customPrompt = {...this.customPrompt, show: false};
+    }
+
     private generateId(): string {
         return crypto.randomUUID().split('-')[0];
     }
@@ -196,7 +203,7 @@ export class PdfWorkspace extends LitElement {
             } : a));
             this.isDirty = true;
         }
-        this.customPrompt.show = false;
+        this.closeCustomPrompt();
     }
 
     sendProofEmail() {
@@ -2485,7 +2492,7 @@ export class PdfWorkspace extends LitElement {
             <owq-modal .open=${this.customPrompt.show}
                        data-testid="custom-prompt"
                        ariaLabelledby="prompt-title"
-                       @modal-close=${() => this.customPrompt.show = false}>
+                       @modal-close=${() => this.closeCustomPrompt()}>
                 <h3 id="prompt-title" class="modal-title">${this.customPrompt.title}</h3>
                 <input type="text" class="input-field prompt-input" data-testid="input-custom-prompt"
                        aria-label="${this.customPrompt.title}"
@@ -2495,11 +2502,11 @@ export class PdfWorkspace extends LitElement {
                        @input=${(e: any) => this.customPrompt.value = e.target.value}
                        @keydown=${(e: KeyboardEvent) => {
                            if (e.key === 'Enter') this.saveCustomPrompt();
-                           if (e.key === 'Escape') this.customPrompt.show = false;
+                           if (e.key === 'Escape') this.closeCustomPrompt();
                        }}>
                 <div class="modal-actions">
                     <button class="btn modal-btn-flex" data-testid="btn-cancel-prompt"
-                            @click=${() => this.customPrompt.show = false}>
+                            @click=${() => this.closeCustomPrompt()}>
                         ${i18n.t('cancel')}
                     </button>
                     <button class="btn btn-primary modal-btn-flex" data-testid="btn-save-prompt"

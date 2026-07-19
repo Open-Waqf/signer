@@ -60,16 +60,27 @@ export async function loadLastUsed(mode: string): Promise<string | null> {
     return typeof value === 'string' ? value : null;
 }
 
+// Best-effort convenience cache: a failure here must never reject (callers use
+// `void persistLastUsed(...)`), because the actual signature is dispatched
+// regardless of whether the last-used thumbnail could be cached.
 export async function persistLastUsed(mode: string, dataURL: string): Promise<void> {
-    await writeKey(`last:${mode}`, dataURL);
+    try {
+        await writeKey(`last:${mode}`, dataURL);
+    } catch {
+        // Storage full/unavailable — the last-used cache is non-essential.
+    }
 }
 
 export async function clearLastUsed(mode: string): Promise<void> {
-    const db = await openDb();
-    await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readwrite');
-        tx.objectStore(STORE).delete(`last:${mode}`);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
+    try {
+        const db = await openDb();
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(STORE, 'readwrite');
+            tx.objectStore(STORE).delete(`last:${mode}`);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch {
+        // Non-essential cache clear — ignore failures.
+    }
 }

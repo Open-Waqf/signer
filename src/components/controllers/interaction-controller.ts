@@ -42,9 +42,13 @@ export class InteractionController implements ReactiveController {
 
         this.isDragging = true;
         this.host.selectedIds = this.host.selectedIds.includes(id) ? this.host.selectedIds : [id];
+        // Offset must be in pixels: computeDragMove subtracts dragOffset from a
+        // pixel value (clientX - rect.left) and recomputes it in pixels each move.
+        // Storing a fraction here made the first pointermove snap the annotation's
+        // corner to the cursor ("teleport").
         this.dragOffset = {
-            x: (clientX - rect.left) / rect.width - ann.xPct,
-            y: (clientY - rect.top) / rect.height - ann.yPct,
+            x: (clientX - rect.left) - ann.xPct * rect.width,
+            y: (clientY - rect.top) - ann.yPct * rect.height,
         };
         this.interactionSnapshotTaken = false;
 

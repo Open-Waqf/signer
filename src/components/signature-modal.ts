@@ -38,6 +38,7 @@ export class SignatureModal extends LitElement {
     @state() private presets: SignaturePreset[] = [];
     @state() private showSaveNameRow = false;
     @state() private saveNameValue = '';
+    @state() private saveError = '';
 
     private isDrawing = false;
     private ctx: CanvasRenderingContext2D | null = null;
@@ -221,6 +222,16 @@ export class SignatureModal extends LitElement {
 
         .save-preset-row .btn {
             width: 100%;
+        }
+
+        .save-error {
+            color: var(--danger-text, #b91c1c);
+            background: var(--danger-bg, #fee2e2);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            text-align: start;
+            margin-bottom: 14px;
         }
 
         .actions .btn {
@@ -529,9 +540,21 @@ export class SignatureModal extends LitElement {
         void persistLastUsed(this.mode, preset.dataURL);
     }
 
-    private deletePreset(id: string) {
+    private async deletePreset(id: string) {
         HapticService.impact();
-        const target = this.presets.find(p => p.id === id);
+        const previous = this.presets;
+        const updated = this.presets.filter(p => p.id !== id);
+        this.presets = updated;
+        try {
+            await persistPresetsToDb(this.mode, updated);
+        } catch (e) {
+            console.error('[OWQ] Failed to persist preset deletion', e);
+            this.presets = previous; // keep the UI consistent with what is actually stored
+            this.saveError = i18n.t('presetSaveFailed');
+            return;
+        }
+        this.saveError = '';
+        const target = previous.find(p => p.id === id);
         if (target && this.originalData === target.dataURL) {
             this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.originalData = null;
@@ -539,14 +562,12 @@ export class SignatureModal extends LitElement {
             this.showSaveNameRow = false;
             void clearLastUsed(this.mode);
         }
-        const updated = this.presets.filter(p => p.id !== id);
-        this.presets = updated;
-        void persistPresetsToDb(this.mode, updated);
     }
 
     private saveAsPreset() {
         HapticService.selection();
         if (this.presets.length >= MAX_PRESETS) return;
+        this.saveError = '';
         const defaultName = `${this.mode === 'signature' ? i18n.t('presetBaseSignature') : i18n.t('presetBaseInitials')} ${this.presets.length + 1}`;
         this.saveNameValue = defaultName;
         this.showSaveNameRow = true;
@@ -559,11 +580,22 @@ export class SignatureModal extends LitElement {
         const exportPayload = this.exportCanvas();
         if (!exportPayload) return;
 
-        HapticService.success();
         const preset: SignaturePreset = {id: Date.now().toString(), name, dataURL: exportPayload.dataUrl};
         const updated = [...this.presets, preset];
-        await persistPresetsToDb(this.mode, updated);
+        // Persist BEFORE signalling success — a rejected IndexedDB write (quota
+        // exceeded, private mode) must surface an error instead of silently
+        // dropping the preset after a success haptic.
+        try {
+            await persistPresetsToDb(this.mode, updated);
+        } catch (e) {
+            console.error('[OWQ] Failed to persist signature preset', e);
+            HapticService.impact();
+            this.saveError = i18n.t('presetSaveFailed');
+            return;
+        }
+        HapticService.success();
         this.presets = updated;
+        this.saveError = '';
         this.showSaveNameRow = false;
         this.saveNameValue = '';
     }
@@ -708,7 +740,7 @@ export class SignatureModal extends LitElement {
 
                     <canvas id="signature-pad" data-testid="signature-pad"></canvas>
 
-                    ${(this.isDirty || this.originalData) && this.presets.length < MAX_PRESETS ? html`
+                    ${this.presets.length < MAX_PRESETS ? html`
                         ${this.showSaveNameRow ? html`
                             <div class="save-name-row">
                                 <input
@@ -732,11 +764,16 @@ export class SignatureModal extends LitElement {
                         ` : html`
                             <div class="save-preset-row">
                                 <button class="btn btn-sm" data-testid="btn-save-preset"
+                                        ?disabled=${!this.isDirty && !this.originalData}
                                         @click=${() => this.saveAsPreset()}>
                                     + ${i18n.t('savePresetShort')}
                                 </button>
                             </div>
                         `}
+                    ` : ''}
+
+                    ${this.saveError ? html`
+                        <div class="save-error" role="alert" data-testid="preset-save-error">${this.saveError}</div>
                     ` : ''}
 
                     <div class="actions">

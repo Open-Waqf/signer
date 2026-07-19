@@ -1,4 +1,4 @@
-import {PDFDocument} from 'pdf-lib';
+import {PDFDocument, PDFName} from 'pdf-lib';
 
 self.onmessage = async (event: MessageEvent) => {
     const {id, type, data} = event.data;
@@ -28,6 +28,17 @@ async function calculateDeterministicHashIgnoringSubject(fileData: Uint8Array): 
     pdfDoc.setSubject('');
     pdfDoc.setCreationDate(new Date(0));
     pdfDoc.setModificationDate(new Date(0));
+    // The signer chain payload is mirrored into a redundant /OpenWaqfChain info-dict
+    // key by setSignaturesSubject(). It must be excluded from the deterministic hash
+    // exactly like Subject — otherwise the integrity anchor computed over the
+    // provisional payload (before finalization) never matches the finalized payload
+    // stored in the saved file, breaking chain verification and the handover flow.
+    try {
+        const infoDict = (pdfDoc as any).getInfoDict();
+        infoDict.delete(PDFName.of('OpenWaqfChain'));
+    } catch {
+        // No info dict present (or key already absent) — nothing to strip.
+    }
     const normalized = await pdfDoc.save();
     return calculateSHA256(normalized);
 }

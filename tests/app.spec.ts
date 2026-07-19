@@ -606,7 +606,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.mouse.down();
         await page.mouse.up();
 
-        await expect(page.getByTestId('btn-save-preset')).toHaveCount(0);
+        await expect(page.getByTestId('btn-save-preset')).toBeDisabled();
 
         const blankAlphaPixels = await sigPad.evaluate((canvas) => {
             const ctx = (canvas as HTMLCanvasElement).getContext('2d');
@@ -626,6 +626,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.mouse.up();
 
         await expect(page.getByTestId('btn-save-preset')).toBeVisible();
+        await expect(page.getByTestId('btn-save-preset')).toBeEnabled();
         const drawnAlphaPixels = await sigPad.evaluate((canvas) => {
             const ctx = (canvas as HTMLCanvasElement).getContext('2d');
             if (!ctx) return -1;
@@ -1124,6 +1125,164 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
 
         await page.keyboard.press('Delete');
         await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+    });
+
+    test('9.3 Annotation does not teleport to the cursor on first drag move', async ({page}) => {
+        await page.goto('/');
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'drag_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer)
+        });
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        const ws = page.locator('pdf-workspace');
+        await ws.getByTestId('btn-add-date').click();
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+
+        // Pin the annotation to a known spot away from the center guideline.
+        await ws.evaluate((el) => {
+            const comp = el as any;
+            comp.annotations = comp.annotations.map((a: any) => ({...a, xPct: 0.35, yPct: 0.35}));
+            comp.requestUpdate();
+        });
+        await page.waitForTimeout(50);
+
+        const ann = ws.locator('[data-testid^="annotation-"]').first();
+        const before = await ann.boundingBox();
+        if (!before) throw new Error('Missing annotation box');
+        const cx = before.x + before.width / 2;
+        const cy = before.y + before.height / 2;
+
+        // Grab at the centre and nudge a small delta.
+        const dx = 25;
+        const dy = 15;
+        await page.mouse.move(cx, cy);
+        await page.mouse.down();
+        await page.mouse.move(cx + dx, cy + dy, {steps: 4});
+        await page.mouse.up();
+        await page.waitForTimeout(50);
+
+        const after = await ann.boundingBox();
+        if (!after) throw new Error('Missing annotation box after drag');
+        const movedX = (after.x + after.width / 2) - cx;
+
+        // With the fix the centre follows the pointer delta (~dx). The teleport bug
+        // snapped the top-left corner under the cursor (grabbed at centre), adding a
+        // one-time jump of ~half the annotation width on the first move, i.e.
+        // movedX ≈ dx + width/2. Assert it followed the pointer and did NOT jump.
+        expect(movedX).toBeGreaterThan(dx * 0.6);
+        expect(movedX).toBeLessThan(dx + before.width / 4);
+    });
+
+    test('9.4 Add Identity prompt closes on Cancel without adding an annotation', async ({page}) => {
+        await page.goto('/');
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'prompt_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer)
+        });
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        const ws = page.locator('pdf-workspace');
+        await ws.evaluate((el) => (el as any).addIdentity());
+
+        await expect(page.getByTestId('custom-prompt')).toBeVisible();
+        await page.getByTestId('btn-cancel-prompt').click();
+        // Regression: nested-state mutation previously left the modal stuck open.
+        await expect(page.getByTestId('custom-prompt')).not.toBeVisible();
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(0);
+    });
+
+    test('9.5 Hardware signing succeeds on the first use (fresh credential)', async ({page}) => {
+        // Virtual platform authenticator so navigator.credentials.create/get work headlessly.
+        const client = await page.context().newCDPSession(page);
+        await client.send('WebAuthn.enable');
+        await client.send('WebAuthn.addVirtualAuthenticator', {
+            options: {
+                protocol: 'ctap2',
+                transport: 'internal',
+                hasResidentKey: true,
+                hasUserVerification: true,
+                isUserVerified: true,
+            },
+        });
+
+        await page.goto('/');
+        // Fresh context => no stored credential => sign() takes the register-then-get
+        // path. The bug reconstructed a bogus rawId here so the immediate get() matched
+        // no credential and threw on the very first attempt.
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'hw_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer)
+        });
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        const ws = page.locator('pdf-workspace');
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(0);
+
+        await ws.evaluate((el) => (el as any).addBiometric());
+
+        // Success => a biometric annotation is placed. The first-use bug would have
+        // thrown inside sign() and left zero annotations (biometricError toast).
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+    });
+
+    test('9.6 Preset save surfaces an inline error when storage is unavailable', async ({page}) => {
+        // Simulate private-mode / quota-blocked IndexedDB: every open() rejects.
+        await page.addInitScript(() => {
+            const failingOpen = () => {
+                const req: any = {onsuccess: null, onerror: null, onupgradeneeded: null};
+                Promise.resolve().then(() => {
+                    Object.defineProperty(req, 'error', {
+                        value: new DOMException('blocked', 'InvalidStateError'),
+                        configurable: true,
+                    });
+                    if (typeof req.onerror === 'function') req.onerror(new Event('error'));
+                });
+                return req;
+            };
+            try {
+                (window.indexedDB as any).open = failingOpen;
+            } catch {
+                // ignore
+            }
+        });
+
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing signature pad bounds');
+        await page.mouse.move(box.x + 18, box.y + 18);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 90, box.y + 90);
+        await page.mouse.up();
+
+        await page.getByTestId('btn-save-preset').click();
+        await page.getByTestId('input-preset-name').fill('Storage Fail Preset');
+        await page.getByTestId('btn-confirm-preset').click();
+
+        // The write rejects: the user must see an error instead of a silently dropped
+        // preset. Previously the success haptic fired and the preset vanished on reload.
+        await expect(page.getByTestId('preset-save-error')).toBeVisible();
+        await expect(page.locator('.preset-item[title="Storage Fail Preset"]')).toHaveCount(0);
     });
 
     test('9.1 Workflow: Mobile long-press enables multi-select tap-add', async ({page}) => {

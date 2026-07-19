@@ -111,37 +111,31 @@ export class WebAuthnService {
         publicKeySpki: string;
         credentialId: string;
     }> {
-        const stored = localStorage.getItem(this.STORAGE_KEY);
-        let credInfo: any;
-        
+        let stored = localStorage.getItem(this.STORAGE_KEY);
+
         if (!stored) {
-            const reg = await this.register(documentHash, userName);
-            credInfo = { 
-                id: reg.id, 
-                rawId: this.bufferToBase64(this.base64ToBuffer(btoa(reg.id))), // simple placeholder
-                publicKeySpki: reg.publicKeySpki 
-            };
-            // The registration itself is a proof of presence, 
-            // but for a strict assertion we might want to re-call .get
-        } else {
-            credInfo = JSON.parse(stored);
+            // First use: register, then re-read the persisted credential so we use
+            // the authenticator's real binary rawId. Reconstructing a placeholder
+            // rawId here made the immediate get() fail to match any credential,
+            // breaking hardware signing on the very first attempt.
+            await this.register(documentHash, userName);
+            stored = localStorage.getItem(this.STORAGE_KEY);
+            if (!stored) throw new Error('Failed to persist hardware credential');
         }
 
+        const credInfo = JSON.parse(stored);
         const rpId = window.location.hostname || 'localhost';
 
         const getOptions: PublicKeyCredentialRequestOptions = {
             challenge: documentHash.buffer as any,
             rpId,
             allowCredentials: [{
-                id: this.base64ToBuffer(credInfo.id.includes('=') ? credInfo.id : btoa(credInfo.id).replace(/=/g,'')), // cleanup id format
+                id: this.base64ToBuffer(credInfo.rawId),
                 type: 'public-key'
             }],
             userVerification: 'required',
             timeout: 60000
         };
-
-        // Fix rawId vs id handling
-        getOptions.allowCredentials![0].id = this.base64ToBuffer(credInfo.rawId);
 
         const assertion = await navigator.credentials.get({
             publicKey: getOptions
