@@ -267,4 +267,15 @@ export const sharedStyles = css`
             border-radius: var(--owq-modal-radius-mobile, 12px);
         }
     }
+
+    /* Honour reduced-motion inside the shadow DOM — the global reset in style.css
+       cannot cross the shadow boundary into these components. */
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.001ms !important;
+            scroll-behavior: auto !important;
+        }
+    }
 `;

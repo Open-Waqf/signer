@@ -1111,10 +1111,11 @@ export class PdfWorkspace extends LitElement {
                 // multi-selected alongside movable ones.
                 if (this.selectedIds.includes(a.id) && !a.lockedByChain) {
                     let {xPct, yPct} = a;
+                    const heightPct = (a.widthPct || 0) * (a.aspectRatio || 1);
                     if (e.key === 'ArrowLeft') xPct = Math.max(0, xPct - step);
                     else if (e.key === 'ArrowRight') xPct = Math.min(1 - a.widthPct, xPct + step);
                     else if (e.key === 'ArrowUp') yPct = Math.max(0, yPct - step);
-                    else if (e.key === 'ArrowDown') yPct = Math.min(1, yPct + step);
+                    else if (e.key === 'ArrowDown') yPct = Math.min(Math.max(0, 1 - heightPct), yPct + step);
                     return {...a, xPct, yPct};
                 }
                 return a;
@@ -2771,11 +2772,7 @@ export class PdfWorkspace extends LitElement {
                              data-page="${page}"
                              data-testid="thumb-page-${i + 1}"
                              aria-label="${i18n.t('pageLabel')} ${i + 1}"
-                             @click=${() => {
-                                 this.currentPage = i + 1;
-                                 this.selectedIds = [];
-                                 void this.renderPage();
-                             }}>
+                             @click=${() => this.gotoPage(i + 1)}>
                             ${url
                                 ? html`<img src="${url}" alt="${i18n.t('pageLabel')} ${i + 1}" class="thumb-image">`
                                 : html`<div class="thumb-placeholder" aria-hidden="true"></div>`}

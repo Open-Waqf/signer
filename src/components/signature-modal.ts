@@ -52,7 +52,6 @@ export class SignatureModal extends LitElement {
     private _pointerUpHandler: ((e: PointerEvent) => void) | null = null;
     private _pointerCancelHandler: ((e: PointerEvent) => void) | null = null;
     private activePointerId: number | null = null;
-    private _keyDownHandler: ((e: KeyboardEvent) => void) | null = null;
 
     @state() private originalData: string | null = null;
     @state() private isDirty = false;
@@ -278,31 +277,9 @@ export class SignatureModal extends LitElement {
         window.addEventListener('resize', this._resizeHandler!);
         this.setupEvents();
         await this.loadSaved();
-
-        // Focus trap
-        this._keyDownHandler = (e: KeyboardEvent) => {
-            if (e.key === 'Tab') {
-                const focusables = this.shadowRoot!.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-                const first = focusables[0] as HTMLElement;
-                const last = focusables[focusables.length - 1] as HTMLElement;
-
-                if (e.shiftKey) {
-                    if (document.activeElement === first || this.shadowRoot!.activeElement === first) {
-                        last.focus();
-                        e.preventDefault();
-                    }
-                } else {
-                    if (document.activeElement === last || this.shadowRoot!.activeElement === last) {
-                        first.focus();
-                        e.preventDefault();
-                    }
-                }
-            }
-            if (e.key === 'Escape') {
-                this.remove();
-            }
-        };
-        this.shadowRoot?.addEventListener('keydown', this._keyDownHandler as EventListener);
+        // Focus trapping and Escape-to-close are handled by the native <dialog>
+        // showModal() in owq-modal (same as every other modal), so no custom
+        // keydown trap is needed here.
     }
 
     updated(changed: Map<string, unknown>) {
@@ -323,7 +300,6 @@ export class SignatureModal extends LitElement {
             if (this._pointerUpHandler) this.canvas.removeEventListener('pointerup', this._pointerUpHandler);
             if (this._pointerCancelHandler) this.canvas.removeEventListener('pointercancel', this._pointerCancelHandler);
         }
-        if (this._keyDownHandler) this.shadowRoot?.removeEventListener('keydown', this._keyDownHandler as EventListener);
     }
 
     async loadSaved() {
@@ -519,6 +495,18 @@ export class SignatureModal extends LitElement {
     }
 
     stop() {
+        // The quadratic smoothing only draws up to the midpoint of the last two
+        // points, so the tail to the actual pen-up position was never rendered and
+        // strokes ended a few pixels short. Draw that final segment on release.
+        if (this.isDrawing && this.hasCommittedStroke && this.ctx && this.points.length >= 2) {
+            const pPrev = this.points[this.points.length - 2];
+            const pLast = this.points[this.points.length - 1];
+            const mid = {x: (pPrev.x + pLast.x) / 2, y: (pPrev.y + pLast.y) / 2};
+            this.ctx.beginPath();
+            this.ctx.moveTo(mid.x, mid.y);
+            this.ctx.lineTo(pLast.x, pLast.y);
+            this.ctx.stroke();
+        }
         this.isDrawing = false;
         this.points = [];
         this.hasCommittedStroke = false;
@@ -787,37 +775,36 @@ export class SignatureModal extends LitElement {
                             tabindex="0" autofocus
                             role="img" aria-label="${i18n.t('signaturePadLabel')}"></canvas>
 
-                    ${this.presets.length < MAX_PRESETS ? html`
-                        ${this.showSaveNameRow ? html`
-                            <div class="save-name-row">
-                                <input
-                                    type="text"
-                                    class="input-field"
-                                    data-testid="input-preset-name"
-                                    .value=${this.saveNameValue}
-                                    @input=${(e: Event) => { this.saveNameValue = (e.target as HTMLInputElement).value; }}
-                                    @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter') this.confirmSavePreset(); if (e.key === 'Escape') { this.showSaveNameRow = false; } }}
-                                    placeholder="${i18n.t('presetName')}"
-                                >
-                                <button class="btn btn-primary btn-sm" data-testid="btn-confirm-preset"
-                                        @click=${() => this.confirmSavePreset()}>
-                                    ${i18n.t('savePresetShort')}
-                                </button>
-                                <button class="btn btn-sm"
-                                        @click=${() => { this.showSaveNameRow = false; }}>
-                                    ${i18n.t('cancel')}
-                                </button>
-                            </div>
-                        ` : html`
-                            <div class="save-preset-row">
-                                <button class="btn btn-sm" data-testid="btn-save-preset"
-                                        ?disabled=${!this.isDirty && !this.originalData}
-                                        @click=${() => this.saveAsPreset()}>
-                                    + ${i18n.t('savePresetShort')}
-                                </button>
-                            </div>
-                        `}
-                    ` : ''}
+                    ${this.showSaveNameRow ? html`
+                        <div class="save-name-row">
+                            <input
+                                type="text"
+                                class="input-field"
+                                data-testid="input-preset-name"
+                                .value=${this.saveNameValue}
+                                @input=${(e: Event) => { this.saveNameValue = (e.target as HTMLInputElement).value; }}
+                                @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter') this.confirmSavePreset(); if (e.key === 'Escape') { this.showSaveNameRow = false; } }}
+                                placeholder="${i18n.t('presetName')}"
+                            >
+                            <button class="btn btn-primary btn-sm" data-testid="btn-confirm-preset"
+                                    @click=${() => this.confirmSavePreset()}>
+                                ${i18n.t('savePresetShort')}
+                            </button>
+                            <button class="btn btn-sm"
+                                    @click=${() => { this.showSaveNameRow = false; }}>
+                                ${i18n.t('cancel')}
+                            </button>
+                        </div>
+                    ` : html`
+                        <div class="save-preset-row">
+                            <button class="btn btn-sm" data-testid="btn-save-preset"
+                                    ?disabled=${this.presets.length >= MAX_PRESETS || (!this.isDirty && !this.originalData)}
+                                    title=${this.presets.length >= MAX_PRESETS ? i18n.t('presetMaxReached') : ''}
+                                    @click=${() => this.saveAsPreset()}>
+                                + ${i18n.t('savePresetShort')}
+                            </button>
+                        </div>
+                    `}
 
                     ${this.saveError ? html`
                         <div class="save-error" role="alert" data-testid="preset-save-error">${this.saveError}</div>

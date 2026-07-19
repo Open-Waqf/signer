@@ -1536,6 +1536,69 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(toast).toHaveAttribute('aria-live', 'polite');
     });
 
+    test('9.17 Save-preset control stays mounted (disabled) at the preset limit', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        await expect(page.getByTestId('signature-pad')).toBeVisible();
+
+        // Fill to the max so the row would previously have unmounted (layout shift).
+        await page.locator('signature-modal').evaluate((el) => {
+            const c = el as any;
+            c.presets = Array.from({length: 5}, (_, i) => ({
+                id: String(i), name: 'P' + i,
+                dataURL: 'data:image/png;base64,iVBORw0KGgo=',
+            }));
+            c.requestUpdate();
+        });
+
+        await expect(page.getByTestId('btn-save-preset')).toBeVisible();
+        await expect(page.getByTestId('btn-save-preset')).toBeDisabled();
+    });
+
+    test('9.18 Signature modal closes on Escape via the native dialog', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        await expect(page.getByTestId('signature-pad')).toBeVisible();
+
+        // The custom focus/Escape trap was removed — the native <dialog> must still close it.
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('signature-pad')).toHaveCount(0);
+    });
+
+    test('9.19 ArrowDown keeps an annotation on the page', async ({page}) => {
+        await page.goto('/');
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'arrow_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer)
+        });
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        const ws = page.locator('pdf-workspace');
+        await ws.getByTestId('btn-add-date').click();
+        await ws.evaluate((el) => {
+            const c = el as any;
+            c.annotations = c.annotations.map((a: any) => ({...a, yPct: 0.9, widthPct: 0.3, aspectRatio: 0.4}));
+            c.selectedIds = [c.annotations[0].id];
+            c.requestUpdate();
+        });
+
+        for (let i = 0; i < 25; i++) await page.keyboard.press('ArrowDown');
+
+        const result = await ws.evaluate((el) => {
+            const a = (el as any).annotations[0];
+            return {yPct: a.yPct, heightPct: (a.widthPct || 0) * (a.aspectRatio || 1)};
+        });
+        // Bottom edge stays within the page (was Math.min(1, …), which let it slide off).
+        expect(result.yPct + result.heightPct).toBeLessThanOrEqual(1.0001);
+    });
+
     test('9.1 Workflow: Mobile long-press enables multi-select tap-add', async ({page}) => {
         await page.goto('/');
         const fileChooserPromise = page.waitForEvent('filechooser');

@@ -72,8 +72,19 @@ export function computeDragMove(input: {
         };
     }
 
-    const dx = nextXPct - input.ann.xPct;
-    const dy = nextYPct - input.ann.yPct;
+    let dx = nextXPct - input.ann.xPct;
+    let dy = nextYPct - input.ann.yPct;
+    // Tighten the group delta so no OTHER selected member leaves the page. The
+    // primary is already clamped above, so single-selection behaviour is unchanged;
+    // this only constrains multi-select drags where a far member would go off-page.
+    for (const a of input.annotations) {
+        if (a.id === input.ann.id || !input.selectedIds.includes(a.id)) continue;
+        const aW = a.widthPct || 0.1;
+        const aH = aW * (a.aspectRatio || 1);
+        dx = Math.min(Math.max(dx, -a.xPct), Math.max(0, 1 - aW) - a.xPct);
+        dy = Math.min(Math.max(dy, -a.yPct), Math.max(0, 1 - aH) - a.yPct);
+    }
+
     const nextAnnotations = input.annotations.map((a) => {
         if (input.selectedIds.includes(a.id)) {
             return {...a, xPct: a.xPct + dx, yPct: a.yPct + dy};
@@ -81,16 +92,21 @@ export function computeDragMove(input: {
         return a;
     });
 
+    // The primary's real position may have been reduced by the group clamp; base
+    // the returned position and drag offset on it so the next move doesn't jump.
+    const primaryXPct = input.ann.xPct + dx;
+    const primaryYPct = input.ann.yPct + dy;
+
     return {
         changed: true,
         nextAnnotations,
         nextDragOffset: {
-            x: input.clientX - input.rect.left - nextXPct * input.rect.width,
-            y: input.clientY - input.rect.top - nextYPct * input.rect.height,
+            x: input.clientX - input.rect.left - primaryXPct * input.rect.width,
+            y: input.clientY - input.rect.top - primaryYPct * input.rect.height,
         },
         guideLines,
-        nextXPct,
-        nextYPct,
+        nextXPct: primaryXPct,
+        nextYPct: primaryYPct,
     };
 }
 
