@@ -54,6 +54,10 @@ export class PdfWorkspace extends LitElement {
     @state() lastSavedHash: string | null = null;
     @state() lastSavedCode: string | null = null;
     @state() lastSaveHardwareFallback = false;
+    @state() lastSaveTsaVerified = true;
+    @state() isSaving = false;
+    @state() handoverChecking = false;
+    private _renderController: AbortController | null = null;
     @state() includeFooter = false;
 
     @state() validationMsg: string | null = null;
@@ -1017,6 +1021,8 @@ export class PdfWorkspace extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        this._renderController?.abort();
+        this._renderController = null;
         this.resetThumbnailState();
         window.removeEventListener('lang-changed', this.onLangChanged);
         window.removeEventListener('mousemove', this.handleGlobalMove);
@@ -1154,6 +1160,7 @@ export class PdfWorkspace extends LitElement {
         this.lastSavedHash = null;
         this.lastSavedCode = null;
         this.lastSaveHardwareFallback = false;
+        this.lastSaveTsaVerified = true;
         this.totalPages = await pdfEngine.load(file);
         const meta = await pdfEngine.readMetadataID(file);
         const existingID = meta.id;
@@ -1205,21 +1212,36 @@ export class PdfWorkspace extends LitElement {
     }
 
     async checkHandover() {
-        if (!this.loadedBytes) return;
-        const result = await runHandoverCheck({
-            handoverInput: this.handoverHashInput,
-            loadedBytes: this.loadedBytes,
-            signaturesChain: this.signaturesChain,
-            detectedAssertions: this.detectedAssertions,
-            detectedRefId: this.detectedRefId,
-            deps: {
-                getFileHash: (bytes) => pdfEngine.getFileHash(bytes),
-                getSixDigitCode: (hash) => pdfEngine.getSixDigitCode(hash),
-                verifySignatureChain: (bytes) => pdfEngine.verifySignatureChain(bytes),
-                verifyLocalAssertion: (publicKey, signature, authData, clientDataJSON) =>
-                    WebAuthnService.verifyLocal(publicKey, signature, authData, clientDataJSON),
-            },
-        });
+        if (!this.loadedBytes || this.handoverChecking) return;
+        this.handoverChecking = true;
+        let result;
+        try {
+            result = await runHandoverCheck({
+                handoverInput: this.handoverHashInput,
+                loadedBytes: this.loadedBytes,
+                signaturesChain: this.signaturesChain,
+                detectedAssertions: this.detectedAssertions,
+                detectedRefId: this.detectedRefId,
+                deps: {
+                    getFileHash: (bytes) => pdfEngine.getFileHash(bytes),
+                    getSixDigitCode: (hash) => pdfEngine.getSixDigitCode(hash),
+                    verifySignatureChain: (bytes) => pdfEngine.verifySignatureChain(bytes),
+                    verifyLocalAssertion: (publicKey, signature, authData, clientDataJSON) =>
+                        WebAuthnService.verifyLocal(publicKey, signature, authData, clientDataJSON),
+                },
+            });
+        } catch (e) {
+            // A malformed assertion or engine error must not freeze the modal with
+            // a live Verify button and no feedback.
+            console.error('Handover check failed', e);
+            this.handoverResult = 'fail';
+            this.isVerified = false;
+            this.validationMsg = i18n.t('handoverCheckError');
+            this.toast(i18n.t('handoverCheckError'));
+            return;
+        } finally {
+            this.handoverChecking = false;
+        }
 
         this.handoverResult = result.handoverResult;
         this.isVerified = result.isVerified;
@@ -1228,7 +1250,9 @@ export class PdfWorkspace extends LitElement {
             ? i18n.t('handoverVerifiedMsg')
             : result.validationMessageKey === 'handoverHardwareFailMsg'
                 ? i18n.t('handoverHardwareFailMsg')
-                : i18n.t('handoverMismatchMsg');
+                : result.validationMessageKey === 'handoverChainFailMsg'
+                    ? i18n.t('handoverChainFailMsg')
+                    : i18n.t('handoverMismatchMsg');
         this.validationMsg = validationBase.replace('{ref}', this.detectedRefId);
         if (result.appendHardwareVerifiedSuffix) {
             this.validationMsg += ` + ${i18n.t('hardwareSignVerifiedSuffix')}`;
@@ -1244,12 +1268,27 @@ export class PdfWorkspace extends LitElement {
 
     async renderPage() {
         if (!this.canvas) return;
+        // Cancel any in-flight render before starting a new one. Rapid page
+        // switches previously ran concurrent render tasks on the same canvas
+        // (pdf.js throws "Cannot use the same canvas...") and could land a stale
+        // page or clear the skeleton early.
+        this._renderController?.abort();
+        const controller = new AbortController();
+        this._renderController = controller;
         this.isRendering = true;
         try {
             const renderScale = Math.min(3.0, 1.5 * this.scale);
-            await pdfEngine.renderPage(this.currentPage, this.canvas, renderScale);
+            await pdfEngine.renderPage(this.currentPage, this.canvas, renderScale, {signal: controller.signal});
+        } catch (e) {
+            // A superseded render was cancelled — ignore it and let the newer
+            // render own the canvas and the isRendering flag.
+            if (controller.signal.aborted) return;
+            throw e;
         } finally {
-            this.isRendering = false;
+            if (this._renderController === controller) {
+                this.isRendering = false;
+                this._renderController = null;
+            }
         }
     }
 
@@ -1993,8 +2032,15 @@ export class PdfWorkspace extends LitElement {
             this.isDirty = true;
             this.toast(i18n.t('biometricVerified'));
         } catch (e: any) {
-            console.error('Biometric Error', e);
-            this.toast(i18n.t('biometricError'));
+            // A user who dismisses the biometric sheet (NotAllowedError/AbortError)
+            // did not hit an error — don't alarm them with a failure toast.
+            const name = String(e?.name ?? '');
+            if (name === 'NotAllowedError' || name === 'AbortError') {
+                this.toast(i18n.t('biometricCancelled'));
+            } else {
+                console.error('Biometric Error', e);
+                this.toast(i18n.t('biometricError'));
+            }
         } finally {
             this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
         }
@@ -2058,6 +2104,7 @@ export class PdfWorkspace extends LitElement {
         this.isVerified = false;
         this.lastSavedCode = null;
         this.lastSaveHardwareFallback = false;
+        this.lastSaveTsaVerified = true;
         this.previousHashManuallyVerified = true;
         this.openedDocumentHash = '';
         this.totalPages = 0;
@@ -2074,6 +2121,10 @@ export class PdfWorkspace extends LitElement {
             this.toast(i18n.t('noChanges'));
             return;
         }
+        // Guard against re-entrant saves: a second tap during the hardware-prompt
+        // window used to overwrite this.hardwareResolver and orphan the first save.
+        if (this.isSaving) return;
+        this.isSaving = true;
         console.error('[OWQ][SAVE_START]');
 
         const hasVisualSig = this.annotations.some(a => a.type !== 'biometric');
@@ -2090,7 +2141,10 @@ export class PdfWorkspace extends LitElement {
                 });
             },
         });
-        if (decision.cancelled) return;
+        if (decision.cancelled) {
+            this.isSaving = false;
+            return;
+        }
 
         this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
         await new Promise((r) => setTimeout(r, 50));
@@ -2124,13 +2178,15 @@ export class PdfWorkspace extends LitElement {
         } catch (e: any) {
             console.error('[OWQ][SAVE_FAILED]');
             console.error('Save Error', e);
-            this.toast(e.message.includes('OOM') ? i18n.t('outOfMemory') : `${i18n.t('errorSaving')}: ${e.message}`);
+            const msg = String(e?.message ?? e);
+            this.toast(msg.includes('OOM') ? i18n.t('outOfMemory') : `${i18n.t('errorSaving')}: ${msg}`);
             this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
         } finally {
             if (certificateConfig) {
                 wipeCertificateConfig(certificateConfig);
                 this.clearCertificateSession();
             }
+            this.isSaving = false;
         }
     }
 
@@ -2151,7 +2207,11 @@ export class PdfWorkspace extends LitElement {
         this.lastSavedId = result.docId;
         this.lastSavedHash = result.finalHash;
         this.lastSavedCode = result.finalCode;
-        this.lastSaveHardwareFallback = !!result.signatures[result.signatures.length - 1]?.hardwareFallbackUsed;
+        const latestSig = result.signatures[result.signatures.length - 1];
+        this.lastSaveHardwareFallback = !!latestSig?.hardwareFallbackUsed;
+        // tsaVerified is only true when an RFC-3161 token came back; offline/timeout
+        // saves fall back to the device clock and must be flagged to the user.
+        this.lastSaveTsaVerified = latestSig?.tsaVerified !== false;
         this.signaturesChain = result.signatures;
         this.loadedBytes = result.pdfBytes;
         this.openedDocumentHash = result.signatures[result.signatures.length - 1]?.integrityAnchorHash || result.finalHash;
@@ -2421,8 +2481,9 @@ export class PdfWorkspace extends LitElement {
                 </p>
                 <div class="modal-actions">
                     <button class="btn btn-primary btn-block" data-testid="btn-verify-handover"
+                            ?disabled=${this.handoverChecking}
                             @click=${this.checkHandover}>
-                        ${i18n.t('verifyBtn')}
+                        ${this.handoverChecking ? i18n.t('verifyingBtn') : i18n.t('verifyBtn')}
                     </button>
                     <button class="btn btn-block" data-testid="btn-skip-handover"
                             @click=${() => this.closeHandoverModal(true)}>
@@ -2482,6 +2543,11 @@ export class PdfWorkspace extends LitElement {
                     ${this.lastSaveHardwareFallback ? html`
                         <div class="alert-box alert-warning hardware-warning-top-gap" data-testid="hardware-fallback-warning">
                             ${i18n.t('hardwareProofUnavailable')}
+                        </div>
+                    ` : ''}
+                    ${!this.lastSaveTsaVerified ? html`
+                        <div class="alert-box alert-warning hardware-warning-top-gap" data-testid="tsa-unverified-warning">
+                            ${i18n.t('tsaUnverifiedWarning')}
                         </div>
                     ` : ''}
                 </div>
@@ -2782,7 +2848,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     render() {
-        const saveDisabled = !this.pdfName || !this.hasEdits;
+        const saveDisabled = !this.pdfName || !this.hasEdits || this.isSaving;
         const shareDisabled = !this.pdfName || !this.hasEdits;
 
         return html`

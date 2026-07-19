@@ -1433,6 +1433,87 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
     });
 
+    test('9.12 Failed/offline timestamp surfaces an unverified-TSA warning in the proof modal', async ({page}) => {
+        await page.goto('/');
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'tsa_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer)
+        });
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        const ws = page.locator('pdf-workspace');
+        await ws.getByTestId('btn-add-date').click();
+
+        const downloadPromise = page.waitForEvent('download');
+        await ws.getByTestId('btn-save').click();
+        await downloadPromise;
+
+        await expect(ws.getByTestId('proof-modal')).toBeVisible();
+        // No TSA relay is reachable in the test environment, so the timestamp is
+        // unverified — the user must be told rather than left to assume it's proven.
+        await expect(ws.getByTestId('tsa-unverified-warning')).toBeVisible();
+    });
+
+    test('9.13 A re-entrant save is ignored while one is already in flight', async ({page}) => {
+        await page.goto('/');
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'double_save_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer)
+        });
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        const ws = page.locator('pdf-workspace');
+        await ws.getByTestId('btn-add-date').click();
+
+        // Simulate a save already in progress, then fire another save() — the guard
+        // must make it a no-op (previously it re-entered and orphaned the first save).
+        await ws.evaluate((el) => { (el as any).isSaving = true; });
+        await ws.evaluate((el) => { (el as any).saveDocument(); });
+        await page.waitForTimeout(150);
+
+        await expect(ws.getByTestId('proof-modal')).toHaveCount(0);
+    });
+
+    test('9.14 Rapid page navigation settles on the last requested page', async ({page}) => {
+        const bigPdf = await PDFDocument.create();
+        for (let i = 0; i < 10; i++) bigPdf.addPage([595, 842]);
+        const bytes = Buffer.from(await bigPdf.save());
+
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({
+            name: 'nav10.pdf',
+            mimeType: 'application/pdf',
+            buffer: bytes,
+        });
+        const ws = page.locator('pdf-workspace');
+        await expect(ws).toBeVisible();
+        // Wait until all pages are known, otherwise gotoPage() clamps against a
+        // not-yet-populated totalPages and the jumps are rejected.
+        await expect.poll(async () => ws.evaluate((el) => (el as any).totalPages)).toBe(10);
+
+        // Fire several jumps faster than a render can complete.
+        await ws.evaluate((el) => {
+            const c = el as any;
+            c.gotoPage(2); c.gotoPage(5); c.gotoPage(8); c.gotoPage(4);
+        });
+
+        // The abort-and-supersede logic must land on page 4 and clear the render flag.
+        await expect.poll(async () => ws.evaluate((el) => (el as any).currentPage)).toBe(4);
+        await expect.poll(async () => ws.evaluate((el) => (el as any).isRendering)).toBe(false);
+    });
+
     test('9.1 Workflow: Mobile long-press enables multi-select tap-add', async ({page}) => {
         await page.goto('/');
         const fileChooserPromise = page.waitForEvent('filechooser');

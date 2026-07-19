@@ -23,7 +23,7 @@ export type HandoverResult = {
     handoverResult: 'idle' | 'success' | 'fail';
     isVerified: boolean;
     previousHashManuallyVerified: boolean;
-    validationMessageKey: 'handoverMismatchMsg' | 'handoverHardwareFailMsg' | 'handoverVerifiedMsg';
+    validationMessageKey: 'handoverMismatchMsg' | 'handoverHardwareFailMsg' | 'handoverChainFailMsg' | 'handoverVerifiedMsg';
     appendHardwareVerifiedSuffix: boolean;
     shouldAutoClose: boolean;
 };
@@ -52,11 +52,17 @@ export async function runHandoverCheck(input: {
         };
     }
 
-    let hwVerified = true;
+    let verified = true;
+    // Track which kind of verification failed so the message is accurate: a
+    // signer-chain/integrity failure is not the same as a hardware-assertion
+    // failure (a prior signer may not have used hardware at all).
+    let failureKind: 'chain' | 'hardware' = 'chain';
     if (input.signaturesChain.length > 0) {
         const chainCheck = await input.deps.verifySignatureChain(input.loadedBytes);
-        hwVerified = chainCheck.valid;
+        verified = chainCheck.valid;
+        failureKind = 'chain';
     } else if (input.detectedAssertions.length > 0) {
+        failureKind = 'hardware';
         for (const a of input.detectedAssertions) {
             if (!a?.publicKey) continue;
             const parsed = JSON.parse(a.assertion);
@@ -66,16 +72,16 @@ export async function runHandoverCheck(input: {
                 parsed.authData,
                 parsed.clientDataJSON
             );
-            if (!ok) hwVerified = false;
+            if (!ok) verified = false;
         }
     }
 
-    if (!hwVerified) {
+    if (!verified) {
         return {
             handoverResult: 'fail',
             isVerified: false,
             previousHashManuallyVerified: false,
-            validationMessageKey: 'handoverHardwareFailMsg',
+            validationMessageKey: failureKind === 'hardware' ? 'handoverHardwareFailMsg' : 'handoverChainFailMsg',
             appendHardwareVerifiedSuffix: false,
             shouldAutoClose: false,
         };
