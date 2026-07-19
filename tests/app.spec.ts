@@ -1514,6 +1514,28 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect.poll(async () => ws.evaluate((el) => (el as any).isRendering)).toBe(false);
     });
 
+    test('9.15 Privacy disclosure is keyboard-operable with a 44px target', async ({page}) => {
+        await page.goto('/');
+        const privacy = page.getByTestId('link-privacy');
+        // Must be a real <button> — it was a bare <a @click> unreachable by keyboard.
+        expect(await privacy.evaluate((el) => el.tagName)).toBe('BUTTON');
+
+        const box = await privacy.boundingBox();
+        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+        await privacy.focus();
+        await expect(privacy).toBeFocused();
+        await page.keyboard.press('Enter');
+        await expect(page.getByTestId('privacy-modal')).toBeVisible();
+    });
+
+    test('9.16 Toast messages live in an aria-live status region', async ({page}) => {
+        await page.goto('/');
+        const toast = page.locator('.toast-passive');
+        await expect(toast).toHaveAttribute('role', 'status');
+        await expect(toast).toHaveAttribute('aria-live', 'polite');
+    });
+
     test('9.1 Workflow: Mobile long-press enables multi-select tap-add', async ({page}) => {
         await page.goto('/');
         const fileChooserPromise = page.waitForEvent('filechooser');

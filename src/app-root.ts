@@ -650,8 +650,10 @@ export class AppRoot extends LitElement {
             this.airGapReceiveActive = false;
             this.airGapStatus = i18n.t('airGapComplete');
             const loadName = finalized.fileName || 'Transferred_Document.pdf';
-            await this.handleFile(finalized.data, loadName);
+            // Close the modal BEFORE loading: the loader overlay is ordinary DOM and
+            // would otherwise be painted behind the top-layer <dialog>.
             this.closeAirGapModal();
+            await this.handleFile(finalized.data, loadName);
         } catch (error) {
             console.error('Failed to finalize transfer:', error);
             this.airGapStatus = i18n.t('airGapDecodeFailed');
@@ -679,7 +681,7 @@ export class AppRoot extends LitElement {
     private renderLoaderOverlay() {
         if (!this.isLoading) return '';
         return html`
-            <div class="loader-overlay">
+            <div class="loader-overlay" role="status" aria-live="polite">
                 <div class="spinner"></div>
                 <div>${i18n.t('loadingDoc')}</div>
             </div>
@@ -790,7 +792,7 @@ export class AppRoot extends LitElement {
                         </div>
 
                         <div class="footer-links">
-                            <a class="footer-link" data-testid="link-privacy" @click=${this.showPrivacy}>${i18n.t('privacyTitle')}</a>
+                            <button type="button" class="footer-link" data-testid="link-privacy" @click=${this.showPrivacy}>${i18n.t('privacyTitle')}</button>
                             <span>•</span>
                             <a href="mailto:${AppConfig.supportEmail}" class="footer-link">${i18n.t('contactUs')}</a>
                         </div>
@@ -827,6 +829,7 @@ export class AppRoot extends LitElement {
         return html`
             <owq-modal .open=${this.showPrivacyModal}
                        .closeOnBackdrop=${false}
+                       data-testid="privacy-modal"
                        ariaLabel="${i18n.t('privacyTitle')}"
                        @modal-close=${this.closePrivacy}>
                 <div class="dialog-content">
@@ -889,7 +892,7 @@ export class AppRoot extends LitElement {
 
     private renderVerifyResultCard() {
         return html`
-            <div class="verify-step-card info-panel">
+            <div class="verify-step-card info-panel" role="status" aria-live="polite">
                 <h3 class="verify-step-title">${i18n.t('metadataCheckTitle')}</h3>
                 ${this.verifyResult.status === 'success' ? html`
                     <h2 class="verify-success-title" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
@@ -1113,7 +1116,7 @@ export class AppRoot extends LitElement {
         return html`
             ${this.renderLoaderOverlay()}
 
-            <div class="toast toast-passive ${this.toastMsg ? 'show' : ''}">${this.toastMsg}</div>
+            <div class="toast toast-passive ${this.toastMsg ? 'show' : ''}" role="status" aria-live="polite">${this.toastMsg}</div>
 
             ${this.renderUpdateToast()}
 

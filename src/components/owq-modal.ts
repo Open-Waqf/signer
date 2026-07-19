@@ -52,9 +52,19 @@ export class OwqModal extends LitElement {
         .modal-shell {
             min-height: 100dvh;
             display: flex;
+            flex-direction: column;
+            /* Horizontally centre the card, but anchor it near the top so a modal
+               whose content grows after opening (e.g. verify alerts) does not
+               re-centre and jump under the reader. */
             align-items: center;
-            justify-content: center;
-            padding: var(--owq-modal-padding, 12px);
+            justify-content: flex-start;
+            /* Respect device safe areas (notch / home indicator) — the top-layer
+               dialog lives outside <body>, so body safe-area padding never applies. */
+            padding:
+                max(8vh, env(safe-area-inset-top, 0px))
+                max(var(--owq-modal-padding, 12px), env(safe-area-inset-right, 0px))
+                max(var(--owq-modal-padding, 12px), env(safe-area-inset-bottom, 0px))
+                max(var(--owq-modal-padding, 12px), env(safe-area-inset-left, 0px));
             box-sizing: border-box;
         }
     `];
@@ -98,7 +108,17 @@ export class OwqModal extends LitElement {
     }
 
     private onBackdropClick(event: MouseEvent) {
+        // Fires for clicks on the ::backdrop / dialog element itself (the gutters
+        // outside the 420px box on wide viewports).
         if (event.target !== this.dialogEl) return;
+        if (this.closeOnBackdrop) this.dispatchClose();
+    }
+
+    private onShellClick(event: MouseEvent) {
+        // On narrow viewports the shell fills the dialog, so backdrop clicks land
+        // here (above/below the card) rather than on the dialog element. The card
+        // stops propagation, so target===currentTarget means the empty area.
+        if (event.target !== event.currentTarget) return;
         if (this.closeOnBackdrop) this.dispatchClose();
     }
 
@@ -141,7 +161,7 @@ export class OwqModal extends LitElement {
                 @click=${this.onBackdropClick}
                 @cancel=${this.onCancel}
             >
-                <div class="modal-shell" dir=${dir}>
+                <div class="modal-shell" dir=${dir} @click=${this.onShellClick}>
                     <div class="modal-card ${this.center ? 'center' : ''}" role="dialog" aria-modal="true"
                          dir=${dir}
                          @click=${(e: Event) => e.stopPropagation()}>

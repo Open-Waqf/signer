@@ -254,6 +254,7 @@ app-root {
 .mode-toggle button {
     flex: 1;
     padding: 10px;
+    min-height: 44px;
     font-size: 0.9rem;
     background: transparent;
     border: none;
@@ -314,6 +315,8 @@ app-root {
     align-items: center;
     justify-content: center;
     padding: 10px 20px;
+    min-height: 44px;
+    min-width: 44px;
     border-radius: var(--radius-md);
     font-weight: 600;
     font-size: 0.95rem;
@@ -348,7 +351,7 @@ app-root {
 
 .btn-danger {
     background: var(--danger-bg);
-    color: var(--danger);
+    color: var(--danger-text);
     border: none;
 }
 
@@ -366,7 +369,7 @@ app-root {
 /* Typography & Badges */
 .badge-success {
     background: var(--success-bg);
-    color: var(--success);
+    color: var(--success-text);
     padding: 6px 14px;
     border-radius: 20px;
     font-size: 0.8rem;
@@ -390,6 +393,13 @@ app-root {
     text-decoration: none;
     cursor: pointer;
     transition: var(--transition-fast);
+    /* Also usable as a <button> (privacy link) with a link appearance. */
+    background: transparent;
+    border: none;
+    font: inherit;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
 }
 
 .footer-link:hover {
@@ -405,6 +415,10 @@ app-root {
     font-size: 0.9rem;
     font-weight: 600;
     padding: 0;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: var(--transition-fast);
 }
 
