@@ -138,6 +138,11 @@ export class PdfWorkspace extends LitElement {
         return this.uiMode === 'basic';
     }
 
+    private get isAnyModalOpen(): boolean {
+        return this.showHardwarePrompt || this.showProofModal || this.showHandoverModal
+            || this.showStampLibraryModal || this.showCertificateModal || this.customPrompt.show;
+    }
+
     annotationsChanged(next: Annotation[]) {
         this.annotations = next;
     }
@@ -1023,9 +1028,15 @@ export class PdfWorkspace extends LitElement {
     }
 
     handleKeyboard = (e: KeyboardEvent) => {
-        // Never intercept while user is typing in an input or a modal prompt is open
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || this.customPrompt.show) return;
+        // Resolve the actual focused element across the shadow boundary — a
+        // window-level listener sees the retargeted host as e.target, not the
+        // inner control, so use composedPath()[0].
+        const focused = (e.composedPath()[0] as HTMLElement | undefined);
+        const focusedTag = focused?.tagName;
+
+        // Never intercept while typing in a field or while any modal is open.
+        if (focusedTag === 'INPUT' || focusedTag === 'TEXTAREA' || focusedTag === 'SELECT'
+            || this.isAnyModalOpen) return;
 
         if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
             e.preventDefault();
@@ -1043,8 +1054,11 @@ export class PdfWorkspace extends LitElement {
             return;
         }
 
-        // Tab: cycle through annotations on the current page
+        // Tab: cycle through annotations on the current page — but only when focus
+        // is on the workspace surface, not an interactive control. Hijacking Tab
+        // while a button/link is focused broke normal toolbar/keyboard navigation.
         if (e.key === 'Tab') {
+            if (focusedTag === 'BUTTON' || focusedTag === 'A') return;
             const pageAnns = this.annotations.filter(a => a.page === this.currentPage - 1);
             if (pageAnns.length > 0) {
                 e.preventDefault();
@@ -1086,7 +1100,10 @@ export class PdfWorkspace extends LitElement {
             const step = e.shiftKey ? 0.02 : 0.005;
             
             this.annotations = this.annotations.map(a => {
-                if (this.selectedIds.includes(a.id)) {
+                // Only move selected AND unlocked annotations — chain-locked (prior
+                // signer) annotations are immutable and must not be nudged even when
+                // multi-selected alongside movable ones.
+                if (this.selectedIds.includes(a.id) && !a.lockedByChain) {
                     let {xPct, yPct} = a;
                     if (e.key === 'ArrowLeft') xPct = Math.max(0, xPct - step);
                     else if (e.key === 'ArrowRight') xPct = Math.min(1 - a.widthPct, xPct + step);

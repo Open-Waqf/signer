@@ -112,7 +112,11 @@ export class OwqModal extends LitElement {
 
     private focusFirstElement() {
         const root = this.card || (this.renderRoot as ShadowRoot);
-        const autofocus = root.querySelector('[autofocus]') as HTMLElement | null;
+        // Look in the card AND in the slotted light-DOM content — slotted nodes are
+        // projected, not descendants of the card, so a card-only query misses an
+        // [autofocus] that consumers put on their slotted content.
+        const autofocus = (root.querySelector('[autofocus]')
+            || this.querySelector('[autofocus]')) as HTMLElement | null;
         if (autofocus) {
             autofocus.focus();
             return;

@@ -39,6 +39,8 @@ export class SignatureModal extends LitElement {
     @state() private showSaveNameRow = false;
     @state() private saveNameValue = '';
     @state() private saveError = '';
+    @state() private pendingDeleteId: string | null = null;
+    private pendingDeleteTimer: number | null = null;
 
     private isDrawing = false;
     private ctx: CanvasRenderingContext2D | null = null;
@@ -176,6 +178,21 @@ export class SignatureModal extends LitElement {
             opacity: 1;
         }
 
+        /* Touch devices have no hover — keep the delete affordance visible. */
+        @media (pointer: coarse) {
+            .preset-delete {
+                opacity: 1;
+            }
+        }
+
+        .preset-delete.confirm {
+            opacity: 1;
+            background: var(--success, #1e8449);
+            width: auto;
+            padding: 0 6px;
+            border-radius: 10px;
+        }
+
         .preset-name {
             font-size: 0.6rem;
             color: var(--text-sub, #6b7280);
@@ -298,6 +315,7 @@ export class SignatureModal extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        this.clearPendingDelete();
         if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
         if (this.canvas) {
             if (this._pointerDownHandler) this.canvas.removeEventListener('pointerdown', this._pointerDownHandler);
@@ -519,13 +537,13 @@ export class SignatureModal extends LitElement {
         HapticService.selection();
         this.inkColor = color;
         localStorage.setItem('signer_ink_color', color);
+        // Only affect subsequent strokes — do NOT clear the canvas. Wiping the
+        // in-progress drawing on a colour change destroyed the user's work with
+        // no warning or undo.
         if (this.ctx) {
             this.ctx.strokeStyle = color;
             this.ctx.fillStyle = color;
-            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         }
-        this.isDirty = false;
-        this.originalData = null;
     }
 
     private usePreset(preset: SignaturePreset) {
@@ -538,6 +556,33 @@ export class SignatureModal extends LitElement {
         this.drawFromData(preset.dataURL);
         // Update last-used cache
         void persistLastUsed(this.mode, preset.dataURL);
+    }
+
+    private clearPendingDelete() {
+        if (this.pendingDeleteTimer !== null) {
+            clearTimeout(this.pendingDeleteTimer);
+            this.pendingDeleteTimer = null;
+        }
+        this.pendingDeleteId = null;
+    }
+
+    // Two-tap guard: the first tap arms deletion (and is visible on touch, where
+    // there is no hover), the second within 3s confirms. Prevents accidental,
+    // unrecoverable loss of a saved signature.
+    private requestDeletePreset(id: string) {
+        if (this.pendingDeleteId === id) {
+            this.clearPendingDelete();
+            void this.deletePreset(id);
+            return;
+        }
+        HapticService.selection();
+        this.clearPendingDelete();
+        this.pendingDeleteId = id;
+        this.pendingDeleteTimer = window.setTimeout(() => {
+            this.pendingDeleteId = null;
+            this.pendingDeleteTimer = null;
+            this.requestUpdate();
+        }, 3000);
     }
 
     private async deletePreset(id: string) {
@@ -710,14 +755,14 @@ export class SignatureModal extends LitElement {
                                         <img src="${p.dataURL}" alt="${p.name}">
                                         <span class="preset-name">${p.name}</span>
                                         <button
-                                            class="preset-delete"
+                                            class="preset-delete ${this.pendingDeleteId === p.id ? 'confirm' : ''}"
                                             data-testid="btn-delete-preset-${p.id}"
-                                            title="${i18n.t('deletePreset')}"
-                                            aria-label="${i18n.t('deletePreset')}"
+                                            title="${this.pendingDeleteId === p.id ? i18n.t('confirmDeletePreset') : i18n.t('deletePreset')}"
+                                            aria-label="${this.pendingDeleteId === p.id ? i18n.t('confirmDeletePreset') : i18n.t('deletePreset')}"
                                             @click=${(e: Event) => {
                                                 e.stopPropagation();
-                                                this.deletePreset(p.id);
-                                            }}>✕</button>
+                                                this.requestDeletePreset(p.id);
+                                            }}>${this.pendingDeleteId === p.id ? '✓' : '✕'}</button>
                                     </div>
                                 `)}
                             </div>
@@ -738,7 +783,9 @@ export class SignatureModal extends LitElement {
                         `)}
                     </div>
 
-                    <canvas id="signature-pad" data-testid="signature-pad"></canvas>
+                    <canvas id="signature-pad" data-testid="signature-pad"
+                            tabindex="0" autofocus
+                            role="img" aria-label="${i18n.t('signaturePadLabel')}"></canvas>
 
                     ${this.presets.length < MAX_PRESETS ? html`
                         ${this.showSaveNameRow ? html`
@@ -779,7 +826,9 @@ export class SignatureModal extends LitElement {
                     <div class="actions">
                         <button class="btn" @click=${() => this.remove()}>${i18n.t('cancel')}</button>
                         <button class="btn btn-danger" data-testid="btn-clear-sig" @click=${() => this.clear()}>${i18n.t('clear')}</button>
-                        <button class="btn btn-primary" data-testid="btn-save-sig" @click=${() => this.save()}>${i18n.t('done')}</button>
+                        <button class="btn btn-primary" data-testid="btn-save-sig"
+                                ?disabled=${!this.isDirty && !this.originalData}
+                                @click=${() => this.save()}>${i18n.t('done')}</button>
                     </div>
             </owq-modal>
         `;

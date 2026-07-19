@@ -1285,6 +1285,154 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.locator('.preset-item[title="Storage Fail Preset"]')).toHaveCount(0);
     });
 
+    const countInk = (canvas: HTMLCanvasElement) => {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return -1;
+        const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let n = 0;
+        for (let i = 3; i < data.length; i += 4) if (data[i] > 8) n++;
+        return n;
+    };
+
+    test('9.7 Changing ink colour preserves the in-progress drawing', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing signature pad bounds');
+        await page.mouse.move(box.x + 20, box.y + 20);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 120, box.y + 90, {steps: 5});
+        await page.mouse.up();
+
+        const inkBefore = await sigPad.evaluate(countInk);
+        expect(inkBefore).toBeGreaterThan(0);
+
+        await page.getByTestId('color-#1447e6').click();
+
+        // Regression: selecting a colour used to clearRect the whole canvas.
+        const inkAfter = await sigPad.evaluate(countInk);
+        expect(inkAfter).toBeGreaterThanOrEqual(inkBefore * 0.9);
+    });
+
+    test('9.8 Done is disabled on an empty pad and enabled after drawing', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        await expect(page.getByTestId('btn-save-sig')).toBeDisabled();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing signature pad bounds');
+        await page.mouse.move(box.x + 20, box.y + 20);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 120, box.y + 90, {steps: 5});
+        await page.mouse.up();
+
+        await expect(page.getByTestId('btn-save-sig')).toBeEnabled();
+    });
+
+    test('9.9 Preset delete requires a confirmation tap', async ({page}) => {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await page.getByTestId('btn-add-sig').click();
+        const sigPad = page.getByTestId('signature-pad');
+        await expect(sigPad).toBeVisible();
+
+        const box = await sigPad.boundingBox();
+        if (!box) throw new Error('Missing signature pad bounds');
+        await page.mouse.move(box.x + 18, box.y + 18);
+        await page.mouse.down();
+        await page.mouse.move(box.x + 90, box.y + 90);
+        await page.mouse.up();
+
+        await page.getByTestId('btn-save-preset').click();
+        await page.getByTestId('input-preset-name').fill('DelTest');
+        await page.getByTestId('btn-confirm-preset').click();
+
+        const item = page.locator('.preset-item[title="DelTest"]');
+        await expect(item).toHaveCount(1);
+
+        const del = page.locator('.preset-item[title="DelTest"] .preset-delete');
+        await del.click();
+        // First tap only arms — the preset is NOT deleted yet.
+        await expect(item).toHaveCount(1);
+        await del.click();
+        // Second tap confirms.
+        await expect(item).toHaveCount(0);
+    });
+
+    test('9.10 Arrow-key nudge does not move chain-locked annotations', async ({page}) => {
+        await page.goto('/');
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'nudge_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer)
+        });
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        const ws = page.locator('pdf-workspace');
+        await ws.getByTestId('btn-add-date').click();
+        await ws.getByTestId('btn-add-date').click();
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(2);
+
+        const before = await ws.evaluate((el) => {
+            const c = el as any;
+            c.annotations = c.annotations.map((a: any, i: number) => ({
+                ...a, xPct: 0.3 + i * 0.1, yPct: 0.3, lockedByChain: i === 0,
+            }));
+            c.selectedIds = c.annotations.map((a: any) => a.id);
+            c.requestUpdate();
+            return c.annotations.map((a: any) => a.xPct);
+        });
+
+        await page.keyboard.press('ArrowRight');
+        await page.keyboard.press('ArrowRight');
+
+        const after = await ws.evaluate((el) => (el as any).annotations.map((a: any) => a.xPct));
+        // Locked annotation (index 0) must stay put; unlocked (index 1) moves right.
+        expect(Math.abs(after[0] - before[0])).toBeLessThan(1e-6);
+        expect(after[1]).toBeGreaterThan(before[1]);
+    });
+
+    test('9.11 Keyboard shortcuts are suppressed while a modal is open', async ({page}) => {
+        await page.goto('/');
+        const fileChooserPromise = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        const fileChooser = await fileChooserPromise;
+        const pdfBuffer = await generateTestPDF();
+        await fileChooser.setFiles({
+            name: 'modal_shortcut_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from(pdfBuffer)
+        });
+        await expect(page.locator('pdf-workspace')).toBeVisible();
+
+        const ws = page.locator('pdf-workspace');
+        await ws.getByTestId('btn-add-date').click();
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+
+        // Open a secondary modal, then fire undo — it must not reach the workspace.
+        await ws.evaluate((el) => {
+            (el as any).showStampLibraryModal = true;
+            (el as any).requestUpdate();
+        });
+        await expect(ws.getByTestId('stamp-library-modal')).toBeVisible();
+
+        await page.keyboard.press('ControlOrMeta+z');
+        // Undo was suppressed, so the annotation is still there.
+        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+    });
+
     test('9.1 Workflow: Mobile long-press enables multi-select tap-add', async ({page}) => {
         await page.goto('/');
         const fileChooserPromise = page.waitForEvent('filechooser');
