@@ -156,7 +156,7 @@ Anyone receiving a signed document can verify it:
 
 ### Prerequisites
 
-* Node.js 20+
+* Node.js 22+ (the Capacitor 8 CLI needs it)
 * Android Studio (only if building the APK)
 
 ### 1. Installation
