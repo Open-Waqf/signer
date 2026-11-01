@@ -18,6 +18,17 @@ tool and belongs in `devDependencies`.
   own files, so they are not urgent. Take the fixes when Dependabot offers them, never with
   `npm audit fix --force` (it downgrades major versions).
 
+## Updates (Dependabot)
+
+Once a month, Dependabot (`.github/dependabot.yml`) opens at most:
+- one pull request with all npm minor and patch updates together,
+- separate pull requests for npm major versions,
+- one pull request for the GitHub Actions versions.
+
+Each pull request runs the full checks on GitHub. Merge it if they pass, then pull and
+release as usual. Dependabot never proposes TypeScript 7 or any `pdfjs-dist` update (see
+below). It does not touch Android Gradle Plugin or Gradle: those follow Android Studio.
+
 ## Pinned versions and why
 
 Do not upgrade these, and decline any tool (npm, Dependabot) that offers to.

@@ -1,0 +1,32 @@
+# Dependabot: one small batch of update pull requests per month, not a stream.
+# Each pull request runs the full checks (.github/workflows/deploy.yml). Nothing is
+# merged or deployed automatically: you merge, then release with `npm run release`.
+# Why some packages are held back: docs/DEPENDENCIES.md.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    target-branch: develop
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      # All minor and patch updates together, in one pull request.
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # TypeScript 7 ships no tsserver, so IntelliJ loses type checking.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # pdf.js files are copied into public/ (cmaps, fonts, wasm) and must match the
+      # package version: upgrade it by hand, following docs/DEPENDENCIES.md.
+      - dependency-name: pdfjs-dist
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: develop
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns: ["*"]

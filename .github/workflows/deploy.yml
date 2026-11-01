@@ -1,5 +1,6 @@
 name: Check and Deploy
-# Every push to develop runs the checks (nothing is deployed).
+# Every push to develop, and every pull request into develop (e.g. Dependabot), runs the
+# checks. Nothing is deployed.
 # Pushing a version tag (vX.Y.Z, made by `npm run release`) runs the checks and, only if
 # they pass, deploys sign.open-waqf.org.
 on:
@@ -9,6 +10,14 @@ on:
     tags:
       - 'v*'
     paths-ignore: # not applied to tag pushes
+      - '**/*.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - develop
+    paths-ignore:
       - '**/*.md'
       - 'LICENSE'
       - '.gitignore'
