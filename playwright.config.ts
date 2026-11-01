@@ -1,6 +1,10 @@
 // playwright.config.ts
 import {defineConfig, devices} from '@playwright/test';
 
+// TEST_BUILD=1 (npm run test:build, and CI) tests the production build in dist/ through
+// `vite preview`, so build-only bugs are caught before deploy. Default: the dev server.
+const testBuild = !!process.env.TEST_BUILD;
+
 export default defineConfig({
     testDir: './tests',
     fullyParallel: true,
@@ -23,9 +27,10 @@ export default defineConfig({
 
     // 3. Web Server: Start the app before running tests
     webServer: {
-        command: 'npm run dev',
+        command: testBuild ? 'npx vite preview --port 5173 --strictPort' : 'npm run dev',
         url: 'http://localhost:5173',
-        reuseExistingServer: !process.env.CI,
+        // Never reuse a running dev server when the build is what must be tested.
+        reuseExistingServer: !process.env.CI && !testBuild,
         timeout: 120 * 1000,
     },
 

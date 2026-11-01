@@ -190,6 +190,13 @@ a plain message. The parts also run alone: `npm run typecheck`, `npm run check-i
 `npm test`. Tests use at most 4 browsers at once (1 on CI). After a failure,
 `npx playwright show-report` opens the details.
 
+`npm run test:build` runs the same tests against the production build (`vite preview`), as
+GitHub does before deploying.
+
+GitHub (`.github/workflows/deploy.yml`): every push to `develop` runs the checks and
+deploys nothing. Only a version tag (`vX.Y.Z`, pushed by `npm run release`) deploys
+sign.open-waqf.org, and only if the tag matches `package.json` and all checks pass.
+
 On Ubuntu 26.04, Playwright needs `export PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`
 (put it in `~/.bashrc`).
 
