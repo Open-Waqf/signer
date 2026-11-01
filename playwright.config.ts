@@ -7,8 +7,11 @@ export default defineConfig({
     // Fail the build on CI if you accidentally left test.only in the source code.
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
-    workers: process.env.CI ? 1 : undefined,
-    reporter: 'html',
+    // At most 4 browsers at once locally: more crash pages on a 14 GB machine. One on CI.
+    workers: process.env.CI ? 1 : 4,
+    // List in the terminal; the HTML report is written but never opens by itself
+    // (it would block `npm run check`). Open it with `npx playwright show-report`.
+    reporter: [['list'], ['html', {open: 'never'}]],
 
     use: {
         // 1. Base URL: Matches your local Vite dev server

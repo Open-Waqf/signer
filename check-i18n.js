@@ -1,90 +1,79 @@
-import fs from 'fs';
-import path from 'path';
-import {fileURLToPath} from 'url';
+// check-i18n.js: make sure every language has every text, and nothing is unused.
+//
+//   npm run check-i18n
+//
+// It reads the real `resources` object from src/i18n/locales.ts (compiled in memory with
+// the TypeScript package we already have), then checks:
+//   1. every language has exactly the same keys as English (no missing, no extra)
+//   2. no text is empty
+//   3. placeholders such as {count} are the same in every language
+//   4. every key used in src/ exists, and every key that exists is used
+// Exits with code 1 and a plain-English list when something is wrong.
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import ts from 'typescript';
 
-// --- Configuration ---
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const LOCALES_PATH = path.join(__dirname, 'src/i18n/locales.ts');
-const SRC_PATH = path.join(__dirname, 'src');
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const LOCALES_PATH = path.join(ROOT, 'src/i18n/locales.ts');
+const SRC_PATH = path.join(ROOT, 'src');
 
-console.log('🔍 Scanning for unused translations...');
-
-// 1. Extract keys only from resources.en in locales.ts
-const localesContent = fs.readFileSync(LOCALES_PATH, 'utf-8');
-
-const definedKeys = new Set();
-const enStart = localesContent.indexOf('en: {');
-if (enStart === -1) {
-    throw new Error('Could not find resources.en block in locales.ts');
-}
-const openBrace = localesContent.indexOf('{', enStart);
-let depth = 0;
-let endIndex = -1;
-for (let i = openBrace; i < localesContent.length; i++) {
-    const ch = localesContent[i];
-    if (ch === '{') depth++;
-    if (ch === '}') depth--;
-    if (depth === 0) {
-        endIndex = i;
-        break;
+async function loadResources() {
+    const source = fs.readFileSync(LOCALES_PATH, 'utf8');
+    const js = ts.transpileModule(source, {
+        compilerOptions: {module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022},
+    }).outputText;
+    const mod = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
+    if (!mod.resources || !mod.resources.en) {
+        throw new Error('src/i18n/locales.ts must export `resources` with an `en` block.');
     }
-}
-if (endIndex === -1) {
-    throw new Error('Could not parse end of resources.en block in locales.ts');
+    return mod.resources;
 }
 
-const enContent = localesContent.slice(openBrace + 1, endIndex);
-const keyRegex = /^\s*["']?([a-zA-Z0-9_]+)["']?:\s*['"`]/gm;
-let match;
-while ((match = keyRegex.exec(enContent)) !== null) {
-    definedKeys.add(match[1]);
-}
-
-console.log(`✅ Found ${definedKeys.size} defined keys in locales.ts`);
-
-// 2. Scan Source Files for Usage
-const usedKeys = new Set();
-
-function scanDir(directory) {
-    const files = fs.readdirSync(directory);
-
-    for (const file of files) {
+function findUsedKeys(directory, used = new Set()) {
+    for (const file of fs.readdirSync(directory)) {
         const fullPath = path.join(directory, file);
-        const stat = fs.statSync(fullPath);
-
-        if (stat.isDirectory()) {
-            scanDir(fullPath);
+        if (fs.statSync(fullPath).isDirectory()) {
+            findUsedKeys(fullPath, used);
         } else if (file.endsWith('.ts')) {
-            const content = fs.readFileSync(fullPath, 'utf-8');
+            const content = fs.readFileSync(fullPath, 'utf8');
+            // Direct calls: i18n.t('key') and this.t('key') inside the service.
+            for (const m of content.matchAll(/(i18n|this)\.t\(\s*['"`](.*?)['"`]\s*\)/g)) used.add(m[2]);
+            // Keys passed around as data, e.g. {labelKey: 'inkBlue'}.
+            for (const m of content.matchAll(/labelKey:\s*['"`](.*?)['"`]/g)) used.add(m[1]);
+        }
+    }
+    return used;
+}
 
-            // Match direct calls in app code and service-internal calls.
-            const usageRegex = /(i18n|this)\.t\(\s*['"`](.*?)['"`]\s*\)/g;
+const placeholders = (text) => [...String(text).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
 
-            let usageMatch;
-            while ((usageMatch = usageRegex.exec(content)) !== null) {
-                usedKeys.add(usageMatch[2]);
-            }
+const resources = await loadResources();
+const en = resources.en;
+const enKeys = Object.keys(en);
+const problems = [];
 
-            // Match known dynamic key carriers (e.g. signature color label keys).
-            const dynamicKeyRegex = /labelKey:\s*['"`](.*?)['"`]/g;
-            let dynamicMatch;
-            while ((dynamicMatch = dynamicKeyRegex.exec(content)) !== null) {
-                usedKeys.add(dynamicMatch[1]);
-            }
+for (const [lang, texts] of Object.entries(resources)) {
+    const keys = Object.keys(texts);
+    for (const key of enKeys.filter((k) => !keys.includes(k))) problems.push(`${lang}: missing "${key}"`);
+    for (const key of keys.filter((k) => !enKeys.includes(k))) problems.push(`${lang}: "${key}" is not in English (typo or leftover?)`);
+    for (const key of keys) {
+        if (String(texts[key]).trim() === '') problems.push(`${lang}: "${key}" is empty`);
+        if (lang !== 'en' && key in en && placeholders(texts[key]) !== placeholders(en[key])) {
+            problems.push(`${lang}: "${key}" has placeholders {${placeholders(texts[key])}} but English has {${placeholders(en[key])}}`);
         }
     }
 }
 
-scanDir(SRC_PATH);
-console.log(`✅ Found ${usedKeys.size} unique keys used in code`);
+const used = findUsedKeys(SRC_PATH);
+for (const key of [...used].filter((k) => !enKeys.includes(k))) problems.push(`code uses "${key}" but it is not defined in locales.ts`);
+for (const key of enKeys.filter((k) => !used.has(k))) problems.push(`"${key}" is defined but never used (remove it, or use it)`);
 
-// 3. Compare and Report
-const unusedKeys = [...definedKeys].filter(key => !usedKeys.has(key));
-
-if (unusedKeys.length === 0) {
-    console.log('\n🎉 Great job! No unused translations found.');
-} else {
-    console.log('\n⚠️  Found Unused Keys:');
-    unusedKeys.forEach(key => console.log(`   - ${key}`));
-    console.log(`\nTotal: ${unusedKeys.length} unused keys.`);
+const langs = Object.keys(resources).join(', ');
+if (problems.length) {
+    console.error(`✖ Translations have ${problems.length} problem(s):`);
+    for (const p of problems) console.error(`   - ${p}`);
+    console.error('\nFix these in src/i18n/locales.ts, then run `npm run check-i18n` again.');
+    process.exit(1);
 }
+console.log(`✓ Translations OK: ${enKeys.length} keys, complete in ${langs}, all used.`);

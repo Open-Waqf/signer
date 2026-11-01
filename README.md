@@ -178,17 +178,20 @@ Runs the app in "Web Mode" with Hot Module Replacement (HMR).
 npm run dev
 ```
 
-### 3. Verification & Type-checking
-
-Always run these before contributing to ensure stability.
+### 3. Check before every commit
 
 ```bash
-# Run TypeScript type-check
-npm run typecheck
-
-# Run the test suite
-npm test
+npm run check
 ```
+
+It runs the typecheck, the translation check (every language has every text, and every
+text is used) and all Playwright tests, in that order, and stops at the first failure with
+a plain message. The parts also run alone: `npm run typecheck`, `npm run check-i18n`,
+`npm test`. Tests use at most 4 browsers at once (1 on CI). After a failure,
+`npx playwright show-report` opens the details.
+
+On Ubuntu 26.04, Playwright needs `export PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`
+(put it in `~/.bashrc`).
 
 ### Test Certificate Fixture
 
