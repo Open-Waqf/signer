@@ -261,6 +261,30 @@ as wird. The script checks the bundle is signed with the key Play Console expect
 (SHA-1 `BB:7B:A6:…:8A:08`) and stops if not. Without any signing setup, Gradle still builds an
 unsigned bundle, so Android Studio and CI keep working.
 
+### 8. Release a new version
+
+```bash
+npm run release                 # 0.41.0 -> 0.42.0 (the middle number goes up)
+npm run release -- 1.0.0        # an exact version (never lower)
+npm run release -- --dry-run    # show what would happen, change nothing
+```
+
+One command does it all, and asks before changing anything:
+
+1. Checks you are on `develop`, have nothing uncommitted, and are not behind GitHub.
+2. Lists the commits since the last release and opens your editor for an optional
+   "What's new" note (max 500 characters, like Google Play), saved in
+   `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
+3. Sets the version in `package.json`, `package-lock.json` and `android/app/build.gradle`
+   (`versionName`, and `versionCode` + 1).
+4. Runs the production build, `npm run check` and the Android unit tests. If anything fails,
+   every file is put back and nothing is committed.
+5. Commits `Release X`, tags `vX` and pushes both together.
+6. Builds the signed `.aab` (`npm run android:release`) for you to upload in Play Console.
+
+If the push fails (no internet), the release stays committed and tagged on your computer,
+and the script prints the one command that finishes it.
+
 ### Cloudflare Worker Relay (GitHub Pages Hosting)
 
 If the app is hosted on GitHub Pages, deploy the TSA relay as a separate Cloudflare Worker:

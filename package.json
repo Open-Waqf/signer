@@ -17,6 +17,7 @@
     "android:run": "node scripts/run-android.mjs",
     "android:live": "node scripts/run-android.mjs --live",
     "android:release": "node scripts/release-android.mjs",
+    "release": "node scripts/release.mjs",
     "test:android": "node scripts/test-android.mjs"
   },
   "devDependencies": {
