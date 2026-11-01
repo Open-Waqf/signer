@@ -163,10 +163,25 @@ npm run check
 ```
 
 It runs the typecheck, the translation check (every language has every text, and every
-text is used) and all Playwright tests, in that order, and stops at the first failure with
+text is used) and the Playwright tests, in that order, and stops at the first failure with
 a plain message. The parts also run alone: `npm run typecheck`, `npm run check-i18n`,
 `npm test`. Tests use at most 4 browsers at once (1 on CI). After a failure,
 `npx playwright show-report` opens the details.
+
+The same tests run on three screens (Playwright projects in `playwright.config.ts`):
+
+| Project | Screen | Runs in |
+|---|---|---|
+| `phone` | Pixel 5, touch, English: every test | `npm run check`, GitHub |
+| `phone-ar` | Pixel 5, Arabic (right to left): tests tagged `@rtl` / `@rtl-only` | `npm run check`, GitHub |
+| `desktop` | Desktop Chrome: every test | `npm run check -- --desktop`, GitHub |
+
+Tags in a test title choose where it runs: `@desktop` or `@phone` (one screen only), `@rtl`
+(also in Arabic), `@rtl-only` (only in Arabic). `tests/support/ui.ts` clicks the right button
+for the screen (`tid(page, 'btn-add-date')`). `tests/android.spec.ts` runs the app as if it
+were the Android app, through a fake Android bridge (`tests/support/native-fake.ts`): saving
+into Documents, the share sheet, "Open with", the Back button. A test for a known, not yet
+fixed bug is marked `test.fixme(…, 'Bug <id>: …')` and switched on with the fix.
 
 `npm run test:build` runs the same tests against the production build (`vite preview`), as
 GitHub does before deploying.
@@ -212,13 +227,16 @@ npx @capacitor/assets generate --android
 
 ### Phone tests (Maestro)
 
-The flows in `maestro/android/` tap through the real app on your phone. They always
-target Signer Dev, never the Play Store app.
+Three short flows in `maestro/android/` tap through the real app on your phone, for what only a
+real phone shows: opening a PDF, saving into Documents and the Android share sheet, and the
+Android language picker. They always target Signer Dev, never the Play Store app. After the
+run, the command checks through adb that a new signed PDF really is in the phone's Documents
+folder. A flow that waits for a bug fix lives in `maestro/android/pending/`.
 
 ```bash
 npm run test:android                      # install a fresh Signer Dev, then run all flows
 npm run test:android -- --no-install      # use the Signer Dev already on the phone
-npm run test:android -- maestro/android/flows/08-sample-save-cycle.yaml   # one flow
+npm run test:android -- maestro/android/flows/02-sign-save-share.yaml     # one flow
 ```
 
 Keep the phone unlocked while the flows run. Maestro is installed once with
@@ -240,7 +258,7 @@ One command does it all, and asks before changing anything:
    `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
 3. Sets the version in `package.json`, `package-lock.json` and `android/app/build.gradle`
    (`versionName`, and `versionCode` + 1).
-4. Runs the production build, `npm run check` and the Android unit tests. If anything fails,
+4. Runs the production build, `npm run check` and an Android build check. If anything fails,
    every file is put back and nothing is committed.
 5. Commits `Release X`, tags `vX` and pushes both together.
 6. Builds the signed `.aab` (`npm run android:release`) for you to upload in Play Console.

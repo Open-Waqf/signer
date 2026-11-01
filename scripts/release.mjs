@@ -16,13 +16,14 @@
  *      versionCode (+1) in android/app/build.gradle. (The offline cache needs no version:
  *      it updates by file content.)
  *   4. Production build, `npm run check` (typecheck, translations, all tests) and the
- *      Android unit tests. If anything fails, every file is put back.
+ *      Android build check. If anything fails, every file is put back.
  *   5. Commits "Release X", tags vX and pushes both together. The tag makes GitHub
  *      test again and deploy the website.
  *   6. Builds the signed Android bundle for Google Play (npm run android:release).
  *
- * Other options: --notes "text" (skip the editor), --yes (skip the question),
- * --no-android (skip step 6).
+ * Other options: --notes "text" (skip the editor), --yes (skip the questions),
+ * --no-android (skip step 6), --phone-tests (run the Maestro phone tests in step 4 without
+ * asking; otherwise they are offered when a phone is connected and Maestro is installed).
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -170,7 +171,8 @@ if (notes && notes.length > PLAY_LIMIT) fail(`The note has ${notes.length} chara
 console.log('\nThis will:');
 console.log(`  • set version ${next} (versionCode ${code}) in package.json, package-lock.json, build.gradle`);
 if (notes) console.log(`  • save the "What's new" note to changelogs/${code}.txt`);
-console.log('  • build, run `npm run check` and the Android unit tests');
+console.log('  • build, run `npm run check` and the Android build check');
+console.log('  • phone tests (Maestro): asked if a phone is connected, or with --phone-tests');
 console.log(`  • commit "Release ${next}", tag v${next}, push both to GitHub (the tag deploys the website)`);
 if (!flag('--no-android')) console.log('  • build the signed Android bundle for Google Play');
 if (notes) console.log(`\nWhat's new:\n${notes.split('\n').map((l) => `  ${l}`).join('\n')}`);
@@ -221,11 +223,32 @@ console.log('\n▶ Production build…');
 if (!run('npm', ['run', 'build'])) undo('The production build failed.');
 console.log('▶ npm run check…');
 if (!run('npm', ['run', 'check'])) undo('npm run check failed.');
-console.log('▶ Android unit tests…');
+// Signer has no native code of its own (only Capacitor and its plugins), so there is
+// nothing to unit-test on the Android side: building the debug app proves the Android
+// project, plugins and Gradle setup still work.
+console.log('▶ Android build check…');
 const env = androidEnv();
-if (!run('npx', ['cap', 'sync', 'android'], {stdio: 'ignore', env})) undo('cap sync failed before the Android tests.');
+if (!run('npx', ['cap', 'sync', 'android'], {stdio: 'ignore', env})) undo('cap sync failed before the Android build check.');
 ensureGradlewExecutable();
-if (!run('./gradlew', ['-q', 'testDebugUnitTest'], {cwd: ANDROID, env})) undo('The Android unit tests failed.');
+if (!run('./gradlew', ['-q', 'assembleDebug'], {cwd: ANDROID, env})) undo('The Android build check failed.');
+
+// Phone tests (Maestro): optional, because GitHub has no phone. Asked only in a terminal,
+// with a phone connected and Maestro installed; --phone-tests runs them without asking.
+function phoneTestsAvailable() {
+    const devices = spawnSync('adb', ['devices'], {encoding: 'utf8', env}).stdout || '';
+    const hasPhone = devices.split('\n').some((l) => /\tdevice$/.test(l));
+    const hasMaestro = spawnSync('which', ['maestro'], {stdio: 'ignore'}).status === 0
+        || fs.existsSync(path.join(os.homedir(), '.maestro/bin/maestro'));
+    return hasPhone && hasMaestro;
+}
+let phoneTests = flag('--phone-tests');
+if (!phoneTests && process.stdin.isTTY && !assumeYes && phoneTestsAvailable()) {
+    phoneTests = (await ask('\nRun the phone tests now? About 2 minutes; keep the phone unlocked. (y/N) ')) === 'y';
+}
+if (phoneTests) {
+    console.log('▶ Phone tests (Maestro)…');
+    if (!run('node', ['scripts/test-android.mjs'], {env})) undo('The phone tests failed.');
+}
 
 // --- 5. Commit, tag, push ---
 console.log('▶ Committing, tagging and pushing…');

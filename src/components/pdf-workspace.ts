@@ -2672,12 +2672,12 @@ export class PdfWorkspace extends LitElement {
                 ` : ''}
                 <div class="saved-actions">
                     ${this.lastSaveCanShare ? html`
-                        <button class="btn btn-primary" data-testid="btn-share-saved"
+                        <button class="btn btn-primary" id="btn-share-saved" data-testid="btn-share-saved"
                                 @click=${this.shareFromSavedSheet}>
                             ${ICONS.share} ${i18n.t('share')}
                         </button>
                     ` : ''}
-                    <button class="btn" data-testid="btn-close-proof"
+                    <button class="btn" id="btn-close-proof" data-testid="btn-close-proof"
                             @click=${() => this.showProofModal = false}>
                         ${i18n.t('close')}
                     </button>
@@ -2986,7 +2986,7 @@ export class PdfWorkspace extends LitElement {
         const saveDisabled = !this.pdfName || !this.hasEdits || this.isSaving;
         const shareDisabled = !this.pdfName || !this.hasEdits;
         const finishButton = (testId: string, extraClass: string) => html`
-            <button data-testid=${testId} class="btn btn-primary btn-finish ${extraClass}"
+            <button id=${testId} data-testid=${testId} class="btn btn-primary btn-finish ${extraClass}"
                     @click=${() => this.finish()}
                     ?disabled=${saveDisabled}>
                 ${ICONS.check}<span>${i18n.t('finish')}</span>
@@ -3126,7 +3126,7 @@ export class PdfWorkspace extends LitElement {
                         @click=${this.openSignModal}>
                     ${ICONS.sign} <span>${i18n.t('signMode')}</span>
                 </button>
-                <button data-testid="m-btn-add-date" class="btn btn-tool" aria-label="${i18n.t('addDate')}"
+                <button id="m-btn-add-date" data-testid="m-btn-add-date" class="btn btn-tool" aria-label="${i18n.t('addDate')}"
                         @click=${this.addDateStamp}>
                     ${ICONS.date} <span>${i18n.t('addDate')}</span>
                 </button>

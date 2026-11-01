@@ -1,0 +1,24 @@
+# Add a date, Finish (saves into Documents), the Saved sheet opens, Share opens the
+# Android share sheet. test-android.mjs then checks the PDF really is in Documents.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "btn-sample"
+- tapOn:
+    id: "m-btn-add-date"
+- tapOn:
+    id: "m-btn-finish"
+- assertVisible:
+    id: "btn-share-saved"
+- tapOn:
+    id: "btn-share-saved"
+- waitForAnimationToEnd
+# The Android share sheet covers the app now: the Signer button is no longer visible.
+- assertNotVisible:
+    id: "btn-share-saved"
+- pressKey: back
+- waitForAnimationToEnd
+- assertVisible:
+    id: "m-btn-finish"

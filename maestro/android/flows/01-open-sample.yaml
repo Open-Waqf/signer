@@ -1,0 +1,15 @@
+# The app starts, opens the sample PDF in the editor, and goes back home.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "btn-sample"
+- assertVisible:
+    id: "m-btn-add-date"
+- assertVisible:
+    id: "m-btn-finish"
+- tapOn:
+    id: "btn-exit"
+- assertVisible:
+    id: "btn-sample"

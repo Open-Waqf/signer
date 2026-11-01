@@ -1,0 +1,19 @@
+# PENDING: fails today because of bug O1 (Back with a dialog open freezes the app).
+# Move it into flows/ and add it to suite.yaml together with the O1 fix.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "btn-sample"
+- tapOn:
+    id: "m-btn-add-date"
+- tapOn:
+    id: "m-btn-finish"
+- assertVisible:
+    id: "btn-share-saved"
+- pressKey: back
+- assertNotVisible:
+    id: "btn-share-saved"
+- assertVisible:
+    id: "m-btn-finish"

@@ -748,7 +748,7 @@ export class AppRoot extends LitElement {
                  @dragover=${(e: DragEvent) => e.preventDefault()} @drop=${this.handleDrop}>
                 <div class="mode-container">
                     <div class="layout-header">
-                        <select class="lang-select" data-testid="select-lang-home" @change=${this.handleLangChange}>
+                        <select id="select-lang-home" class="lang-select" data-testid="select-lang-home" @change=${this.handleLangChange}>
                             ${LANGUAGES.map(l => html`
                                 <option value="${l.code}" ?selected=${i18n.lang === l.code}>${l.label}</option>
                             `)}

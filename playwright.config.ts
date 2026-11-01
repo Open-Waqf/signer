@@ -34,11 +34,26 @@ export default defineConfig({
         timeout: 120 * 1000,
     },
 
+    // Three ways to run the same tests (tags in test titles choose who runs what):
+    //   phone     every test on a phone screen (Pixel 5, touch), except @desktop and @rtl-only
+    //   phone-ar  the @rtl and @rtl-only tests on a phone screen in Arabic (right-to-left)
+    //   desktop   every test on a desktop screen, except @phone and @rtl-only
+    // `npm run check` runs phone + phone-ar (about as fast as one run). GitHub runs all three.
     projects: [
         {
-            name: 'chromium',
-            use: {...devices['Desktop Chrome']},
+            name: 'phone',
+            use: {...devices['Pixel 5'], locale: 'en-US'},
+            grepInvert: /@desktop|@rtl-only/,
         },
-        // You can uncomment Firefox/Safari later if you want
+        {
+            name: 'phone-ar',
+            use: {...devices['Pixel 5'], locale: 'ar'},
+            grep: /@rtl/,
+        },
+        {
+            name: 'desktop',
+            use: {...devices['Desktop Chrome'], locale: 'en-US'},
+            grepInvert: /@phone|@rtl-only/,
+        },
     ],
 });

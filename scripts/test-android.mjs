@@ -18,7 +18,7 @@ import {ROOT, androidEnv, requireDevice} from './android-env.mjs';
 const APP_ID = 'org.openwaqf.signer.dev';
 const args = process.argv.slice(2);
 const noInstall = args.includes('--no-install');
-const flow = args.find((a) => a.endsWith('.yaml')) || 'maestro/android/full-e2e.yaml';
+const flow = args.find((a) => a.endsWith('.yaml')) || 'maestro/android/suite.yaml';
 const env = androidEnv();
 
 function findMaestro() {
@@ -51,10 +51,26 @@ if (!noInstall) {
     }
 }
 
+// Signed PDFs in the phone's Documents folder (read only: nothing on the phone is deleted).
+function signedPdfsOnPhone() {
+    const r = spawnSync('adb', ['shell', 'ls', '/sdcard/Documents/'], {encoding: 'utf8', env});
+    return new Set((r.stdout || '').split(/\s+/).filter((f) => /_signed_.*\.pdf$/.test(f)));
+}
+const savesAPdf = /suite\.yaml$|02-sign-save-share\.yaml$/.test(flow);
+const before = savesAPdf ? signedPdfsOnPhone() : new Set();
+
 console.log(`▶ Running ${flow} on Signer Dev (keep the phone unlocked)…`);
 const r = spawnSync(maestro, ['test', '-e', `APP_ID=${APP_ID}`, flow], {stdio: 'inherit', cwd: ROOT, env});
 if (r.status !== 0) {
     console.error('\n✖ Some Maestro flows failed (see above). Screenshots of failures are in ~/.maestro/tests/.');
     process.exit(1);
+}
+if (savesAPdf) {
+    const created = [...signedPdfsOnPhone()].filter((f) => !before.has(f));
+    if (!created.length) {
+        console.error('\n✖ The flows passed, but no new signed PDF appeared in the phone\'s Documents folder.');
+        process.exit(1);
+    }
+    console.log(`✓ Saved on the phone: Documents/${created.join(', ')}`);
 }
 console.log('\n✓ All Maestro flows passed on the phone.');
