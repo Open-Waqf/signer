@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npx playwright test",
     "check-i18n": "node check-i18n.js",
+    "android:run": "node scripts/run-android.mjs",
     "android:sync:win": "node scripts/sync-android-win.mjs",
     "android:open:win": "node scripts/sync-android-win.mjs --open"
   },

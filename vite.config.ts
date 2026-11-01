@@ -3,6 +3,9 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig({
     base: './',
+    // Only scan the real entry for deps. Without this, a cold cache also scans the
+    // web copy that `cap sync` puts in android/app/src/main/assets/public.
+    optimizeDeps: {entries: ['index.html']},
     build: {
         outDir: 'dist',
         emptyOutDir: true,

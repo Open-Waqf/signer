@@ -203,7 +203,16 @@ Compiles TypeScript to optimized, offline-ready JS in `dist/`.
 npm run build
 ```
 
-### 5. Android E2E (Maestro)
+### 5. Test on your phone
+
+Builds the app and installs **Signer Dev** (`org.openwaqf.signer.dev`) on a phone plugged in over USB.
+It has its own name and data, so it sits next to the Play Store app without touching it.
+
+```bash
+npm run android:run
+```
+
+### 5b. Android E2E (Maestro)
 
 For Android emulator/device workflow parity, run the PowerShell smoke runner from Windows:
 
