@@ -80,7 +80,9 @@ export async function signPdfWithCertificate(
     cert: CertificateSigningConfig
 ): Promise<Uint8Array> {
     await ensureNodeLikeGlobals();
-    const [{PDFDocument}, {pdflibAddPlaceholder}, {default: signerEngine}, {P12Signer}] = await Promise.all([
+    // Named import: @signpdf/signpdf is CommonJS, and Vite 8 reads its `default` export as the
+    // whole module, not the SignPdf instance. The class is the same on every bundler.
+    const [{PDFDocument}, {pdflibAddPlaceholder}, {SignPdf}, {P12Signer}] = await Promise.all([
         import('pdf-lib'),
         import('@signpdf/placeholder-pdf-lib'),
         import('@signpdf/signpdf'),
@@ -102,7 +104,7 @@ export async function signPdfWithCertificate(
 
         const withPlaceholder = await doc.save({useObjectStreams: false});
         const signer = new P12Signer(p12Copy, {passphrase});
-        const signedBuffer = await signerEngine.sign(withPlaceholder, signer, new Date());
+        const signedBuffer = await new SignPdf().sign(withPlaceholder, signer, new Date());
         return new Uint8Array(signedBuffer);
     } finally {
         p12Copy.fill(0);

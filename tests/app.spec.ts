@@ -2089,3 +2089,28 @@ test.describe('10. Finish and Saved sheet', () => {
         expect(downloads).toBe(2);
     });
 });
+
+// ---------------------------------------------------------------------------
+// 11. Scanned PDFs (fax-style CCITT images, as phone scan apps produce)
+// ---------------------------------------------------------------------------
+test.describe('11. Scanned PDFs', () => {
+    test('11.1 A CCITT-compressed scan renders visible content', async ({page}) => {
+        // pdf.js 6 decodes CCITT and JBIG2 images with files from public/wasm/.
+        // Without them the page renders blank, with no error.
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles(path.join(process.cwd(), 'tests/fixtures/scan-ccitt.pdf'));
+        const ws = page.locator('pdf-workspace');
+        await expect(ws.getByTestId('btn-exit')).toBeVisible();
+
+        await expect.poll(async () => ws.evaluate((el) => {
+            const canvas = (el as HTMLElement).shadowRoot?.querySelector('#pdf-canvas') as HTMLCanvasElement | null;
+            if (!canvas || !canvas.width) return 0;
+            const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+            let dark = 0;
+            for (let i = 0; i < data.length; i += 4) if (data[i] < 100 && data[i + 3] > 0) dark++;
+            return dark;
+        }), {timeout: 15000}).toBeGreaterThan(1000);
+    });
+});

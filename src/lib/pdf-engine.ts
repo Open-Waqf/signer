@@ -40,7 +40,8 @@ export class PdfEngine {
 
     destroy() {
         if (this.pdfDoc) {
-            this.pdfDoc.destroy();
+            // pdf.js 6 removed PDFDocumentProxy.destroy(); the loading task owns the worker.
+            void this.pdfDoc.loadingTask.destroy();
             this.pdfDoc = null;
         }
         this.pdfBytes = null;
@@ -53,6 +54,9 @@ export class PdfEngine {
         const base = new URL(import.meta.env.BASE_URL, window.location.href);
         const cMapUrl = new URL('cmaps/', base).toString();
         const standardFontDataUrl = new URL('standard_fonts/', base).toString();
+        // pdf.js 6 decodes JBIG2 and CCITT (fax) images, common in scans, with files
+        // from public/wasm/. Without them those pages render blank, with no error.
+        const wasmUrl = new URL('wasm/', base).toString();
         const attempts: Array<Record<string, unknown>> = [
             {
                 cMapUrl,
@@ -80,6 +84,7 @@ export class PdfEngine {
                     // PDF.js may transfer/detach ArrayBuffer internally on some Android WebViews.
                     // Re-create a fresh copy for each attempt.
                     data: new Uint8Array(data),
+                    wasmUrl,
                     ...attempts[i],
                 });
                 this.pdfDoc = await loadingTask.promise;

@@ -17,7 +17,7 @@ export async function removeTrailingAuditPages(pdfDoc: PDFDocument, sourceBytes:
     const textContent = await lastPage.getTextContent();
     const text = (textContent.items || []).map((i: any) => i.str || '').join(' ');
     const hasMarker = pageContainsAuditMarker(text);
-    srcDoc.destroy();
+    void srcDoc.loadingTask.destroy();
     if (hasMarker && pdfDoc.getPageCount() > 1) {
         pdfDoc.removePage(pdfDoc.getPageCount() - 1);
         return true;

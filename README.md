@@ -159,8 +159,8 @@ Anyone receiving a signed document can verify it:
 * Node.js 22+ (the Capacitor 8 CLI needs it)
 * Android Studio (only if building the APK)
 
-Some versions are pinned on purpose (pdfjs-dist, Vite 7, TypeScript 6, AGP 8.13). Read
-[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) before upgrading anything.
+TypeScript is pinned to 6.0.x on purpose. Read [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md)
+before upgrading anything.
 
 ### 1. Installation
 
