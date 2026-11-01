@@ -247,6 +247,20 @@ npm run test:android -- maestro/android/flows/08-sample-save-cycle.yaml   # one 
 Keep the phone unlocked while the flows run. Maestro is installed once with
 `curl -Ls "https://get.maestro.mobile.dev" | bash`; the command tells you if it is missing.
 
+### 7. Android release build
+
+```bash
+npm run android:release
+```
+
+Builds the signed `.aab` for Play Console (nothing is uploaded). Unlock the Cryptomator vault
+first. Signing comes from `android/keystore.properties` (git-ignored: `storeFile`,
+`storePassword`, `keyAlias`, `keyPassword`), else from `SIGNER_KEYSTORE`, `SIGNER_KS_PASS`,
+`SIGNER_KEY_ALIAS` [`SIGNER_KEY_PASS`], else it asks. Signer uses the same Open Waqf upload key
+as wird. The script checks the bundle is signed with the key Play Console expects
+(SHA-1 `BB:7B:A6:…:8A:08`) and stops if not. Without any signing setup, Gradle still builds an
+unsigned bundle, so Android Studio and CI keep working.
+
 ### Cloudflare Worker Relay (GitHub Pages Hosting)
 
 If the app is hosted on GitHub Pages, deploy the TSA relay as a separate Cloudflare Worker:

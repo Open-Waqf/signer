@@ -16,6 +16,7 @@
     "check-i18n": "node check-i18n.js",
     "android:run": "node scripts/run-android.mjs",
     "android:live": "node scripts/run-android.mjs --live",
+    "android:release": "node scripts/release-android.mjs",
     "test:android": "node scripts/test-android.mjs"
   },
   "devDependencies": {

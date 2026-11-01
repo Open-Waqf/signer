@@ -32,3 +32,8 @@ dist-ssr
 /.claude/CLAUDE.md
 /GEMINI.md
 /AGENTS.md
+
+# Release signing: never commit keys or their passwords
+*.jks
+*.keystore
+android/keystore.properties

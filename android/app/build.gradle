@@ -1,5 +1,15 @@
 apply plugin: 'com.android.application'
 
+// Release signing reads android/keystore.properties (git-ignored; the key itself lives in
+// the Cryptomator vault). Without that file, release builds stay unsigned, so a fresh
+// clone, CI and Android Studio all keep working.
+def keystorePropsFile = rootProject.file("keystore.properties")
+def hasSigningConfig = keystorePropsFile.exists()
+def keystoreProps = new Properties()
+if (hasSigningConfig) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace = "org.openwaqf.signer"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,6 +26,18 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~!*.apk'
         }
     }
+    signingConfigs {
+        release {
+            if (hasSigningConfig) {
+                // Tolerate a path wrapped in quotes or padded with spaces.
+                def storePath = (keystoreProps['storeFile'] ?: '').trim().replaceAll(/^"(.*)"$/, '$1')
+                storeFile file(storePath)
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         // Test builds install next to the Play Store app: own id and name ("Signer Dev",
         // see src/debug/res), own data. Release builds are unchanged.
@@ -24,6 +46,7 @@ android {
             versionNameSuffix "-dev"
         }
         release {
+            if (hasSigningConfig) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
