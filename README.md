@@ -215,6 +215,14 @@ It has its own name and data, so it sits next to the Play Store app without touc
 npm run android:run
 ```
 
+### App icons
+
+Icons are generated from `assets/` only when they change. The tool is not installed; run it with npx:
+
+```bash
+npx @capacitor/assets generate --android
+```
+
 ### 5b. Android E2E (Maestro)
 
 For Android emulator/device workflow parity, run the PowerShell smoke runner from Windows:
