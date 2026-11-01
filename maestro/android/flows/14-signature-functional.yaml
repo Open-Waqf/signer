@@ -55,9 +55,9 @@ appId: org.openwaqf.signer
     id: "btn-save-sig"
 - waitForAnimationToEnd
 - assertVisible:
-    id: "btn-save"
+    id: "m-btn-finish"
 - tapOn:
-    id: "btn-save"
+    id: "m-btn-finish"
 - waitForAnimationToEnd
 - runFlow:
     when:
@@ -69,6 +69,10 @@ appId: org.openwaqf.signer
 - waitForAnimationToEnd
 - assertVisible:
     id: "proof-modal"
+- assertVisible:
+    id: "btn-share-saved"
+- tapOn:
+    id: "btn-saved-details"
 - assertVisible:
     id: "saved-doc-id"
 - assertVisible:

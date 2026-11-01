@@ -120,6 +120,23 @@ export class FileService {
     }
 
     /**
+     * True when Share can hand a PDF to another app: always in the native app,
+     * and in browsers that support sharing files (e.g. Chrome on Android).
+     * On desktop browsers without it, Share would only download the file again.
+     */
+    canShareFiles(): boolean {
+        if (isNativePlatform()) return true;
+        const navAny = navigator as any;
+        if (typeof navAny.share !== 'function' || typeof navAny.canShare !== 'function') return false;
+        try {
+            const probe = new File([new Uint8Array(0)], 'probe.pdf', {type: 'application/pdf'});
+            return !!navAny.canShare({files: [probe]});
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * 🟢 RESTORED: Intelligent Share (Web + Native)
      * Handles Web Share API (Mobile Web) and Native Share (App).
      */

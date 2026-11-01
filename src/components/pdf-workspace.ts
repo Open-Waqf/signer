@@ -50,6 +50,8 @@ export class PdfWorkspace extends LitElement {
     @state() rememberHardwareChoice = false;
 
     @state() showProofModal = false;
+    /** Whether the "Saved" sheet offers Share (false on desktop browsers that can only download). */
+    @state() lastSaveCanShare = false;
     @state() lastSavedId: string | null = null;
     @state() lastSavedHash: string | null = null;
     @state() lastSavedCode: string | null = null;
@@ -373,19 +375,147 @@ export class PdfWorkspace extends LitElement {
             padding: 8px 8px calc(max(env(safe-area-inset-bottom), 12px) + 8px);
             z-index: 200;
             box-shadow: var(--workspace-bottom-bar-shadow);
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* The tools scroll; the Finish button next to them never does. */
+        .bottom-tools {
+            display: flex;
+            flex: 1;
+            min-width: 0;
             justify-content: flex-start;
             overflow-x: auto;
             scrollbar-width: none;
             -webkit-overflow-scrolling: touch;
         }
 
-        .toolbar-bottom::-webkit-scrollbar {
+        .bottom-tools::-webkit-scrollbar {
             display: none;
+        }
+
+        .btn-finish {
+            gap: 6px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .btn-finish svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .btn-finish.finish-bottom {
+            flex: none;
+            min-height: 48px;
+            padding: 10px 18px;
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+        }
+
+        /* Saved sheet */
+        .saved-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .saved-icon {
+            flex: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: var(--success-bg);
+            color: var(--success);
+        }
+
+        .saved-icon svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .saved-head-text {
+            min-width: 0;
+        }
+
+        .saved-title {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .saved-where {
+            color: var(--text-sub);
+            font-size: 0.85rem;
+            overflow-wrap: anywhere;
+        }
+
+        .saved-actions,
+        .saved-detail-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .saved-actions .btn,
+        .saved-detail-actions .btn {
+            flex: 1;
+            min-height: 44px;
+        }
+
+        .saved-details {
+            border-top: 1px solid var(--border);
+            padding-top: 4px;
+        }
+
+        .saved-details summary {
+            cursor: pointer;
+            color: var(--text-sub);
+            font-weight: 600;
+            font-size: 0.9rem;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+        }
+
+        .saved-help {
+            color: var(--text-sub);
+            font-size: 0.85rem;
+            margin: 0 0 10px;
+        }
+
+        /* Fingerprint in blocks of 8 so a person can compare it by eye.
+           The blocks are spans, so copied text stays one unbroken hash. */
+        .saved-hash {
+            direction: ltr;
+            text-align: start;
+        }
+
+        .saved-hash span {
+            display: inline-block;
+            margin-inline-end: 0.6em;
+        }
+
+        .saved-note {
+            color: var(--text-sub);
+            font-size: 0.78rem;
+            margin: 0;
+            overflow-wrap: anywhere;
         }
 
         @media (max-width: 768px) {
             .toolbar-bottom {
                 display: flex;
+                /* Last in the column, so it sits on the bottom edge under the thumb.
+                   In the markup it comes before the page, which put it at the top. */
+                order: 1;
+            }
+
+            /* On phones Finish lives in the bottom bar, under the thumb. */
+            .finish-top {
+                display: none;
             }
 
             .toolbar-top .primary-tools {
@@ -1303,6 +1433,11 @@ export class PdfWorkspace extends LitElement {
     }
 
     updated(changed: Map<string, unknown>) {
+        if (changed.has('showProofModal') && this.showProofModal) {
+            // The verification details always start closed when the Saved sheet opens.
+            const details = this.shadowRoot?.querySelector<HTMLDetailsElement>('.saved-details');
+            if (details) details.open = false;
+        }
         if (changed.has('currentPage') && this.activeSidebar === 'thumbnails') {
             this.ensureThumbPageVisible(this.currentPage);
             this.scheduleThumbObserverRefresh();
@@ -2069,11 +2204,9 @@ export class PdfWorkspace extends LitElement {
     private getFinalizeSaveDeps() {
         return {
             savePdf: (filename: string, data: Uint8Array) => fileService.savePdf(filename, data),
-            sharePdf: (file: { filename: string; uri?: string }, bytes?: Uint8Array) => fileService.sharePdf(file, bytes),
             isNativePlatform,
             toast: (msg: string) => this.toast(msg),
             messages: {
-                exportingFile: i18n.t('exportingFile'),
                 savedMsg: i18n.t('savedMsg'),
             },
             hapticSuccess: () => HapticService.success(),
@@ -2193,7 +2326,8 @@ export class PdfWorkspace extends LitElement {
 
     private async finishSave(result: {pdfBytes: Uint8Array, docId: string, finalHash: string, finalCode: string, signatures: SignaturePayload[]}, opts?: { silentWeb?: boolean; showToast?: boolean; suppressProofModal?: boolean }) {
         const silentWeb = !!opts?.silentWeb;
-        const showToast = opts?.showToast ?? true;
+        // The "Saved" sheet already says the file is saved, so no toast by default.
+        const showToast = opts?.showToast ?? false;
         const suppressProofModal = !!opts?.suppressProofModal;
         const finalized = await finalizeSave({
             deps: this.getFinalizeSaveDeps(),
@@ -2217,6 +2351,7 @@ export class PdfWorkspace extends LitElement {
         this.loadedBytes = result.pdfBytes;
         this.openedDocumentHash = result.signatures[result.signatures.length - 1]?.integrityAnchorHash || result.finalHash;
         this.previousHashManuallyVerified = true;
+        this.lastSaveCanShare = fileService.canShareFiles();
         this.showProofModal = !suppressProofModal;
         this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
     }
@@ -2333,6 +2468,24 @@ export class PdfWorkspace extends LitElement {
 
     private openStampPicker() {
         this.shadowRoot?.getElementById('stamp-input')?.click();
+    }
+
+    /**
+     * Finish: save, then show the "Saved" sheet. When nothing changed since the
+     * last save, reopen the sheet instead of writing the file again, so Share
+     * stays one tap away after the sheet was closed.
+     */
+    async finish() {
+        if (!this.isDirty && this.lastSavedBytes && this.lastSaved) {
+            this.showProofModal = true;
+            return;
+        }
+        await this.saveDocument();
+    }
+
+    async shareFromSavedSheet() {
+        this.showProofModal = false;
+        await this.shareLatest();
     }
 
     async shareLatest() {
@@ -2499,73 +2652,58 @@ export class PdfWorkspace extends LitElement {
         if (!this.showProofModal) return '';
         return html`
             <owq-modal .open=${this.showProofModal}
-                       .center=${true}
+                       .sheet=${true}
                        data-testid="proof-modal"
                        ariaLabelledby="proof-title"
                        @modal-close=${() => this.showProofModal = false}>
-                <div class="modal-icon-wrap">
-                    <div class="modal-icon-badge success">${ICONS.check}
+                <div class="saved-head">
+                    <div class="saved-icon" aria-hidden="true">${ICONS.check}</div>
+                    <div class="saved-head-text">
+                        <h2 id="proof-title" class="saved-title">${i18n.t('savedTitle')}</h2>
+                        <div class="saved-where" data-testid="saved-where">
+                            ${this.lastSaved?.filename ?? ''} · ${isNativePlatform() ? i18n.t('savedWhereNative') : i18n.t('savedWhereWeb')}
+                        </div>
                     </div>
                 </div>
-                <h2 id="proof-title" class="modal-title">${i18n.t('savedMsg')}</h2>
-                <p class="modal-copy">
-                    ${i18n.t('proofSavedFileHelp')}</p>
-                <div class="modal-card-surface">
-                    <div class="modal-section-title">
-                        ${i18n.t('proofSavedFileTitle')}
+                ${this.lastSaveHardwareFallback ? html`
+                    <div class="alert-box alert-warning" data-testid="hardware-fallback-warning">
+                        ${i18n.t('hardwareProofUnavailable')}
                     </div>
-                    <div class="modal-label">
-                        ${i18n.t('internalRefLabel')}
+                ` : ''}
+                <div class="saved-actions">
+                    ${this.lastSaveCanShare ? html`
+                        <button class="btn btn-primary" data-testid="btn-share-saved"
+                                @click=${this.shareFromSavedSheet}>
+                            ${ICONS.share} ${i18n.t('share')}
+                        </button>
+                    ` : ''}
+                    <button class="btn" data-testid="btn-close-proof"
+                            @click=${() => this.showProofModal = false}>
+                        ${i18n.t('close')}
+                    </button>
+                </div>
+                <details class="saved-details" data-testid="saved-details">
+                    <summary data-testid="btn-saved-details">${i18n.t('savedDetailsSummary')}</summary>
+                    <p class="saved-help">${i18n.t('savedDetailsHelp')}</p>
+                    <div class="modal-label">${i18n.t('fingerprintLabel')}</div>
+                    <div class="modal-value-mono hash saved-hash" data-testid="saved-doc-hash">${
+                        (this.lastSavedHash || '').match(/.{1,8}/g)?.map((group) => html`<span>${group}</span>`)
+                    }</div>
+                    <div class="modal-label">${i18n.t('nextSignerCodeLabel')}</div>
+                    <div class="modal-value-mono code" data-testid="saved-handover-code">${this.lastSavedCode || '------'}</div>
+                    <div class="saved-detail-actions">
+                        <button class="btn" data-testid="btn-copy-hash" @click=${this.copyHash}>
+                            ${ICONS.copy} ${i18n.t('copyShort')}
+                        </button>
+                        <button class="btn" data-testid="btn-email-proof" @click=${this.sendProofEmail}>
+                            ${ICONS.email} ${i18n.t('email')}
+                        </button>
                     </div>
-                    <div class="modal-value-mono id"
-                         data-testid="saved-doc-id">
-                        ${this.lastSavedId}
-                    </div>
-                    <div class="modal-section-title">
-                        ${i18n.t('proofShareHashTitle')}
-                    </div>
-                    <p class="modal-copy">
-                        ${i18n.t('proofShareHashHelp')}
+                    <p class="saved-note">
+                        ${!this.lastSaveTsaVerified ? html`<span data-testid="tsa-unverified-warning">${i18n.t('tsaClockNote')}</span> · ` : ''}
+                        <span>${i18n.t('refShort')} <span data-testid="saved-doc-id">${this.lastSavedId}</span></span>
                     </p>
-                    <div class="modal-label inline-icon">
-                        ${ICONS.lock} ${i18n.t('hashLabel')}
-                    </div>
-                    <div class="modal-value-mono hash"
-                         data-testid="saved-doc-hash">
-                        ${this.lastSavedHash}
-                    </div>
-                    <div class="modal-label">
-                        ${i18n.t('handoverCodeLabel')}
-                    </div>
-                    <div class="modal-value-mono code"
-                         data-testid="saved-handover-code">
-                        ${this.lastSavedCode || '------'}
-                    </div>
-                    ${this.lastSaveHardwareFallback ? html`
-                        <div class="alert-box alert-warning hardware-warning-top-gap" data-testid="hardware-fallback-warning">
-                            ${i18n.t('hardwareProofUnavailable')}
-                        </div>
-                    ` : ''}
-                    ${!this.lastSaveTsaVerified ? html`
-                        <div class="alert-box alert-warning hardware-warning-top-gap" data-testid="tsa-unverified-warning">
-                            ${i18n.t('tsaUnverifiedWarning')}
-                        </div>
-                    ` : ''}
-                </div>
-                <div class="modal-actions modal-actions-spaced">
-                    <button class="btn btn-primary btn-block" data-testid="btn-copy-hash"
-                            @click=${this.copyHash}>
-                        ${ICONS.copy} ${i18n.t('copyShort')}
-                    </button>
-                    <button class="btn btn-block" data-testid="btn-email-proof"
-                            @click=${this.sendProofEmail}>${ICONS.email}
-                        ${i18n.t('email')}
-                    </button>
-                </div>
-                <button class="btn btn-block" data-testid="btn-close-proof"
-                        @click=${() => this.showProofModal = false}>
-                    ${i18n.t('close')}
-                </button>
+                </details>
             </owq-modal>
         `;
     }
@@ -2847,6 +2985,13 @@ export class PdfWorkspace extends LitElement {
     render() {
         const saveDisabled = !this.pdfName || !this.hasEdits || this.isSaving;
         const shareDisabled = !this.pdfName || !this.hasEdits;
+        const finishButton = (testId: string, extraClass: string) => html`
+            <button data-testid=${testId} class="btn btn-primary btn-finish ${extraClass}"
+                    @click=${() => this.finish()}
+                    ?disabled=${saveDisabled}>
+                ${ICONS.check}<span>${i18n.t('finish')}</span>
+            </button>
+        `;
 
         return html`
             <header>
@@ -2963,10 +3108,6 @@ export class PdfWorkspace extends LitElement {
                                 ${ICONS.audit}
                             </button>
                         ` : ''}
-                        <button data-testid="btn-share" class="btn toolbar-btn-compact"
-                                aria-label="${i18n.t('share')}" @click=${this.shareLatest} ?disabled=${shareDisabled}>
-                            ${ICONS.share}
-                        </button>
                         <button data-testid="btn-airgap-transfer" class="btn toolbar-btn-compact"
                                 aria-label="${i18n.t('airGapTransfer')}"
                                 title="${i18n.t('airGapTransfer')}"
@@ -2974,17 +3115,13 @@ export class PdfWorkspace extends LitElement {
                                 ?disabled=${shareDisabled}>
                             ${ICONS.qr}
                         </button>
-                        <button data-testid="btn-save" class="btn btn-primary toolbar-btn-compact"
-                                aria-label="${i18n.t('done')}"
-                                @click=${() => this.saveDocument()}
-                                ?disabled=${saveDisabled}>
-                            ${ICONS.save}
-                        </button>
+                        ${finishButton('btn-save', 'toolbar-btn-compact finish-top')}
                     </div>
                 </div>
             </div>
 
             <div class="toolbar-bottom" role="toolbar" aria-label="${i18n.t('ariaToolbar')}">
+                <div class="bottom-tools">
                 <button data-testid="m-btn-add-sig" class="btn btn-tool" aria-label="${i18n.t('signMode')}"
                         @click=${this.openSignModal}>
                     ${ICONS.sign} <span>${i18n.t('signMode')}</span>
@@ -3028,6 +3165,8 @@ export class PdfWorkspace extends LitElement {
                         </button>
                     ` : ''}
                 ` : ''}
+                </div>
+                ${finishButton('m-btn-finish', 'finish-bottom')}
             </div>
 
             <div class="workspace-area">

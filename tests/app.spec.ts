@@ -356,6 +356,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const downloadPromise = page.waitForEvent('download');
         await page.getByTestId('btn-save').click();
         const download = await downloadPromise;
+        await page.getByTestId('btn-saved-details').click();
         const generatedHash = (await page.getByTestId('saved-doc-hash').innerText()).trim();
 
         const stream = await download.createReadStream();
@@ -419,9 +420,16 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.getByTestId('btn-exit')).toBeVisible();
         await page.getByTestId('btn-add-date').click();
 
+        // Finish saves (first download) and opens the Saved sheet with Share.
+        const savedDownload = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        await savedDownload;
+
+        // Share fails, so the file is still handed to the user as a download.
         const downloadPromise = page.waitForEvent('download');
-        await page.getByTestId('btn-share').click();
+        await page.getByTestId('btn-share-saved').click();
         const download = await downloadPromise;
+        expect(await page.evaluate(() => (window as any).__owqShareCalled)).toBe(1);
         expect(download.suggestedFilename()).toMatch(/_signed_\d{4}-\d{2}-\d{2}_\d{4}\.pdf$/);
     });
 
@@ -486,6 +494,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
 
         // Proof modal
         await expect(page.getByTestId('proof-modal')).toBeVisible();
+        await page.getByTestId('btn-saved-details').click();
         const savedId = await page.getByTestId('saved-doc-id').innerText();
         expect(savedId.length).toBeGreaterThan(5);
         await page.getByTestId('btn-close-proof').click();
@@ -1433,7 +1442,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
     });
 
-    test('9.12 Failed/offline timestamp surfaces an unverified-TSA warning in the proof modal', async ({page}) => {
+    test('9.12 Failed/offline timestamp surfaces a device-clock note in the saved sheet details', async ({page}) => {
         await page.goto('/');
         const fileChooserPromise = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
@@ -1456,6 +1465,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(ws.getByTestId('proof-modal')).toBeVisible();
         // No TSA relay is reachable in the test environment, so the timestamp is
         // unverified — the user must be told rather than left to assume it's proven.
+        await ws.getByTestId('btn-saved-details').click();
         await expect(ws.getByTestId('tsa-unverified-warning')).toBeVisible();
     });
 
@@ -1736,6 +1746,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const dlA = page.waitForEvent('download');
         await page.getByTestId('btn-save').click();
         const dA = await dlA;
+        await page.getByTestId('btn-saved-details').click();
         const codeA = (await page.getByTestId('saved-handover-code').innerText()).trim();
         const streamA = await dA.createReadStream();
         const chunksA = [];
@@ -1816,6 +1827,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const dlA = page.waitForEvent('download');
         await page.getByTestId('btn-save').click();
         const dA = await dlA;
+        await page.getByTestId('btn-saved-details').click();
         const codeA = (await page.getByTestId('saved-handover-code').innerText()).trim();
         const streamA = await dA.createReadStream();
         const chunksA = [];
@@ -1835,6 +1847,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const dlB = page.waitForEvent('download');
         await page.getByTestId('btn-save').click();
         const dB = await dlB;
+        await page.getByTestId('btn-saved-details').click();
         const codeB = (await page.getByTestId('saved-handover-code').innerText()).trim();
         const streamB = await dB.createReadStream();
         const chunksB = [];
@@ -1957,5 +1970,122 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         (await chooserV).setFiles({name: 'tampered-signed-b.pdf', mimeType: 'application/pdf', buffer: tamperedSignedByB});
         await expect(page.getByTestId('chain-fail')).toBeVisible();
         await expect(page.getByTestId('chain-fail')).toContainText('2');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Finish button and Saved sheet
+// ---------------------------------------------------------------------------
+test.describe('10. Finish and Saved sheet', () => {
+    async function openSample(page: import('@playwright/test').Page) {
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+    }
+
+    for (const lang of ['en', 'ar'] as const) {
+        test(`10.1 On a 360px phone (${lang}) Finish is fully on screen even with all tools shown`, async ({page}) => {
+            await page.setViewportSize({width: 360, height: 740});
+            await openSample(page);
+            if (lang === 'ar') await page.getByTestId('select-lang').selectOption('ar');
+            // More Tools makes the bottom tool row overflow; Finish must not scroll away with it.
+            await page.getByTestId('m-btn-toggle-advanced').click();
+            await page.getByTestId('m-btn-add-date').click();
+
+            const finish = page.getByTestId('m-btn-finish');
+            await expect(finish).toBeVisible();
+            await expect(finish).toBeEnabled();
+            const box = await finish.boundingBox();
+            expect(box).not.toBeNull();
+            expect(box!.x).toBeGreaterThanOrEqual(0);
+            expect(box!.x + box!.width).toBeLessThanOrEqual(360);
+            expect(box!.y + box!.height).toBeLessThanOrEqual(740);
+            // It sits on the bottom edge of the screen, under the thumb.
+            expect(box!.y).toBeGreaterThan(740 - 120);
+            expect(box!.height).toBeGreaterThanOrEqual(44);
+            // The top-row copy is hidden on phones so there is only one Finish.
+            await expect(page.getByTestId('btn-save')).toBeHidden();
+
+            const download = page.waitForEvent('download');
+            await finish.click();
+            await download;
+            await expect(page.getByTestId('proof-modal')).toBeVisible();
+        });
+    }
+
+    test('10.2 Saved sheet offers Share first and keeps the hash in closed details', async ({page}) => {
+        await page.addInitScript(() => {
+            const navAny = navigator as any;
+            (window as any).__owqShared = 0;
+            const share = async () => { (window as any).__owqShared += 1; };
+            Object.defineProperty(navAny, 'share', {value: share, configurable: true});
+            Object.defineProperty(navAny, 'canShare', {value: () => true, configurable: true});
+        });
+        await openSample(page);
+        await page.getByTestId('btn-add-date').click();
+        const download = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        await download;
+
+        await expect(page.getByTestId('proof-modal')).toBeVisible();
+        await expect(page.getByTestId('btn-share-saved')).toBeVisible();
+        await expect(page.getByTestId('saved-where')).toContainText('Downloaded');
+        await expect(page.getByTestId('saved-doc-hash')).toBeHidden();
+
+        await page.getByTestId('btn-saved-details').click();
+        await expect(page.getByTestId('saved-doc-hash')).toBeVisible();
+        // Shown in blocks for reading, but the text is still one unbroken hash.
+        const hash = (await page.getByTestId('saved-doc-hash').innerText()).trim();
+        expect(hash).toMatch(/^[0-9a-f]{64}$/);
+
+        await page.getByTestId('btn-share-saved').click();
+        await expect.poll(() => page.evaluate(() => (window as any).__owqShared)).toBe(1);
+        await expect(page.getByTestId('proof-modal')).toBeHidden();
+    });
+
+    test('10.3 Without Web Share the sheet shows no Share button', async ({page}) => {
+        await page.addInitScript(() => {
+            const navAny = navigator as any;
+            const proto = Object.getPrototypeOf(navAny);
+            try { delete proto.share; delete proto.canShare; } catch { /* ignore */ }
+            Object.defineProperty(navAny, 'share', {value: undefined, configurable: true});
+            Object.defineProperty(navAny, 'canShare', {value: undefined, configurable: true});
+        });
+        await openSample(page);
+        await page.getByTestId('btn-add-date').click();
+        const download = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        await download;
+        await expect(page.getByTestId('proof-modal')).toBeVisible();
+        await expect(page.getByTestId('saved-where')).toContainText('Downloaded');
+        await expect(page.getByTestId('btn-share-saved')).toHaveCount(0);
+    });
+
+    test('10.5 Finish with no new changes reopens the sheet without saving again', async ({page}) => {
+        await openSample(page);
+        await page.getByTestId('btn-add-date').click();
+        let downloads = 0;
+        page.on('download', () => { downloads += 1; });
+        const first = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        await first;
+        await page.getByTestId('btn-saved-details').click();
+        await page.getByTestId('btn-close-proof').click();
+        await expect(page.getByTestId('proof-modal')).toBeHidden();
+
+        await page.getByTestId('btn-save').click();
+        await expect(page.getByTestId('proof-modal')).toBeVisible();
+        // Details start closed again each time the sheet opens.
+        await expect(page.getByTestId('saved-doc-hash')).toBeHidden();
+        await page.waitForTimeout(500);
+        expect(downloads).toBe(1);
+
+        // A real change saves again.
+        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-add-date').click();
+        const second = page.waitForEvent('download');
+        await page.getByTestId('btn-save').click();
+        await second;
+        expect(downloads).toBe(2);
     });
 });

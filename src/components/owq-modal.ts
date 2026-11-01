@@ -6,6 +6,8 @@ import {sharedStyles} from '../styles/shared-styles';
 export class OwqModal extends LitElement {
     @property({type: Boolean, reflect: true}) open = false;
     @property({type: Boolean}) center = false;
+    /** On phones, dock the card to the bottom of the screen like a native sheet. */
+    @property({type: Boolean, reflect: true}) sheet = false;
     @property({type: Boolean}) closeOnBackdrop = true;
     @property({type: Boolean}) closeOnEsc = true;
     @property({type: String}) ariaLabel = '';
@@ -66,6 +68,31 @@ export class OwqModal extends LitElement {
                 max(var(--owq-modal-padding, 12px), env(safe-area-inset-bottom, 0px))
                 max(var(--owq-modal-padding, 12px), env(safe-area-inset-left, 0px));
             box-sizing: border-box;
+        }
+
+        /* Bottom sheet on phones: the card sits on the bottom edge, under the thumb. */
+        @media (max-width: 768px) {
+            :host([sheet]) dialog {
+                width: 100%;
+                max-width: 100%;
+            }
+
+            :host([sheet]) .modal-shell {
+                justify-content: flex-end;
+                padding: 0;
+            }
+
+            :host([sheet]) .modal-card {
+                max-width: 100%;
+                border-radius: var(--radius-lg, 16px) var(--radius-lg, 16px) 0 0;
+                padding-bottom: calc(max(env(safe-area-inset-bottom, 0px), 12px) + 12px);
+                animation-name: sheetUp;
+            }
+        }
+
+        @keyframes sheetUp {
+            from { transform: translateY(24px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
     `];
 

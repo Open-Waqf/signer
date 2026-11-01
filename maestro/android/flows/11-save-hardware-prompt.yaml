@@ -52,7 +52,7 @@ appId: org.openwaqf.signer
       - tapOn: "+ Date"
 - waitForAnimationToEnd
 - tapOn:
-    id: "btn-save"
+    id: "m-btn-finish"
 - waitForAnimationToEnd
 - runFlow:
     when:
@@ -63,7 +63,7 @@ appId: org.openwaqf.signer
           id: "btn-hw-cancel"
 - waitForAnimationToEnd
 - assertVisible:
-    id: "btn-save"
+    id: "m-btn-finish"
 - tapOn:
     id: "btn-exit"
 - runFlow:

@@ -52,3 +52,28 @@ test('annotation-store delete and update by id', async () => {
     expect(removed.map((a) => a.id)).toEqual(['a2']);
 });
 
+
+test('10.4 finalizeSave on native does not open the share sheet by itself', async () => {
+    const {finalizeSave} = await import('../src/features/workspace/save-workflow');
+    const shared: string[] = [];
+    const toasts: string[] = [];
+    const deps: any = {
+        savePdf: async (filename: string) => ({filename, uri: 'file:///Documents/' + filename}),
+        // Present only to catch a regression: the old code called this 200 ms after saving.
+        sharePdf: async (file: {filename: string}) => { shared.push(file.filename); },
+        isNativePlatform: () => true,
+        toast: (msg: string) => toasts.push(msg),
+        messages: {savedMsg: 'Saved', exportingFile: 'Exporting'},
+        hapticSuccess: () => {},
+    };
+    await finalizeSave({
+        deps,
+        result: {pdfBytes: new Uint8Array([1, 2, 3]), docId: 'id', finalHash: 'h', finalCode: 'c', signatures: []},
+        outputFilename: 'doc_signed',
+        silentWeb: false,
+        showToast: true,
+    });
+    await new Promise((r) => setTimeout(r, 400));
+    expect(shared).toEqual([]);
+    expect(toasts).not.toContain('Exporting');
+});

@@ -35,11 +35,9 @@ export type ExecuteSaveDeps = {
 
 export type FinalizeSaveDeps = {
     savePdf: (filename: string, data: Uint8Array) => Promise<{ filename: string; uri?: string }>;
-    sharePdf: (file: { filename: string; uri?: string }, dataIfWeb?: Uint8Array) => Promise<void>;
     isNativePlatform: () => boolean;
     toast: (msg: string) => void;
     messages: {
-        exportingFile: string;
         savedMsg: string;
     };
     hapticSuccess: () => void;
@@ -146,13 +144,9 @@ export async function finalizeSave(input: {
     if (!input.deps.isNativePlatform() && input.silentWeb) {
         saved = {filename};
     } else {
+        // No automatic share sheet: the "Saved" sheet offers Share, so the user
+        // sees one layer at a time instead of a share sheet on top of it.
         saved = await input.deps.savePdf(filename, savedBytes);
-        if (input.deps.isNativePlatform() && input.showToast) {
-            setTimeout(() => {
-                input.deps.toast(input.deps.messages.exportingFile);
-                void input.deps.sharePdf(saved, savedBytes);
-            }, 200);
-        }
     }
 
     input.deps.hapticSuccess();
