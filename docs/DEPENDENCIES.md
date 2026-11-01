@@ -39,7 +39,7 @@ Do not upgrade these, and decline any tool (npm, Dependabot, Android Studio) tha
 
 ## Other exact versions (no known trap)
 
-`@capacitor/status-bar` `8.0.4`, `lit` `3.3.3`, `node-forge` `1.4.0`, `pdf-lib` `1.17.1`
+`@capacitor/status-bar` `8.0.4`, `lit` `3.3.3`, `node-forge` `1.4.2`, `pdf-lib` `1.17.1`
 and `@playwright/test` `1.64.0` are written as exact versions, but nothing is known to
 break on newer releases. Update them like any other package, with the full test suite.
 `node-forge` parses user certificates, so take its security releases quickly.
