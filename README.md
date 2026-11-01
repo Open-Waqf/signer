@@ -211,12 +211,19 @@ npm run build
 
 ### 5. Test on your phone
 
-Builds the app and installs **Signer Dev** (`org.openwaqf.signer.dev`) on a phone plugged in over USB.
-It has its own name and data, so it sits next to the Play Store app without touching it.
+Plug in your phone with USB debugging on. Both commands install **Signer Dev**
+(`org.openwaqf.signer.dev`): it has its own name and data, so it sits next to the Play
+Store app without touching it.
 
 ```bash
-npm run android:run
+npm run android:run    # build, install and open Signer Dev
+npm run android:live   # the phone loads the app from this computer and updates on every save (Ctrl+C to stop)
 ```
+
+After a live session, run `npm run android:run` once so the phone has a normal build again.
+
+First time only: Settings → About phone → tap "Build number" 7 times, then Developer
+options → USB debugging on, plug in, tap "Allow".
 
 ### App icons
 
@@ -226,56 +233,19 @@ Icons are generated from `assets/` only when they change. The tool is not instal
 npx @capacitor/assets generate --android
 ```
 
-### 5b. Android E2E (Maestro)
+### 6. Phone tests (Maestro)
 
-For Android emulator/device workflow parity, run the PowerShell smoke runner from Windows:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
-  -File "<PROJECT_PATH>\signer\scripts\android-smoke.ps1" `
-  -AssembleApk 1 `
-  -InstallApk 1 `
-  -RunMaestro 1 `
-  -AssertSampleFlow 1 `
-  -JavaHome "<JDK21_PATH>"
-```
-
-This runs the Maestro suite at `maestro/android/full-e2e.yaml` and writes artifacts under:
-
-`test-results/android-smoke/`
-
-### 6. Windows Temp Staging Sync (WSL → Windows)
-
-When building from Windows tooling while the project lives in WSL, you can mirror Android sources to a Windows temp
-staging folder:
+The flows in `maestro/android/` tap through the real app on your phone. They always
+target Signer Dev, never the Play Store app.
 
 ```bash
-# Sync Android + capacitor plugin modules into Windows temp stage folder
-npm run android:sync:win
-
-# Sync and open staged Android project in Android Studio
-npm run android:open:win
+npm run test:android                      # install a fresh Signer Dev, then run all flows
+npm run test:android -- --no-install      # use the Signer Dev already on the phone
+npm run test:android -- maestro/android/flows/08-sample-save-cycle.yaml   # one flow
 ```
 
-### 7. Build/Install APK from Windows (staged temp flow)
-
-If you want a release-prep build/install cycle from Windows PowerShell (without opening Android Studio), run:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
-  -File "PATH_TO_PROJECTS\signer\scripts\android-smoke.ps1" `
-  -EmulatorSerial "YOUR_DEVICE_OR_EMULATOR_SERIAL" `
-  -AssembleApk 1 `
-  -InstallApk 1 `
-  -RunMaestro 0 `
-  -AssertSampleFlow 0 `
-  -JavaHome "C:\Program Files\Microsoft\jdk-21.0.10.7-hotspot"
-```
-
-Notes:
-* With `-AssembleApk 1`, the script stages Android sources under Windows temp (`%TEMP%\owq-signer-build`) and builds there.
-* `-InstallApk 1` pushes the generated APK to the selected device via `adb`.
-* Set `-RunMaestro 1` only when you want full automated UI flow execution.
+Keep the phone unlocked while the flows run. Maestro is installed once with
+`curl -Ls "https://get.maestro.mobile.dev" | bash`; the command tells you if it is missing.
 
 ### Cloudflare Worker Relay (GitHub Pages Hosting)
 

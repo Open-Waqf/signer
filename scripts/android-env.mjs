@@ -4,6 +4,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import {spawnSync} from 'node:child_process';
 
 const HOME = process.env.HOME || '';
 export const ROOT = process.cwd();
@@ -68,4 +69,29 @@ export function ensureGradlewExecutable() {
     } catch {
         // Already fine.
     }
+}
+
+// Stop early with help if there is no phone or emulator to run on.
+export function requireDevice(env) {
+    const adb = spawnSync('adb', ['devices'], {encoding: 'utf8', env});
+    if (adb.error) {
+        console.error('\n✖ adb (Android platform tools) was not found. Install the Android SDK, or set ANDROID_HOME.');
+        process.exit(1);
+    }
+    const devices = (adb.stdout || '').split('\n').filter((l) => /\tdevice$/.test(l));
+    const unauthorized = (adb.stdout || '').split('\n').some((l) => /\tunauthorized$/.test(l));
+    const avdDir = path.join(HOME, '.android/avd');
+    const hasAvd = fs.existsSync(avdDir) && fs.readdirSync(avdDir).some((f) => f.endsWith('.ini'));
+    if (devices.length || hasAvd) return devices.length;
+
+    if (unauthorized) {
+        console.error('\n✖ Your phone is connected but has not allowed this computer yet.');
+        console.error('   Unlock the phone and tap "Allow" on the USB debugging prompt, then run again.');
+        process.exit(1);
+    }
+    console.error('\n✖ No phone found. Plug in your phone with USB debugging on, then run again:');
+    console.error('   1. Settings → About phone → tap "Build number" 7 times (turns on Developer options)');
+    console.error('   2. Developer options → turn on "USB debugging"');
+    console.error('   3. Plug in the cable and tap "Allow" on the phone');
+    process.exit(1);
 }

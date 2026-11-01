@@ -1,4 +1,4 @@
-appId: org.openwaqf.signer
+appId: ${APP_ID}
 ---
 - runFlow: flows/01-home-mode-toggle.yaml
 - runFlow: flows/02-sample-open-exit.yaml

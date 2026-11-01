@@ -15,8 +15,8 @@
     "check": "node scripts/check.mjs",
     "check-i18n": "node check-i18n.js",
     "android:run": "node scripts/run-android.mjs",
-    "android:sync:win": "node scripts/sync-android-win.mjs",
-    "android:open:win": "node scripts/sync-android-win.mjs --open"
+    "android:live": "node scripts/run-android.mjs --live",
+    "test:android": "node scripts/test-android.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",

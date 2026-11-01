@@ -1,4 +1,4 @@
-appId: org.openwaqf.signer
+appId: ${APP_ID}
 ---
 - launchApp:
     clearState: false
