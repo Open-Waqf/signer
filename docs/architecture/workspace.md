@@ -13,7 +13,12 @@
   - `features/workspace/annotation-store.ts`
   - `features/workspace/handover-workflow.ts`
   - `features/workspace/save-workflow.ts`
-  - `features/workspace/interaction-controller.ts`
+  - `features/workspace/interaction-controller.ts` (pure drag/resize/snap geometry)
+- Lit controllers attached to `pdf-workspace` (`components/controllers/`):
+  - `history-controller.ts` (undo/redo)
+  - `interaction-controller.ts` (pointer and keyboard interaction, uses the geometry above)
+- Dialogs: `components/owq-modal.ts` (native `<dialog>`, with a bottom-sheet mode on phones) and
+  `components/signature-modal.ts` (drawing pad and saved signatures).
 
 ## Contract
 - Emits unchanged events: `toast`, `set-loading`, `exit-workspace`.

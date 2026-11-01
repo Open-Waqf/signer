@@ -1,7 +1,7 @@
 # ✒️ Open Waqf Signer (الموقّع)
 
-> **Secure. Offline. Verifiable.** > A privacy-first PDF signer with cryptographic integrity checks and a unified,
-> responsive design.
+> **Secure. Offline. Verifiable.**
+> A privacy-first PDF signer for your browser and your Android phone.
 
 <div align="center">
 <a href="https://sign.open-waqf.org">
@@ -9,11 +9,11 @@
 </a>
 </div>
 
-Open Waqf Signer allows users to sign, edit, and **verify** PDF documents directly in their browser. It is built on the
-principles of **Amanah** (Trust) and **Privacy**.
+Open Waqf Signer lets you sign PDF documents and **verify** signed ones, in your browser or in the Android app. It is
+built on the principles of **Amanah** (Trust) and **Privacy**.
 
-Unlike other free tools, **no data is ever uploaded to a server**. All cryptographic processing happens locally in your
-device's RAM.
+Unlike most free tools, **your documents are never uploaded**. Opening, signing, saving and checking all happen on your
+device.
 
 ---
 
@@ -21,53 +21,53 @@ device's RAM.
 
 ### 🛡️ Security & Trust
 
-* **Zero-Knowledge Architecture:** Documents never leave your device.
-* **Hardware-Backed Signing (WebAuthn):** Sign using **FaceID, TouchID, or YubiKey**. Generates a local cryptographic proof (FIDO2) embedded in the PDF for superior non-repudiation.
-* **Dual-Layer Verification:**
-    1. **Metadata Check (Internal):** Instantly identifies files processed by the app via hidden metadata markers.
-    2. **Strict Integrity Check (External):** Uses military-grade `crypto.subtle` SHA-256 hashing to prove
-       mathematically that a document has not been tampered with since signing.
-* **Audit Trail:** Automatically appends a verification page with a **QR code**, Event Log, and Digital Fingerprint.
-* **RFC 3161 Timestamp Proof (Best-Effort):** When online, Signer sends only an abstract SHA-256 fingerprint query to a TSA relay endpoint and records returned timestamp token metadata; when offline or timed out, it falls back to local device time with explicit unverified labeling.
-* **Certificate-Based CMS Signatures (.p12/.pfx):** Optionally sign with your own certificate file. Parsing and signing are performed locally in-memory, and certificate credentials are cleared after each save.
+* **Nothing is uploaded:** Documents are opened, signed and saved on your device. The only network request is the
+  optional timestamp (below), which sends a fingerprint of the file, never the file.
+* **File fingerprint (SHA-256):** When you save, the app computes a SHA-256 fingerprint of the exact file. If the
+  receiver gets that fingerprint through a separate channel (for example a different message), Verify Mode tells them
+  whether the file they hold is byte-for-byte the one you saved.
+* **Signer record in the file:** The app writes a document ID and the signer history into the PDF metadata, so it
+  recognises files it processed. This shows where a file came from; on its own it does not prove the file is unchanged
+  (anyone can edit metadata).
+* **Audit page:** Optionally appends a page with a **QR code**, the signer history and the fingerprint.
+* **Timestamp (best effort):** When online, the web app asks a public Time Stamping Authority (FreeTSA, through our
+  relay) to timestamp the fingerprint and stores the reply in the file. The reply is not checked yet, and the Android
+  app and local builds currently fall back to the device clock, labelled as such.
+* **Certificate signatures (.p12/.pfx):** Optionally sign with your own certificate. The file and password are used in
+  memory for one save and never stored. Adobe Acrobat and other PDF readers can check this kind of signature.
+* **Hardware key (experimental, browsers only):** On browsers with a platform authenticator (Face ID, Touch ID,
+  Windows Hello, a security key), the app can add a WebAuthn assertion to the file. The Android app cannot use it, and
+  checking these assertions is still being fixed, so do not rely on it as proof.
 
 ### 🤝 Multi-Party Workflows
 
-* **The "Handover" Protocol:** Securely pass documents between multiple signers.
-* **Pre-Sign Validation:** When you open a document signed by someone else, the app automatically detects it and
-  asks for the previous signer's **6-digit handover code** before you add yours (with an explicit skip flag if unavailable).
-* **Sequential Hash Chaining:** Each signer payload stores the opened document hash, manual-verification status, and
-  chain metadata so verification can validate the signer chain locally in reverse order.
-* **Single Accumulated Audit Page:** When enabled, the app renders one final audit page listing all signers in history
-  and warning labels for any skipped manual handover checks.
+* **Handover between signers:** When you open a file signed by someone else, the app recognises it and asks for the
+  previous signer's **6-digit handover code** (you can skip it). A matching code shows the file was not changed by
+  accident on the way. It is short, so it is not protection against deliberate forgery: for that, compare the full
+  fingerprint.
+* **Signer history:** Each signer's entry records the fingerprint of the file they opened, whether they checked the
+  handover code, and the time.
+* **One audit page for everyone:** The audit page lists all signers and marks any skipped handover check.
 
-### ✍️ Professional UX & Tools
+### ✍️ Tools
 
-* **Responsive Unified Design:** A meticulously crafted UI using Web Components (Lit) that seamlessly adapts to desktop
-  displays and mobile screens (respecting iOS/Android safe areas and navigation bars).
-* **Enhanced Accessibility:** Full ARIA label support, keyboard navigation (Tab/Shift+Tab), and focus traps for all
-  modal
-  dialogs to ensure a professional experience for all users.
-* **Large Touch Targets:** Optimised for mobile with large (44px+) interactive targets for all critical actions.
-* **Smart Layout Control:** Drag, resize, and position elements with exact mathematical center-to-center snapping and
-  viewport collision detection to prevent UI clipping.
-* **Natural Ink & Custom Prompts:** Smooth signature drawing with saved presets and native-feeling custom modal prompts
-  for text/identity inputs.
-* **Beginner-Friendly Editing:** Workspace opens in **Basic Mode** (signature/date/save first), with **More Tools** to
-  reveal advanced controls.
-* **History:** Full Undo/Redo support (`Ctrl+Z`, `Ctrl+Y`).
+* **Responsive design:** One interface (Web Components, Lit) for phones and desktops, respecting phone safe areas.
+* **Beginner-friendly:** Opens with the essentials (signature, date, Finish); **More Tools** reveals initials, text,
+  stamps, certificate signing and the footer and audit-page options.
+* **Saved signatures and stamps:** Draw once, reuse offline. Stored only on your device (IndexedDB).
+* **Layout help:** Drag, resize, snap guides, multi-select, keyboard nudging.
+* **Undo/Redo:** `Ctrl+Z`, `Ctrl+Y`.
+* **Accessibility:** Labelled controls, keyboard shortcuts, native dialogs, 44 px touch targets for the main actions.
+  Signing itself still needs drawing (typed signatures are planned).
 
 ### 🌍 Universal Access
 
-* **Offline First (PWA):** Installs as a native app on Android, iOS, Windows, and Mac. Fully functional without an
-  internet connection.
-* **Native "Open With" / Share-In:** PDFs can be opened directly into Signer from Android file managers/apps (APK) and
-  from installed Android/Windows PWAs through OS share targets.
-* **Share Target Reliability:** A custom Workbox `injectManifest` service worker intercepts Web Share Target `POST`
-  uploads, prevents static-host 404 navigation issues, and safely hands shared PDFs to the running app.
-* **Air-Gapped QR Transfer:** Share signed PDFs between fully offline devices using animated **UR** fountain QR frames
-  with local reconstruction, progress tracking, and no network/Bluetooth/USB dependency.
-* **Multilingual:** Native support for **English**, **Arabic (RTL)**, and **French** with dynamic UI mirroring.
+* **Offline first (PWA):** Installs from the browser on Android, iOS, Windows and Mac, and works without internet.
+* **Android app:** On Google Play. PDFs open in Signer from file managers and other apps with **Open with**.
+* **Web share target:** The installed web app accepts PDFs shared from other apps (Android and Windows).
+* **Air-gapped QR transfer:** Send a PDF between two offline devices with animated QR codes (slow: about 1.4 KB per
+  second, so best for small files).
+* **Languages:** English, Arabic (right-to-left) and French.
 
 ---
 
@@ -75,110 +75,88 @@ device's RAM.
 
 We believe in **Data Sovereignty**.
 
-* **No Uploads:** Your PDF never touches our cloud.
-* **Cryptographic Identifiers:** We use native `crypto.randomUUID()` for secure, collision-resistant document and
-  annotation tracking—never insecure random numbers.
-* **No Profiling:** We do not use cookies or trackers to build user profiles.
-* **Usage Counting:** We use privacy-preserving telemetry solely to count aggregate usage (e.g., "100 documents signed
-  today") to ensure the project remains sustainable. No personal data is ever collected.
+* **No uploads:** Your PDF never touches a server.
+* **No tracking:** No analytics, no telemetry, no cookies, no accounts.
+* **Your data stays local:** Saved signatures, stamps and settings live in your browser or app storage, and
+  **Forget My Data** deletes them.
 
 ---
 
 ## 🧪 Engineering & Stability
 
-We don't just "hope" the code works; we prove it before every release.
-
-* **Automated Audit (The Robot):** We use **Playwright** to run end-to-end tests simulating real user behavior.
-* **Stable Selectors:** Tests rely on unique `data-testid` attributes rather than fragile translated text, ensuring
-  reliability across all languages.
-* **Comprehensive Coverage:**
-    * ✅ **Cryptography:** Verifies that SHA-256 hashes are calculated and matched correctly.
-    * ✅ **Workflows:** Simulates Alice signing, Bob verifying, and complex multi-page interactions.
-    * ✅ **Navigation:** Full audit of landing page modes, privacy dialogs, and exit confirmation logic.
-    * ✅ **Robustness:** Tests for RTL mirroring, dirty-state detection, and keyboard shortcuts.
-    * ✅ **Certificate Flow:** E2E coverage for `.p12` load/unlock, incorrect-password handling, and CMS `/ByteRange` output.
-* **Type Safety:** The entire codebase is strictly typed. We run `tsc --noEmit` to ensure zero regression in logic or
-  data structures.
-* **CI/CD Guardrails:** Deployment is physically blocked by GitHub Actions if any test fails or type-check fails,
-  ensuring
-  no broken code ever reaches production.
+* **End-to-end tests:** About 90 Playwright tests click through the real app: signing, saving, verifying,
+  multi-signer handover, certificate signing, right-to-left layout, scanned PDFs, and more. They use stable
+  `data-testid` attributes, not translated text.
+* **Strict TypeScript** and a translation check (every language has every text) run before the tests:
+  `npm run check`.
+* **Phone tests:** Maestro flows tap through the Android app on a real phone (`npm run test:android`).
+* **Guarded deploys:** GitHub runs all checks on every push. The website is deployed only from a version tag, only
+  after the checks pass against the production build.
 
 ---
 
 ## 🚀 Workflows: How to Sign & Verify
 
-We use an **"External Key"** model to ensure document integrity without storing your data on a central server.
+### Scenario A: Two people sign (handover)
 
-### Scenario A: The "Handover" (Two Parties Signing)
+1. **Alice** signs and taps **Finish**. The app saves the file and, under **For verification**, shows the file
+   fingerprint and a 6-digit **code for the next signer**.
+2. Alice sends Bob the PDF, and the code in a separate message.
+3. **Bob** opens the PDF in Signer. The app recognises Alice's signature and asks for the code.
+4. **Bob** enters the code (or skips), signs, and taps **Finish**. The new file has a new fingerprint covering both
+   signatures.
 
-1. **Person A (Alice)** signs the document and saves it.
-    * *System generates a Strict Hash and provides a Receipt.*
-    * Alice sends the PDF + Hash to **Person B (Bob)** via a secure channel (e.g., WhatsApp/Signal).
-2. **Person B (Bob)** opens the PDF in Open Waqf Signer.
-    * 🚨 **Auto-Detection:** The app detects Alice's metadata marker immediately.
-    * **Verify:** Bob enters Alice's hash. The app confirms the file wasn't tampered with during transit.
-3. **Bob Signs:** Once verified, Bob adds his signature and saves, generating a NEW Hash that secures both signatures.
+### Scenario B: Checking a signed file (the receiver)
 
-### Scenario B: Verification (The Receiver)
-
-Anyone receiving a signed document can verify it:
-
-1. Scan the **QR Code** on the last page or click the **Verification Link**.
-2. The app opens in **Verify Mode** ("Link Detected").
-3. Drop the signed PDF into the app.
-4. The app confirms **"Metadata Found"**.
-5. Paste the **Security Hash** provided by the sender.
-    * Metadata confirms provenance only.
-    * ✅ **"Integrity Verified":** The document is 100% authentic.
-    * ❌ **"Integrity Failure":** The document has been altered (even by 1 pixel).
+1. Open Signer in **Verify** mode (or scan the QR code on the audit page).
+2. Select the PDF you received. The app reports whether it carries a Signer record.
+3. Paste the fingerprint the sender gave you in a separate message:
+    * ✅ **Integrity Verified:** the file is exactly the one the sender saved.
+    * ❌ **Integrity Failed:** the file is different (even one changed byte).
 
 ---
 
 ## 🏗️ Architecture
 
-* **Core:** TypeScript (Strict Mode), Vite, Lit (Web Components).
-* **Native Layer:** Capacitor (for Android/iOS distribution).
-* **Styling:** CSS variables, dynamic viewport units (`100dvh`), and Shadow DOM isolation.
-* **Testing:** Playwright (End-to-End & Workflow logic).
-* **PDF Engine:** `pdf-lib` (modification) & `pdfjs-dist` (rendering).
-* **Cryptography:** Native `crypto.subtle` API for SHA-256 and `crypto.randomUUID()` for identifiers.
-* **Refactor Docs:** See `docs/architecture/` for app shell, workspace, and PDF pipeline boundaries.
-* **Internal PDF Services:** Hashing, metadata, audit-page rendering, and chain verification are split into focused modules
-  under `src/lib/pdf/`.
-* **Modal System:** All dialogs are standardized on native HTML `<dialog>` via `owq-modal`, with shared utility
-  classes in `src/styles/shared-styles.ts` and normalized `::backdrop` styling for iOS Safari and Android Chrome parity.
-* **Verification State Flow:** App-shell verification transitions are centralized under `src/features/verify/` (`verify-controller`
-  and `verify-state`) to keep UI rendering and state transitions decoupled.
+* **Core:** TypeScript (strict), Vite, Lit (Web Components).
+* **Android:** Capacitor 8 (no iOS app yet; iOS users can install the web app).
+* **PDF:** `pdf-lib` (editing and saving) and `pdfjs-dist` (rendering; its fonts, cmaps and image decoders are copied
+  into `public/`).
+* **Cryptography:** Web Crypto (`crypto.subtle`) for SHA-256, `node-forge` and `@signpdf` for certificate signatures.
+* **Offline:** a Workbox service worker (`src/sw.ts`) precaches the app and receives shared files.
+* **Module map:** `docs/architecture/` (app shell, workspace, PDF pipeline). Dependency rules: `docs/DEPENDENCIES.md`.
 
 ---
 
-## 🚀 Getting Started
+## 🛠️ Development
 
-### Prerequisites
+### Setup
 
-* Node.js 22+ (the Capacitor 8 CLI needs it)
-* Android Studio (only if building the APK)
-
-TypeScript is pinned to 6.0.x on purpose. Read [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md)
-before upgrading anything.
-
-### 1. Installation
+* Node.js 22+ (`.nvmrc`; the Capacitor 8 CLI needs it)
+* For the Android app: a JDK 21 and the Android SDK (Android Studio installs both)
 
 ```bash
-npm install
-# Install Capacitor dependencies for Android
-npx cap sync
+npm ci          # install exactly what package-lock.json lists
+npm run dev     # the app at http://localhost:5173, reloads on every save
 ```
 
-### 2. Development (Browser)
+TypeScript is pinned to 6.0.x on purpose. Read [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) before upgrading anything.
 
-Runs the app in "Web Mode" with Hot Module Replacement (HMR).
+### Everyday commands
 
-```bash
-npm run dev
-```
+| Command | What it does |
+|---|---|
+| `npm run dev` | Run the app in the browser, with live reload |
+| `npm run check` | Typecheck, translations and all tests: run before every commit |
+| `npm run test:build` | All tests against the production build |
+| `npm run build` | Production build into `dist/` |
+| `npm run android:run` | Build and install **Signer Dev** on your USB phone |
+| `npm run android:live` | Signer Dev loads from this computer and reloads on every save |
+| `npm run test:android` | Maestro flows on your USB phone |
+| `npm run android:release` | Signed `.aab` for Play Console |
+| `npm run release` | Release a new version (website and Android), see below |
 
-### 3. Check before every commit
+### Check before every commit
 
 ```bash
 npm run check
@@ -208,15 +186,7 @@ For Playwright certificate-signing tests, a dummy self-signed PKCS#12 fixture is
 
 Fixture password (test-only): `owq-test-1234`
 
-### 4. Build for Production (PWA)
-
-Compiles TypeScript to optimized, offline-ready JS in `dist/`.
-
-```bash
-npm run build
-```
-
-### 5. Test on your phone
+### Test on your phone
 
 Plug in your phone with USB debugging on. Both commands install **Signer Dev**
 (`org.openwaqf.signer.dev`): it has its own name and data, so it sits next to the Play
@@ -240,7 +210,7 @@ Icons are generated from `assets/` only when they change. The tool is not instal
 npx @capacitor/assets generate --android
 ```
 
-### 6. Phone tests (Maestro)
+### Phone tests (Maestro)
 
 The flows in `maestro/android/` tap through the real app on your phone. They always
 target Signer Dev, never the Play Store app.
@@ -254,21 +224,7 @@ npm run test:android -- maestro/android/flows/08-sample-save-cycle.yaml   # one 
 Keep the phone unlocked while the flows run. Maestro is installed once with
 `curl -Ls "https://get.maestro.mobile.dev" | bash`; the command tells you if it is missing.
 
-### 7. Android release build
-
-```bash
-npm run android:release
-```
-
-Builds the signed `.aab` for Play Console (nothing is uploaded). Unlock the Cryptomator vault
-first. Signing comes from `android/keystore.properties` (git-ignored: `storeFile`,
-`storePassword`, `keyAlias`, `keyPassword`), else from `SIGNER_KEYSTORE`, `SIGNER_KS_PASS`,
-`SIGNER_KEY_ALIAS` [`SIGNER_KEY_PASS`], else it asks. Signer uses the same Open Waqf upload key
-as wird. The script checks the bundle is signed with the key Play Console expects
-(SHA-1 `BB:7B:A6:…:8A:08`) and stops if not. Without any signing setup, Gradle still builds an
-unsigned bundle, so Android Studio and CI keep working.
-
-### 8. Release a new version
+### Release a new version
 
 ```bash
 npm run release                 # 0.41.0 -> 0.42.0 (the middle number goes up)
@@ -292,7 +248,21 @@ One command does it all, and asks before changing anything:
 If the push fails (no internet), the release stays committed and tagged on your computer,
 and the script prints the one command that finishes it.
 
-### Cloudflare Worker Relay (GitHub Pages Hosting)
+### Android release build only
+
+```bash
+npm run android:release
+```
+
+Builds the signed `.aab` for Play Console (nothing is uploaded). Unlock the Cryptomator vault
+first. Signing comes from `android/keystore.properties` (git-ignored: `storeFile`,
+`storePassword`, `keyAlias`, `keyPassword`), else from `SIGNER_KEYSTORE`, `SIGNER_KS_PASS`,
+`SIGNER_KEY_ALIAS` [`SIGNER_KEY_PASS`], else it asks. Signer uses the same Open Waqf upload key
+as wird. The script checks the bundle is signed with the key Play Console expects
+(SHA-1 `BB:7B:A6:…:8A:08`) and stops if not. Without any signing setup, Gradle still builds an
+unsigned bundle, so Android Studio and CI keep working.
+
+### Timestamp relay (Cloudflare Worker)
 
 If the app is hosted on GitHub Pages, deploy the TSA relay as a separate Cloudflare Worker:
 
@@ -306,9 +276,12 @@ Runtime behavior:
 * Relay forwards only timestamp-query bytes to FreeTSA (`https://freetsa.org/tsr`).
 * PDF bytes are never uploaded.
 
-Required app env var:
+Required app env var (set only in the GitHub build, `.github/workflows/deploy.yml`):
 
 * `VITE_TSA_RELAY_URL=https://tsa.open-waqf.org/api/tsa`
+
+Local builds, `npm run android:release` and the Android app do not set it yet, so their timestamps fall back to the
+device clock. The relay also only accepts requests from `https://sign.open-waqf.org`.
 
 Required CSP update (already included in `index.html`):
 
@@ -325,13 +298,16 @@ GitHub Actions deploy workflow for relay:
 
 ## ⚠️ Disclaimers
 
-### Visual vs. Digital Signatures
+### What kind of signature is this?
 
-Open Waqf Signer applies a **Cryptographically Linked Electronic Signature**.
-
-* ✅ **Valid for:** Business contracts, invoices, internal approvals, waivers, and general agreements.
-* ❌ **Not for:** Scenarios requiring **eIDAS Qualified Electronic Signatures (QES)** that mandate a specific hardware
-  token (Smart Card/USB) issued by a government authority.
+* By default, Signer adds a **simple electronic signature**: your drawn signature (or stamp) on the page, plus a
+  record and a fingerprint of the file. Many everyday agreements accept this, but whether it is enough depends on your
+  country and the document. This is not legal advice.
+* With your own certificate (.p12/.pfx), Signer adds a standard **digital signature** that PDF readers such as Adobe
+  Acrobat can check. It is as trustworthy as the certificate you use.
+* Signer is **not** a qualified signature service (such as eIDAS QES), which some documents legally require.
+* Saving with Signer changes the file, so a digital signature that was already in the PDF (from another tool) will
+  show as broken afterwards.
 
 ### Performance Limits
 

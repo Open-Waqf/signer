@@ -7,7 +7,14 @@
   - `lib/pdf/metadata-service.ts`
   - `lib/pdf/audit-page-service.ts`
   - `lib/pdf/webauthn-chain-service.ts`
+  - `lib/pdf/cms-signature-service.ts` (certificate signing; its heavy libraries load only when used)
+  - `lib/pdf/hash.worker.ts` (hashing and normalization off the main thread)
   - `lib/pdf/constants.ts`
+
+## pdf.js assets
+- `public/cmaps/`, `public/standard_fonts/` and `public/wasm/` (JBIG2/CCITT decoder) are copied from
+  `node_modules/pdfjs-dist/` and must match its version. Without `wasm/`, scanned pages render blank.
+- Close a pdf.js document with `doc.loadingTask.destroy()` (pdf.js 6 removed `doc.destroy()`).
 
 ## Invariants
 - Signature chain metadata prefix remains `OWQ_CHAIN:`.
