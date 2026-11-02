@@ -1,5 +1,4 @@
-# PENDING: fails today because of bug O1 (Back with a dialog open freezes the app).
-# Move it into flows/ and add it to suite.yaml together with the O1 fix.
+# Back with the Saved sheet open closes the sheet and stays in the editor (bug O1).
 appId: ${APP_ID}
 ---
 - launchApp:

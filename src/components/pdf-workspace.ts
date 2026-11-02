@@ -163,6 +163,33 @@ export class PdfWorkspace extends LitElement {
         preferences.setActiveSidebar(this.activeSidebar);
     }
 
+    /**
+     * Android Back: close the open dialog exactly as Escape or a backdrop tap would.
+     * Returns false when no dialog was open, so the caller can go back a screen instead.
+     */
+    public closeOpenDialog(): boolean {
+        if (this.customPrompt.show) this.closeCustomPrompt();
+        else if (this.showHardwarePrompt) void this.resolveHardwarePrompt(null);
+        else if (this.showCertificateModal) this.closeCertificateModal();
+        else if (this.showStampLibraryModal) this.showStampLibraryModal = false;
+        else if (this.showProofModal) this.showProofModal = false;
+        else if (this.showHandoverModal) this.closeHandoverModal(true);
+        else return false;
+        return true;
+    }
+
+    // Leaving the editor must never leave a dialog open: a hidden open <dialog> makes the
+    // whole page inert, so nothing on the home screen could be tapped (bug O1).
+    private closeAllDialogs() {
+        if (this.showHardwarePrompt) void this.resolveHardwarePrompt(null);
+        if (this.showCertificateModal) this.closeCertificateModal();
+        if (this.customPrompt.show) this.closeCustomPrompt();
+        this.showStampLibraryModal = false;
+        this.showProofModal = false;
+        this.showHandoverModal = false;
+        this.handoverResult = 'idle';
+    }
+
     private closeHandoverModal(markSkipped = false) {
         if (markSkipped && this.detectedRefId) {
             this.validationMsg = i18n.t('handoverSkippedMsg').replace('{ref}', this.detectedRefId);
@@ -1271,6 +1298,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     async loadPdf(file: Uint8Array, name: string) {
+        this.closeAllDialogs(); // a new document never inherits the previous one's dialogs
         pdfEngine.destroy();
         this.resetThumbnailState();
         this.clearCertificateSession();
@@ -2224,6 +2252,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     public reset() {
+        this.closeAllDialogs();
         pdfEngine.destroy();
         this.resetThumbnailState();
         this.clearCertificateSession();

@@ -7,3 +7,4 @@ appId: ${APP_ID}
 - runFlow: flows/01-open-sample.yaml
 - runFlow: flows/02-sign-save-share.yaml
 - runFlow: flows/03-arabic.yaml
+- runFlow: flows/04-back-closes-saved-sheet.yaml

@@ -227,11 +227,11 @@ npx @capacitor/assets generate --android
 
 ### Phone tests (Maestro)
 
-Three short flows in `maestro/android/` tap through the real app on your phone, for what only a
-real phone shows: opening a PDF, saving into Documents and the Android share sheet, and the
-Android language picker. They always target Signer Dev, never the Play Store app. After the
+Four short flows in `maestro/android/` tap through the real app on your phone, for what only a
+real phone shows: opening a PDF, saving into Documents and the Android share sheet, the
+Android language picker, and the Back button closing the Saved sheet. They always target Signer Dev, never the Play Store app. After the
 run, the command checks through adb that a new signed PDF really is in the phone's Documents
-folder. A flow that waits for a bug fix lives in `maestro/android/pending/`.
+folder. A flow that waits for a bug fix goes in `maestro/android/pending/` (not run) until the fix lands.
 
 ```bash
 npm run test:android                      # install a fresh Signer Dev, then run all flows

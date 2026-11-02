@@ -265,7 +265,13 @@ export class AppRoot extends LitElement {
         return true;
     }
 
+    // Android Back: close the top dialog first (as Escape would), and only then go back a
+    // screen. Leaving the editor with a dialog still open froze the app (bug O1).
     private handleBackButton() {
+        if (this.showExitConfirm) {
+            this.showExitConfirm = false;
+            return;
+        }
         if (this.showPrivacyModal) {
             this.closePrivacy();
             return;
@@ -274,7 +280,18 @@ export class AppRoot extends LitElement {
             this.closeVerify();
             return;
         }
+        if (this.showAirGapModal) {
+            this.closeAirGapModal();
+            return;
+        }
+        if (this.showDiagnostics) {
+            this.showDiagnostics = false;
+            return;
+        }
         if (this.closeSignatureModalIfOpen()) {
+            return;
+        }
+        if (this.mode === 'workspace' && this.workspace?.closeOpenDialog()) {
             return;
         }
         if (this.mode === 'workspace') {

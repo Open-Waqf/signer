@@ -104,8 +104,6 @@ test.describe('12. Android app (fake Android bridge) @phone', () => {
     });
 
     test('12.8 Back with the Saved sheet open closes the sheet and stays in the editor', async ({page}) => {
-        // Known bug O1: Back leaves the editor and the invisible dialog blocks every tap.
-        test.fixme(true, 'Bug O1: Back with a dialog open freezes the app');
         await fakeAndroid(page);
         await openSample(page);
         await tid(page, 'btn-add-date').click();
@@ -117,8 +115,6 @@ test.describe('12. Android app (fake Android bridge) @phone', () => {
     });
 
     test('12.9 Back with the stamp library open closes it and stays in the editor', async ({page}) => {
-        // Known bug O1: Back leaves the editor and the invisible dialog blocks every tap.
-        test.fixme(true, 'Bug O1: Back with a dialog open freezes the app');
         await fakeAndroid(page);
         await openSample(page);
         await tid(page, 'btn-toggle-advanced').click();
@@ -127,6 +123,55 @@ test.describe('12. Android app (fake Android bridge) @phone', () => {
         await pressBack(page);
         await expect(page.getByTestId('stamp-library-modal')).toBeHidden();
         await expect(page.getByTestId('btn-exit')).toBeVisible();
+        expect(await openDialogs(page)).toEqual([]);
+    });
+    test('12.10 Back with the leave-without-saving question open closes the question', async ({page}) => {
+        await fakeAndroid(page);
+        await openSample(page);
+        await tid(page, 'btn-add-date').click();
+        await pressBack(page);
+        await expect(page.getByTestId('exit-confirm-modal')).toBeVisible();
+        await pressBack(page);
+        await expect(page.getByTestId('exit-confirm-modal')).toBeHidden();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        expect(await openDialogs(page)).toEqual([]);
+    });
+
+    test('12.11 Back with a text box open closes it and stays in the editor', async ({page}) => {
+        await fakeAndroid(page);
+        await openSample(page);
+        await tid(page, 'btn-toggle-advanced').click();
+        await tid(page, 'btn-add-identity').click();
+        await expect(page.getByTestId('custom-prompt')).toBeVisible();
+        await pressBack(page);
+        await expect(page.getByTestId('custom-prompt')).toBeHidden();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        expect(await openDialogs(page)).toEqual([]);
+    });
+
+    test('12.12 After Back leaves the editor, the home screen still responds', async ({page}) => {
+        await fakeAndroid(page);
+        await openSample(page);
+        await tid(page, 'btn-add-date').click();
+        await finish(page);
+        await pressBack(page); // closes the Saved sheet
+        await pressBack(page); // nothing unsaved: back to home
+        await expect(page.getByTestId('btn-select-file')).toBeVisible();
+        expect(await openDialogs(page)).toEqual([]);
+        await page.getByTestId('btn-sample').click({timeout: 3000});
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+    });
+
+    test('12.13 A PDF arriving with "Open with" while the Saved sheet is open shows no old sheet', async ({page}) => {
+        const url = 'content://media/external/file/7/next.pdf';
+        const pdf = Buffer.from(await generateTestPDF()).toString('base64');
+        await fakeAndroid(page, {files: {[url]: pdf}});
+        await openSample(page);
+        await tid(page, 'btn-add-date').click();
+        await finish(page);
+        await fireNative(page, 'App', 'appUrlOpen', {url});
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        await expect(page.getByTestId('proof-modal')).toBeHidden();
         expect(await openDialogs(page)).toEqual([]);
     });
 });
