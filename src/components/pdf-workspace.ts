@@ -390,6 +390,21 @@ export class PdfWorkspace extends LitElement {
             padding: 8px 12px;
         }
 
+        /* Option toggles show a short name under the icon: icons alone were not
+           understood (bug N3). */
+        .labelled-toggle {
+            flex-direction: column;
+            gap: 2px;
+            padding: 4px 8px;
+        }
+
+        .toggle-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            line-height: 1.1;
+            white-space: nowrap;
+        }
+
         .toolbar-divider {
             width: 1px;
             background: var(--border);
@@ -3186,23 +3201,25 @@ export class PdfWorkspace extends LitElement {
 
                     <div class="toolbar-group">
                         ${!this.isBasicMode ? html`
-                            <button data-testid="btn-toggle-footer" class="btn toggle toolbar-btn-compact ${this.includeFooter ? 'active' : ''}"
+                            <button data-testid="btn-toggle-footer" class="btn toggle toolbar-btn-compact labelled-toggle ${this.includeFooter ? 'active' : ''}"
                                     aria-label="${i18n.t('addPageFooter')}"
+                                    aria-pressed="${this.includeFooter}"
                                     @click=${() => {
                                         this.includeFooter = !this.includeFooter;
                                         this.isDirty = true;
                                     }} title="${i18n.t('addPageFooter')}">
-                                ${ICONS.footer}
+                                ${ICONS.footer}<span class="toggle-label">${i18n.t('footerShort')}</span>
                             </button>
                         ` : ''}
                         ${(!this.isBasicMode || this.includeAudit) ? html`
-                            <button data-testid="btn-toggle-audit" class="btn toggle toolbar-btn-compact ${this.includeAudit ? 'active' : ''}"
+                            <button data-testid="btn-toggle-audit" class="btn toggle toolbar-btn-compact labelled-toggle ${this.includeAudit ? 'active' : ''}"
                                     aria-label="${i18n.t('addAuditPage')}"
+                                    aria-pressed="${this.includeAudit}"
                                     @click=${() => {
                                         this.includeAudit = !this.includeAudit;
                                         this.isDirty = true;
                                     }} title="${i18n.t('addAuditPage')}">
-                                ${ICONS.audit}
+                                ${ICONS.audit}<span class="toggle-label">${i18n.t('auditShort')}</span>
                             </button>
                         ` : ''}
                         ${finishButton('btn-save', 'toolbar-btn-compact finish-top')}

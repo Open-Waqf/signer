@@ -2101,6 +2101,23 @@ test.describe('10. Finish and Saved sheet', () => {
         expect(toastBox.y + toastBox.height).toBeLessThanOrEqual(barTop);
     });
 
+    test('10.8 Done on the Saved sheet goes home; Escape keeps the document open (N4)', async ({page}) => {
+        await openSample(page);
+        await tid(page, 'btn-add-date').click();
+        let download = page.waitForEvent('download');
+        await tid(page, 'btn-save').click();
+        await download;
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('proof-modal')).toBeHidden();
+        await expect(page.getByTestId('btn-exit')).toBeVisible(); // still editing
+
+        await tid(page, 'btn-save').click(); // nothing changed: the sheet reopens
+        await expect(page.getByTestId('proof-modal')).toBeVisible();
+        await page.getByTestId('btn-saved-done').click();
+        await expect(page.getByTestId('btn-select-file')).toBeVisible(); // home
+        await expect(page.getByTestId('exit-confirm-modal')).toBeHidden(); // saved: no "unsaved changes" question
+    });
+
     test('10.5 Finish with no new changes reopens the sheet without saving again @rtl', async ({page}) => {
         await openSample(page);
         await tid(page, 'btn-add-date').click();
@@ -2265,6 +2282,26 @@ test.describe('15. Phone editor layout @phone', () => {
         expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
         await page.getByTestId('btn-apply-all').click({timeout: 3000});
         await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1); // this page; others got copies
+    });
+
+    test('15.6 The option toggles show their name and state, and the top row fits (N3) @rtl', async ({page}) => {
+        await openPdf(page, 1);
+        await tid(page, 'btn-toggle-advanced').click();
+        for (const id of ['btn-toggle-footer', 'btn-toggle-audit']) {
+            const toggle = page.getByTestId(id);
+            await expect(toggle.locator('.toggle-label')).toBeVisible();
+            expect((await toggle.locator('.toggle-label').innerText()).trim().length).toBeGreaterThan(2);
+            await expect(toggle).toHaveAttribute('aria-pressed', /true|false/);
+        }
+        const footer = page.getByTestId('btn-toggle-footer');
+        const before = await footer.getAttribute('aria-pressed');
+        await footer.click();
+        await expect(footer).not.toHaveAttribute('aria-pressed', before!);
+        const fits = await page.locator('pdf-workspace').evaluate((el) => {
+            const row = (el as HTMLElement).shadowRoot!.querySelector('.toolbar-row.secondary-tools') as HTMLElement;
+            return row.scrollWidth <= row.clientWidth + 1;
+        });
+        expect(fits).toBe(true);
     });
 
     test('15.5 The page is drawn sharp for the phone\'s pixel density', async ({page}) => {

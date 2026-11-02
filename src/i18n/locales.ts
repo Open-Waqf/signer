@@ -103,6 +103,8 @@ export const resources = {
         emailSubject: "Signature Receipt for Document: {id}",
 
         addPageFooter: "Print Reference ID on bottom of every page",
+        footerShort: "Page ref.",
+        auditShort: "Audit page",
         previousSigDetected: "Previous signature detected. Audit Trail enabled to preserve history.",
         recordFound: "Record Found",
         recordFoundDisclaimer: "ℹ️ This confirms the file was processed by us. However, standard PDF readers can modify content without removing this tag.",
@@ -316,6 +318,8 @@ export const resources = {
         emailSubject: "إيصال توقيع للمستند: {id}",
 
         addPageFooter: "طباعة الرقم المرجعي أسفل كل صفحة",
+        footerShort: "رقم مرجعي",
+        auditShort: "صفحة تدقيق",
         previousSigDetected: "تم اكتشاف توقيع سابق. تم تفعيل سجل التدقيق لحفظ التاريخ.",
         recordFound: "تم العثور على السجل",
         recordFoundDisclaimer: "ℹ️ هذا يؤكد أن الملف تمت معالجته بواسطتنا. ومع ذلك، يمكن لقراء PDF القياسيين تعديل المحتوى دون إزالة هذه العلامة.",
@@ -528,6 +532,8 @@ export const resources = {
         emailSubject: "Reçu de signature pour : {id}",
 
         addPageFooter: "Imprimer l'ID de référence en bas de chaque page",
+        footerShort: "Réf. pages",
+        auditShort: "Page d'audit",
         previousSigDetected: "Signature précédente détectée. Journal d'audit activé.",
         recordFound: "Enregistrement trouvé",
         recordFoundDisclaimer: "ℹ️ Cela confirme que le fichier a été traité par nous. Cependant, les lecteurs PDF standard peuvent modifier le contenu sans supprimer ce tag.",
