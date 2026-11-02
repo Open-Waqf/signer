@@ -136,6 +136,41 @@ test.describe('12. Android app (fake Android bridge) @phone', () => {
         expect(await page.locator('.toast.show').count()).toBe(0);
     });
 
+    test('12.15 A file left by an earlier install does not block saving: the new file gets "(2)" (S1)', async ({page}) => {
+        // Names go down to the minute: work out the name this save will use.
+        const now = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+        const taken = `sample_document_signed_${stamp}.pdf`;
+        await fakeAndroid(page, {foreignFiles: [taken]});
+        await openSample(page);
+        await tid(page, 'btn-add-date').click();
+        test.skip(new Date().getMinutes() !== now.getMinutes(), 'the minute changed during the test');
+        await finish(page);
+
+        const fs = await nativeCalls(page, 'Filesystem');
+        expect(fs.some((c) => c.method === 'deleteFile' && c.options.path === taken)).toBe(false);
+        const write = fs.filter((c) => c.method === 'writeFile').pop();
+        expect(write?.options.path).toBe(taken.replace('.pdf', ' (2).pdf'));
+        await expect(page.getByTestId('saved-where')).toContainText('(2).pdf');
+    });
+
+    test('12.16 Saving twice in the same minute keeps both files (S1)', async ({page}) => {
+        await fakeAndroid(page);
+        await openSample(page);
+        await tid(page, 'btn-add-date').click();
+        await finish(page);
+        await page.getByTestId('btn-close-proof').click();
+        await tid(page, 'btn-add-date').click();
+        await finish(page);
+
+        const fs = await nativeCalls(page, 'Filesystem');
+        expect(fs.filter((c) => c.method === 'deleteFile')).toHaveLength(0);
+        const paths = fs.filter((c) => c.method === 'writeFile').map((c) => c.options.path);
+        expect(paths).toHaveLength(2);
+        expect(new Set(paths).size).toBe(2);
+    });
+
     test('12.10 Back with the leave-without-saving question open closes the question', async ({page}) => {
         await fakeAndroid(page);
         await openSample(page);

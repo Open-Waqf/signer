@@ -19,13 +19,18 @@ export type FakeAndroidOptions = {
     files?: Record<string, string>;
     /** Make Filesystem.writeFile fail (for example storage full) */
     failWrite?: boolean;
+    /**
+     * Documents files left by an earlier install: on Android 11+ the app cannot see them
+     * (stat fails) and cannot delete or replace them (delete/write fail).
+     */
+    foreignFiles?: string[];
 };
 
 // Every native method the app calls (src/), per plugin. A method missing here would make
 // Capacitor throw "not implemented", which a test would show at once.
 const METHODS: Record<string, string[]> = {
     App: ['addListener', 'removeListener', 'removeAllListeners', 'exitApp', 'getLaunchUrl'],
-    Filesystem: ['writeFile', 'appendFile', 'deleteFile', 'getUri', 'readFile', 'addListener', 'removeListener'],
+    Filesystem: ['writeFile', 'appendFile', 'deleteFile', 'getUri', 'readFile', 'stat', 'addListener', 'removeListener'],
     Share: ['share'],
     Haptics: ['impact', 'notification', 'vibrate', 'selectionStart', 'selectionChanged', 'selectionEnd'],
     StatusBar: ['setStyle', 'setBackgroundColor', 'setOverlaysWebView', 'show', 'hide'],
@@ -46,15 +51,20 @@ export async function fakeAndroid(page: Page, options: FakeAndroidOptions = {}) 
             switch (key) {
                 case 'Filesystem.writeFile':
                     if (options.failWrite) throw new Error('No space left on device');
+                    if ((options.foreignFiles || []).includes(o.path)) throw new Error(`${o.path}: open failed: EACCES`);
                     files[o.path] = [o.data];
                     return {uri: DOCUMENTS + o.path};
                 case 'Filesystem.appendFile':
                     (files[o.path] ||= []).push(o.data);
                     return {};
                 case 'Filesystem.deleteFile':
+                    if ((options.foreignFiles || []).includes(o.path)) throw new Error('An unknown error occurred');
                     if (!files[o.path]) throw new Error('File does not exist');
                     delete files[o.path];
                     return {};
+                case 'Filesystem.stat':
+                    if (!files[o.path]) throw new Error('File does not exist');
+                    return {type: 'file', size: files[o.path].join('').length, uri: DOCUMENTS + o.path};
                 case 'Filesystem.getUri':
                     return {uri: DOCUMENTS + o.path};
                 case 'Filesystem.readFile':

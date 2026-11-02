@@ -50,54 +50,61 @@ export class FileService {
      * Prevents OOM crashes by streaming 1MB chunks.
      */
     private async saveFileNative(filename: string, data: Uint8Array): Promise<SavedFile> {
-        try {
-            // 1. Delete file if exists
+        // Never delete or overwrite a file in Documents. If the name is taken, or Android
+        // refuses it (on Android 11+ a file left by an earlier install is invisible but cannot
+        // be replaced), save as "name (2).pdf", "name (3).pdf", ... (bug S1). The old code
+        // deleted first, which failed in that case and could lose the old file on a bad write.
+        const base = filename.replace(/\.pdf$/i, '');
+        let lastError: unknown = null;
+        for (let n = 1; n <= 20; n++) {
+            const name = n === 1 ? filename : `${base} (${n}).pdf`;
+            if (await this.nativeFileExists(name)) continue;
             try {
-                await Filesystem.deleteFile({
-                    path: filename,
-                    directory: Directory.Documents
-                });
-            } catch (e) { /* Ignore */
+                await this.writeNativeFile(name, data);
+            } catch (e) {
+                lastError = e;
+                if ((e as {partial?: boolean})?.partial) break; // storage problem, not the name
+                continue;
             }
+            const uriResult = await Filesystem.getUri({path: name, directory: Directory.Documents});
+            return {uri: uriResult.uri, filename: name};
+        }
+        console.error('Native Save Error', lastError);
+        throw new Error('Could not save file to device.');
+    }
 
-            // 2. Write in Chunks
-            const CHUNK_SIZE = 1024 * 1024; // 1MB
-            const totalChunks = Math.ceil(data.length / CHUNK_SIZE);
+    private async nativeFileExists(path: string): Promise<boolean> {
+        try {
+            await Filesystem.stat({path, directory: Directory.Documents});
+            return true;
+        } catch {
+            return false;
+        }
+    }
 
-            for (let i = 0; i < totalChunks; i++) {
-                const start = i * CHUNK_SIZE;
-                const end = Math.min(start + CHUNK_SIZE, data.length);
-                const chunk = data.slice(start, end);
-
-                // Use fast Blob conversion
-                const base64Chunk = await this.blobToBase64(new Blob([chunk]));
-
-                if (i === 0) {
-                    await Filesystem.writeFile({
-                        path: filename,
-                        data: base64Chunk,
-                        directory: Directory.Documents,
-                        // No encoding = Binary Write
-                    });
-                } else {
-                    await Filesystem.appendFile({
-                        path: filename,
-                        data: base64Chunk,
-                        directory: Directory.Documents
-                    });
-                }
+    /**
+     * Write in 1 MB chunks (prevents out-of-memory on big files). If a later chunk fails,
+     * the half-written file is removed and the error is marked `partial`.
+     */
+    private async writeNativeFile(path: string, data: Uint8Array) {
+        const CHUNK_SIZE = 1024 * 1024;
+        const totalChunks = Math.max(1, Math.ceil(data.length / CHUNK_SIZE));
+        for (let i = 0; i < totalChunks; i++) {
+            const chunk = data.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, data.length));
+            const base64Chunk = await this.blobToBase64(new Blob([chunk]));
+            if (i === 0) {
+                // No encoding = binary write.
+                await Filesystem.writeFile({path, data: base64Chunk, directory: Directory.Documents});
+                continue;
             }
-
-            const uriResult = await Filesystem.getUri({
-                path: filename,
-                directory: Directory.Documents
-            });
-
-            return {uri: uriResult.uri, filename};
-
-        } catch (e) {
-            console.error("Native Save Error", e);
-            throw new Error("Could not save file to device.");
+            try {
+                await Filesystem.appendFile({path, data: base64Chunk, directory: Directory.Documents});
+            } catch (e) {
+                try {
+                    await Filesystem.deleteFile({path, directory: Directory.Documents}); // our own partial file
+                } catch { /* ignore */ }
+                throw Object.assign(new Error(String((e as Error)?.message ?? e)), {partial: true});
+            }
         }
     }
 
