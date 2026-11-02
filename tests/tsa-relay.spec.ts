@@ -68,3 +68,28 @@ test('tsa relay maps upstream timeout to 504', async () => {
         globalThis.fetch = originalFetch;
     }
 });
+
+test('tsa relay allows the Android app (https://localhost) as well as the website', async () => {
+    const env = {ALLOWED_ORIGIN: 'https://sign.open-waqf.org,https://localhost'};
+    for (const origin of ['https://sign.open-waqf.org', 'https://localhost']) {
+        const request = new Request('https://tsa.open-waqf.org/api/tsa', {
+            method: 'OPTIONS',
+            headers: {Origin: origin, 'Access-Control-Request-Method': 'POST'},
+        });
+        const response = await handleTsaRelayRequest(request, env);
+        expect(response.status).toBe(204);
+        expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+    }
+    // Without settings, the built-in default allows both too.
+    const fromApp = new Request('https://tsa.open-waqf.org/api/tsa', {method: 'OPTIONS', headers: {Origin: 'https://localhost'}});
+    expect((await handleTsaRelayRequest(fromApp, {})).headers.get('Access-Control-Allow-Origin')).toBe('https://localhost');
+});
+
+test('tsa relay never echoes an origin that is not allowed', async () => {
+    const request = new Request('https://tsa.open-waqf.org/api/tsa', {
+        method: 'OPTIONS',
+        headers: {Origin: 'https://evil.example', 'Access-Control-Request-Method': 'POST'},
+    });
+    const response = await handleTsaRelayRequest(request, {ALLOWED_ORIGIN: 'https://sign.open-waqf.org,https://localhost'});
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://sign.open-waqf.org');
+});

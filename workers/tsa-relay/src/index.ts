@@ -6,7 +6,16 @@ export interface RelayEnv {
 const DEFAULT_UPSTREAM_URL = 'https://freetsa.org/tsr';
 const DEFAULT_TIMEOUT_MS = 3000;
 const MAX_QUERY_BYTES = 64 * 1024;
-const DEFAULT_ALLOWED_ORIGIN = 'https://sign.open-waqf.org';
+// The website and the Android app (Capacitor serves it from https://localhost).
+// ALLOWED_ORIGIN may list several origins, separated by commas.
+const DEFAULT_ALLOWED_ORIGIN = 'https://sign.open-waqf.org,https://localhost';
+
+// Echo the caller's origin when it is allowed; otherwise answer with the first allowed
+// origin, which a browser will refuse for any other site.
+function pickAllowedOrigin(requestOrigin: string | null, allowedList: string): string {
+    const allowed = allowedList.split(',').map((o) => o.trim()).filter(Boolean);
+    return requestOrigin && allowed.includes(requestOrigin) ? requestOrigin : allowed[0];
+}
 
 function corsHeaders(allowedOrigin: string): HeadersInit {
     return {
@@ -22,7 +31,7 @@ export async function handleTsaRelayRequest(
     env: RelayEnv = {},
     fetchImpl: typeof fetch = fetch,
 ): Promise<Response> {
-    const allowedOrigin = env.ALLOWED_ORIGIN || DEFAULT_ALLOWED_ORIGIN;
+    const allowedOrigin = pickAllowedOrigin(request.headers.get('Origin'), env.ALLOWED_ORIGIN || DEFAULT_ALLOWED_ORIGIN);
     const cors = corsHeaders(allowedOrigin);
     const url = new URL(request.url);
 

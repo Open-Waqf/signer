@@ -7,5 +7,6 @@ routes = [
 ]
 
 [vars]
-ALLOWED_ORIGIN = "https://sign.open-waqf.org"
+# The website and the Android app (Capacitor: https://localhost), comma separated.
+ALLOWED_ORIGIN = "https://sign.open-waqf.org,https://localhost"
 TSA_UPSTREAM_URL = "https://freetsa.org/tsr"

@@ -34,8 +34,6 @@ concurrency:
 jobs:
   check-and-deploy:
     runs-on: ubuntu-latest
-    env:
-      VITE_TSA_RELAY_URL: https://tsa.open-waqf.org/api/tsa
     steps:
       - name: Checkout Source
         uses: actions/checkout@v6

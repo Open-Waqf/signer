@@ -231,10 +231,20 @@ export async function appendAuditPage(
         textY -= 12;
         
         await drawLabel(`Timestamp:`, 60, textY, 8, true, secondaryColor);
-        await drawLabel(sig.tsaVerified ? 'RFC 3161 Cryptographic (Verified)' : 'Local Device Clock (Unverified)', 160, textY, 8, false, secondaryColor);
+        // Honest wording (O5): the token is stored in the file and can be checked with standard
+        // tools (e.g. openssl ts -verify), but this app does not check it, and the time shown
+        // below is the device clock, not the time inside the token.
+        // The page is drawn before the file is hashed and the hash is timestamped, so for the
+        // signer being added now the result is not known yet (tsaVerified is unset).
+        const timestampText = sig.tsaVerified === undefined
+            ? 'Requested when signing; the result is stored in the file, not on this page'
+            : sig.tsaVerified
+                ? 'RFC 3161 token from FreeTSA (stored, not checked by this app)'
+                : 'Device clock (no timestamp token)';
+        await drawLabel(timestampText, 160, textY, 8, false, secondaryColor);
         textY -= 12;
         
-        await drawLabel(`Time Value:`, 60, textY, 8, true, secondaryColor);
+        await drawLabel(`Device Time:`, 60, textY, 8, true, secondaryColor);
         await drawLabel(sig.timestampIso || 'N/A', 160, textY, 8, false, secondaryColor);
 
         if (sig.hardwareFallbackUsed) {
