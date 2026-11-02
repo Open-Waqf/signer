@@ -11,7 +11,6 @@ import {ICONS} from '../lib/icons';
 import {sharedStyles} from '../styles/shared-styles';
 import {LANGUAGES} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
-import {WebAuthnService} from '../lib/webauthn-service';
 import {preferences} from '../lib/preferences';
 import {
     applyAnnotationStyle,
@@ -24,7 +23,7 @@ import {
 import {HistoryController} from './controllers/history-controller';
 import {InteractionController} from './controllers/interaction-controller';
 import {runHandoverCheck} from '../features/workspace/handover-workflow';
-import {executeSave, finalizeSave, resolveHardwareUsage, shareLatestDocument} from '../features/workspace/save-workflow';
+import {executeSave, finalizeSave, shareLatestDocument} from '../features/workspace/save-workflow';
 import {isMobileViewport, isNativePlatform} from '../lib/runtime-platform';
 import {
     validatePkcs12Certificate,
@@ -44,10 +43,6 @@ export class PdfWorkspace extends LitElement {
     @state() currentPage = 1;
     @state() totalPages = 0;
     @state() scale = 1.0;
-    @state() hasHardwareSupport = false;
-    @state() hardwarePref: 'prompt' | 'always' | 'never' = preferences.getHardwarePref() || 'prompt';
-    @state() showHardwarePrompt = false;
-    @state() rememberHardwareChoice = false;
 
     @state() showProofModal = false;
     /** Whether the "Saved" sheet offers Share (false on desktop browsers that can only download). */
@@ -55,7 +50,6 @@ export class PdfWorkspace extends LitElement {
     @state() lastSavedId: string | null = null;
     @state() lastSavedHash: string | null = null;
     @state() lastSavedCode: string | null = null;
-    @state() lastSaveHardwareFallback = false;
     @state() lastSaveTsaVerified = true;
     @state() isSaving = false;
     @state() handoverChecking = false;
@@ -70,7 +64,6 @@ export class PdfWorkspace extends LitElement {
     @state() handoverHashInput = '';
     @state() handoverResult: 'idle' | 'success' | 'fail' = 'idle';
     @state() detectedRefId = '';
-    @state() detectedAssertions: any[] = [];
     @state() signaturesChain: SignaturePayload[] = [];
     @state() previousHashManuallyVerified = true;
     @state() openedDocumentHash = '';
@@ -150,7 +143,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     private get isAnyModalOpen(): boolean {
-        return this.showHardwarePrompt || this.showProofModal || this.showHandoverModal
+        return this.showProofModal || this.showHandoverModal
             || this.showStampLibraryModal || this.showCertificateModal || this.customPrompt.show;
     }
 
@@ -174,7 +167,6 @@ export class PdfWorkspace extends LitElement {
      */
     public closeOpenDialog(): boolean {
         if (this.customPrompt.show) this.closeCustomPrompt();
-        else if (this.showHardwarePrompt) void this.resolveHardwarePrompt(null);
         else if (this.showCertificateModal) this.closeCertificateModal();
         else if (this.showStampLibraryModal) this.showStampLibraryModal = false;
         else if (this.showProofModal) this.showProofModal = false;
@@ -186,7 +178,6 @@ export class PdfWorkspace extends LitElement {
     // Leaving the editor must never leave a dialog open: a hidden open <dialog> makes the
     // whole page inert, so nothing on the home screen could be tapped (bug O1).
     private closeAllDialogs() {
-        if (this.showHardwarePrompt) void this.resolveHardwarePrompt(null);
         if (this.showCertificateModal) this.closeCertificateModal();
         if (this.customPrompt.show) this.closeCustomPrompt();
         this.showStampLibraryModal = false;
@@ -1049,22 +1040,9 @@ export class PdfWorkspace extends LitElement {
             pointer-events: none;
         }
 
-        .hardware-warning-top-gap {
-            margin-top: 10px;
-        }
-
         .prompt-input {
             margin-bottom: 20px;
             font-size: 1rem;
-        }
-
-        .hardware-choice-label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 20px;
-            cursor: pointer;
-            font-size: 0.9rem;
         }
 
         .stamp-presets {
@@ -1195,16 +1173,6 @@ export class PdfWorkspace extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
-        WebAuthnService.getAvailabilityStatus()
-            .then((status) => {
-                this.hasHardwareSupport = status.available;
-                if (!status.available) {
-                    console.info('[OWQ][HARDWARE_SIGN_UNAVAILABLE]', status.reason);
-                }
-            })
-            .catch(() => {
-                this.hasHardwareSupport = false;
-            });
         void this.loadStampPresets();
         if (this.activeSidebar === 'annotations' && this.annotations.length === 0) {
             this.activeSidebar = 'thumbnails';
@@ -1364,7 +1332,6 @@ export class PdfWorkspace extends LitElement {
         this.lastSavedId = null;
         this.lastSavedHash = null;
         this.lastSavedCode = null;
-        this.lastSaveHardwareFallback = false;
         this.lastSaveTsaVerified = true;
         this.totalPages = await pdfEngine.load(file);
         const meta = await pdfEngine.readMetadataID(file);
@@ -1374,11 +1341,6 @@ export class PdfWorkspace extends LitElement {
             this.includeAudit = true;
             this.toast(i18n.t('previousSigDetected'));
             this.detectedRefId = existingID || this.signaturesChain[this.signaturesChain.length - 1]?.refId || '';
-            const latestSignature = this.signaturesChain[this.signaturesChain.length - 1];
-            this.detectedAssertions = latestSignature?.webauthnData ? [{
-                publicKey: latestSignature.webauthnData.publicKey,
-                assertion: latestSignature.webauthnData.assertion
-            }] : (meta.assertions || []);
             this.previousHashManuallyVerified = false;
             this.handoverHashInput = '';
             this.handoverResult = 'idle';
@@ -1386,7 +1348,6 @@ export class PdfWorkspace extends LitElement {
         } else {
             this.includeAudit = false;
             this.detectedRefId = '';
-            this.detectedAssertions = [];
         }
         this.currentPage = 1;
         this.scale = 1.0; // phones: fitted to the screen width once the page area is laid out
@@ -1426,14 +1387,11 @@ export class PdfWorkspace extends LitElement {
                 handoverInput: this.handoverHashInput,
                 loadedBytes: this.loadedBytes,
                 signaturesChain: this.signaturesChain,
-                detectedAssertions: this.detectedAssertions,
                 detectedRefId: this.detectedRefId,
                 deps: {
                     getFileHash: (bytes) => pdfEngine.getFileHash(bytes),
                     getSixDigitCode: (hash) => pdfEngine.getSixDigitCode(hash),
                     verifySignatureChain: (bytes) => pdfEngine.verifySignatureChain(bytes),
-                    verifyLocalAssertion: (publicKey, signature, authData, clientDataJSON) =>
-                        WebAuthnService.verifyLocal(publicKey, signature, authData, clientDataJSON),
                 },
             });
         } catch (e) {
@@ -1454,15 +1412,10 @@ export class PdfWorkspace extends LitElement {
         this.previousHashManuallyVerified = result.previousHashManuallyVerified;
         const validationBase = result.validationMessageKey === 'handoverVerifiedMsg'
             ? i18n.t('handoverVerifiedMsg')
-            : result.validationMessageKey === 'handoverHardwareFailMsg'
-                ? i18n.t('handoverHardwareFailMsg')
-                : result.validationMessageKey === 'handoverChainFailMsg'
-                    ? i18n.t('handoverChainFailMsg')
-                    : i18n.t('handoverMismatchMsg');
+            : result.validationMessageKey === 'handoverChainFailMsg'
+                ? i18n.t('handoverChainFailMsg')
+                : i18n.t('handoverMismatchMsg');
         this.validationMsg = validationBase.replace('{ref}', this.detectedRefId);
-        if (result.appendHardwareVerifiedSuffix) {
-            this.validationMsg += ` + ${i18n.t('hardwareSignVerifiedSuffix')}`;
-        }
 
         if (result.shouldAutoClose) {
             setTimeout(() => {
@@ -2249,63 +2202,6 @@ export class PdfWorkspace extends LitElement {
         this.wipePendingCertificate();
     }
 
-    async addBiometric() {
-        if (!this.loadedBytes) return;
-        this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
-        try {
-            const hashHex = await pdfEngine.getFileHash(this.loadedBytes);
-            // Convert hex to bytes
-            const hashBytes = new Uint8Array(hashHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-            
-            const savedEmail = preferences.getUserEmail('User');
-            const result = await WebAuthnService.sign(hashBytes, savedEmail);
-            
-            this.snapshot();
-            HapticService.impact();
-            
-            const pageRect = this.container.getBoundingClientRect();
-            const viewportRect = this.viewport.getBoundingClientRect();
-            const screenCenterX = viewportRect.left + viewportRect.width / 2;
-            const screenCenterY = viewportRect.top + viewportRect.height / 2;
-            const relativeX = screenCenterX - pageRect.left;
-            const relativeY = screenCenterY - pageRect.top;
-            const xPct = Math.max(0.1, Math.min(0.8, relativeX / pageRect.width));
-            const yPct = Math.max(0.1, Math.min(0.8, relativeY / pageRect.height));
-
-            const newAnn: Annotation = {
-                id: this.generateId(),
-                type: 'biometric',
-                page: this.currentPage - 1,
-                xPct, yPct,
-                widthPct: 0.25,
-                lockedByChain: false,
-                publicKey: result.publicKeySpki,
-                assertion: JSON.stringify({
-                    signature: result.signature,
-                    authData: result.authData,
-                    clientDataJSON: result.clientDataJSON
-                })
-            };
-
-            this.annotations = [...this.annotations, newAnn];
-            this.selectedIds = [newAnn.id];
-            this.isDirty = true;
-            this.toast(i18n.t('biometricVerified'));
-        } catch (e: any) {
-            // A user who dismisses the biometric sheet (NotAllowedError/AbortError)
-            // did not hit an error — don't alarm them with a failure toast.
-            const name = String(e?.name ?? '');
-            if (name === 'NotAllowedError' || name === 'AbortError') {
-                this.toast(i18n.t('biometricCancelled'));
-            } else {
-                console.error('Biometric Error', e);
-                this.toast(i18n.t('biometricError'));
-            }
-        } finally {
-            this.dispatchEvent(new CustomEvent('set-loading', {detail: false, bubbles: true, composed: true}));
-        }
-    }
-
     private toast(msg: string) {
         this.dispatchEvent(new CustomEvent('toast', {detail: msg, bubbles: true, composed: true}));
     }
@@ -2313,15 +2209,6 @@ export class PdfWorkspace extends LitElement {
     private getExecuteSaveDeps() {
         return {
             saveProfessional: (...args: any[]) => (pdfEngine.saveProfessional as any)(...args),
-            getSavedEmail: () => preferences.getUserEmail('User'),
-            setHardwarePrefNever: () => {
-                this.hardwarePref = 'never';
-                preferences.setHardwarePref('never');
-            },
-            toast: (msg: string) => this.toast(msg),
-            messages: {
-                hardwareProofUnavailable: i18n.t('hardwareProofUnavailable'),
-            },
         };
     }
 
@@ -2362,7 +2249,6 @@ export class PdfWorkspace extends LitElement {
         this.isDirty = false;
         this.isVerified = false;
         this.lastSavedCode = null;
-        this.lastSaveHardwareFallback = false;
         this.lastSaveTsaVerified = true;
         this.previousHashManuallyVerified = true;
         this.openedDocumentHash = '';
@@ -2380,30 +2266,10 @@ export class PdfWorkspace extends LitElement {
             this.toast(i18n.t('noChanges'));
             return;
         }
-        // Guard against re-entrant saves: a second tap during the hardware-prompt
-        // window used to overwrite this.hardwareResolver and orphan the first save.
+        // Guard against re-entrant saves (a second tap while the first is running).
         if (this.isSaving) return;
         this.isSaving = true;
         console.error('[OWQ][SAVE_START]');
-
-        const hasVisualSig = this.annotations.some(a => a.type !== 'biometric');
-
-        const decision = await resolveHardwareUsage({
-            hasHardwareSupport: this.hasHardwareSupport,
-            hasVisualSig,
-            hardwarePref: this.hardwarePref,
-            isBasicMode: this.isBasicMode,
-            requestPromptDecision: async () => {
-                this.showHardwarePrompt = true;
-                return new Promise<boolean | null>((resolve) => {
-                    this.hardwareResolver = resolve;
-                });
-            },
-        });
-        if (decision.cancelled) {
-            this.isSaving = false;
-            return;
-        }
 
         this.dispatchEvent(new CustomEvent('set-loading', {detail: true, bubbles: true, composed: true}));
         await new Promise((r) => setTimeout(r, 50));
@@ -2426,12 +2292,8 @@ export class PdfWorkspace extends LitElement {
                 signaturesChain: this.signaturesChain,
                 previousHashManuallyVerified: this.previousHashManuallyVerified,
                 openedDocumentHash: this.openedDocumentHash,
-                useHardware: decision.useHardware,
                 certificateConfig,
             });
-            if (executed.hardwareFallbackUsed) {
-                console.warn('Hardware proof fallback: browser could not embed WebAuthn public key proof; saving as visual-only.');
-            }
             await this.finishSave(executed.result, opts);
             console.error('[OWQ][SAVE_SUCCESS]');
         } catch (e: any) {
@@ -2468,7 +2330,6 @@ export class PdfWorkspace extends LitElement {
         this.lastSavedHash = result.finalHash;
         this.lastSavedCode = result.finalCode;
         const latestSig = result.signatures[result.signatures.length - 1];
-        this.lastSaveHardwareFallback = !!latestSig?.hardwareFallbackUsed;
         // tsaVerified is only true when an RFC-3161 token came back; offline/timeout
         // saves fall back to the device clock and must be flagged to the user.
         this.lastSaveTsaVerified = latestSig?.tsaVerified !== false;
@@ -2651,38 +2512,6 @@ export class PdfWorkspace extends LitElement {
         preferences.setUiMode(this.uiMode);
     }
 
-    private getHardwareIcon() {
-        if (this.hardwarePref === 'always') return ICONS.biometric;
-        if (this.hardwarePref === 'never') return html`
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 12c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
-                <path d="M5 12c0-2.8 2.2-5 5-5s5 2.2 5 5"/>
-                <path d="M10 20v-4"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
-            </svg>`;
-        return html`
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 12c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
-                <path d="M10 20v-4"/>
-                <circle cx="18" cy="19" r="3"/>
-                <line x1="18" y1="16" x2="18" y2="16.01"/>
-            </svg>`;
-    }
-
-    private getHardwarePrefLabel() {
-        if (this.hardwarePref === 'always') return i18n.t('hardwarePrefAlways');
-        if (this.hardwarePref === 'never') return i18n.t('hardwarePrefNever');
-        return i18n.t('hardwarePrefPrompt');
-    }
-
-    toggleHardwarePref() {
-        if (this.hardwarePref === 'prompt') this.hardwarePref = 'always';
-        else if (this.hardwarePref === 'always') this.hardwarePref = 'never';
-        else this.hardwarePref = 'prompt';
-        preferences.setHardwarePref(this.hardwarePref);
-        this.toast(`${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}`);
-    }
-
     private annotationStyle(ann: Annotation, isText: boolean) {
         return {
             'inset-inline-start': `${ann.xPct * 100}%`,
@@ -2698,20 +2527,6 @@ export class PdfWorkspace extends LitElement {
             'font-family': ann.fontFamily || 'Amiri',
             'color': ann.color || 'black',
         };
-    }
-
-    private hardwareResolver: ((val: boolean | null) => void) | null = null;
-
-    async resolveHardwarePrompt(choice: boolean | null) {
-        if (choice !== null && this.rememberHardwareChoice) {
-            this.hardwarePref = choice ? 'always' : 'never';
-            preferences.setHardwarePref(this.hardwarePref);
-        }
-        this.showHardwarePrompt = false;
-        if (this.hardwareResolver) {
-            this.hardwareResolver(choice);
-            this.hardwareResolver = null;
-        }
     }
 
     private renderHandoverModal() {
@@ -2776,11 +2591,6 @@ export class PdfWorkspace extends LitElement {
                         </div>
                     </div>
                 </div>
-                ${this.lastSaveHardwareFallback ? html`
-                    <div class="alert-box alert-warning" data-testid="hardware-fallback-warning">
-                        ${i18n.t('hardwareProofUnavailable')}
-                    </div>
-                ` : ''}
                 <div class="saved-actions">
                     ${this.lastSaveCanShare ? html`
                         <button class="btn btn-primary" id="btn-share-saved" data-testid="btn-share-saved"
@@ -2845,43 +2655,6 @@ export class PdfWorkspace extends LitElement {
                     <button class="btn btn-primary modal-btn-flex" data-testid="btn-save-prompt"
                             @click=${this.saveCustomPrompt}>
                         ${i18n.t('done')}
-                    </button>
-                </div>
-            </owq-modal>
-        `;
-    }
-
-    private renderHardwarePromptModal() {
-        if (!this.showHardwarePrompt) return '';
-        return html`
-            <owq-modal .open=${this.showHardwarePrompt}
-                       data-testid="hardware-prompt-modal"
-                       ariaLabelledby="hw-prompt-title"
-                       @modal-close=${() => this.resolveHardwarePrompt(null)}>
-                <h3 id="hw-prompt-title" class="modal-title">${i18n.t('secureYourSignature')}</h3>
-                <p class="modal-copy">
-                    ${i18n.t('secureYourSignatureHelp')}
-                </p>
-
-                <label class="hardware-choice-label">
-                    <input type="checkbox" id="remember-hardware-pref" .checked=${this.rememberHardwareChoice}
-                           @change=${(e: any) => this.rememberHardwareChoice = e.target.checked}>
-                    ${i18n.t('rememberMyChoice')}
-                </label>
-
-                <div class="modal-actions">
-                    <button class="btn btn-primary modal-btn-full" data-testid="btn-hw-yes"
-                            autofocus
-                            @click=${() => this.resolveHardwarePrompt(true)}>
-                        ${i18n.t('yesSecureIt')}
-                    </button>
-                    <button class="btn modal-btn-flex" data-testid="btn-hw-no"
-                            @click=${() => this.resolveHardwarePrompt(false)}>
-                        ${i18n.t('noStandardSave')}
-                    </button>
-                    <button class="btn modal-btn-flex" data-testid="btn-hw-cancel"
-                            @click=${() => this.resolveHardwarePrompt(null)}>
-                        ${i18n.t('cancelSave')}
                     </button>
                 </div>
             </owq-modal>
@@ -3168,12 +2941,6 @@ export class PdfWorkspace extends LitElement {
                                 @click=${this.openStampLibrary}>
                             ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
                         </button>
-                        ${this.hasHardwareSupport ? html`
-                            <button data-testid="btn-hw-pref" class="btn" aria-label="${i18n.t('hardwareSign')}"
-                                    @click=${this.toggleHardwarePref}>
-                                ${this.getHardwareIcon()}<span class="btn-label">${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}</span>
-                            </button>
-                        ` : ''}
                     ` : ''}
                 </div>
 
@@ -3265,12 +3032,6 @@ export class PdfWorkspace extends LitElement {
                             @click=${this.openStampLibrary}>
                         ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
                     </button>
-                    ${this.hasHardwareSupport ? html`
-                        <button data-testid="m-btn-hw-pref" class="btn btn-tool" aria-label="${i18n.t('hardwareSign')}"
-                                @click=${this.toggleHardwarePref}>
-                            ${this.getHardwareIcon()} <span>${i18n.t('hardwareSign')}: ${this.getHardwarePrefLabel()}</span>
-                        </button>
-                    ` : ''}
                 ` : ''}
                 </div>
                 ${finishButton('m-btn-finish', 'finish-bottom')}
@@ -3432,7 +3193,6 @@ export class PdfWorkspace extends LitElement {
             ${this.renderHandoverModal()}
             ${this.renderProofModal()}
             ${this.renderCustomPromptModal()}
-            ${this.renderHardwarePromptModal()}
             ${this.renderStampLibraryModal()}
             ${this.renderCertificateModal()}
         `;

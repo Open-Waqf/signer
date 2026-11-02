@@ -784,8 +784,6 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
 
         await expect(tid(page, 'btn-add-stamp')).toHaveCount(0);
         await ensureAdvancedToolsVisible();
-        const hwPrefCount = await tid(page, 'btn-hw-pref').count();
-        expect(hwPrefCount).toBeLessThanOrEqual(1);
 
         await tid(page, 'btn-add-stamp').click();
         await expect(page.getByTestId('stamp-library-modal')).toBeVisible();
@@ -1211,43 +1209,28 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(0);
     });
 
-    test('9.5 Hardware signing succeeds on the first use (fresh credential)', async ({page}) => {
-        // Virtual platform authenticator so navigator.credentials.create/get work headlessly.
-        const client = await page.context().newCDPSession(page);
-        await client.send('WebAuthn.enable');
-        await client.send('WebAuthn.addVirtualAuthenticator', {
-            options: {
-                protocol: 'ctap2',
-                transport: 'internal',
-                hasResidentKey: true,
-                hasUserVerification: true,
-                isUserVerified: true,
-            },
+    test('9.5 No hardware signing: no toggle and no question before saving, even with a fingerprint reader', async ({page}) => {
+        // Hardware signing (WebAuthn) was removed: it never worked in the Android app and
+        // was not checked when a file was opened. A device that has a fingerprint reader
+        // must not bring the toggle or the "Secure your signature?" question back.
+        await page.addInitScript(() => {
+            const pkc = (window as any).PublicKeyCredential;
+            if (pkc) pkc.isUserVerifyingPlatformAuthenticatorAvailable = async () => true;
         });
 
         await page.goto('/');
-        // Fresh context => no stored credential => sign() takes the register-then-get
-        // path. The bug reconstructed a bogus rawId here so the immediate get() matched
-        // no credential and threw on the very first attempt.
-        const fileChooserPromise = page.waitForEvent('filechooser');
-        await page.getByTestId('btn-select-file').click();
-        const fileChooser = await fileChooserPromise;
-        const pdfBuffer = await generateTestPDF();
-        await fileChooser.setFiles({
-            name: 'hw_test.pdf',
-            mimeType: 'application/pdf',
-            buffer: Buffer.from(pdfBuffer)
-        });
-        await expect(page.locator('pdf-workspace')).toBeVisible();
+        await page.getByTestId('btn-sample').click();
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        await tid(page, 'btn-toggle-advanced').click();
+        await expect(tid(page, 'btn-add-stamp')).toBeVisible();
+        expect(await page.locator('[data-testid$="btn-hw-pref"]').count()).toBe(0);
 
-        const ws = page.locator('pdf-workspace');
-        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(0);
-
-        await ws.evaluate((el) => (el as any).addBiometric());
-
-        // Success => a biometric annotation is placed. The first-use bug would have
-        // thrown inside sign() and left zero annotations (biometricError toast).
-        await expect(ws.locator('[data-testid^="annotation-"]')).toHaveCount(1);
+        await tid(page, 'btn-add-date').click();
+        const download = page.waitForEvent('download');
+        await tid(page, 'btn-save').click();
+        await download;
+        await expect(page.getByTestId('proof-modal')).toBeVisible();
+        expect(await page.getByTestId('hardware-prompt-modal').count()).toBe(0);
     });
 
     test('9.6 Preset save surfaces an inline error when storage is unavailable', async ({page}) => {

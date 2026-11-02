@@ -202,7 +202,7 @@ export async function appendAuditPage(
     }
 
     for (const sig of signatures) {
-        const boxHeight = 75 + (sig.signerIndex > 1 ? 25 : 0) + (sig.hardwareFallbackUsed ? 15 : 0);
+        const boxHeight = 63 + (sig.signerIndex > 1 ? 25 : 0);
         if (y - boxHeight < 50) break; // Need enough space for the box
         
         y -= boxHeight;
@@ -231,10 +231,6 @@ export async function appendAuditPage(
             textY -= 14;
         }
 
-        await drawLabel(`Hardware Proof:`, 60, textY, 8, true, secondaryColor);
-        await drawLabel(sig.isHardwareBacked ? 'EMBEDDED (WebAuthn Cryptography)' : 'VISUAL ONLY', 160, textY, 8, true, sig.isHardwareBacked ? rgb(0.1, 0.6, 0.2) : secondaryColor);
-        textY -= 12;
-        
         await drawLabel(`Timestamp:`, 60, textY, 8, true, secondaryColor);
         // Honest wording (O5): the token is stored in the file and can be checked with standard
         // tools (e.g. openssl ts -verify), but this app does not check it, and the time shown
@@ -251,11 +247,6 @@ export async function appendAuditPage(
         
         await drawLabel(`Device Time:`, 60, textY, 8, true, secondaryColor);
         await drawLabel(sig.timestampIso || 'N/A', 160, textY, 8, false, secondaryColor);
-
-        if (sig.hardwareFallbackUsed) {
-            textY -= 14;
-            await drawLabel('WARNING: Hardware proof was requested but could not be embedded.', 60, textY, 8, true, rgb(0.8, 0.4, 0));
-        }
 
         y -= 10; // Margin between boxes
     }

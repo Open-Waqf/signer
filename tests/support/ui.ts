@@ -14,7 +14,6 @@ const PHONE_ID: Record<string, string> = {
     'btn-add-identity': 'm-btn-add-identity',
     'btn-toggle-advanced': 'm-btn-toggle-advanced',
     'btn-cert-sign': 'm-btn-cert-sign',
-    'btn-hw-pref': 'm-btn-hw-pref',
     'btn-save': 'm-btn-finish',
 };
 

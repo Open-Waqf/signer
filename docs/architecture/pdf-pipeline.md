@@ -6,7 +6,7 @@
   - `lib/pdf/hash-service.ts`
   - `lib/pdf/metadata-service.ts`
   - `lib/pdf/audit-page-service.ts`
-  - `lib/pdf/webauthn-chain-service.ts`
+  - `lib/pdf/signature-chain-service.ts` (signer history consistency, information only)
   - `lib/pdf/cms-signature-service.ts` (certificate signing; its heavy libraries load only when used)
   - `lib/pdf/hash.worker.ts` (hashing and normalization off the main thread)
   - `lib/pdf/constants.ts`

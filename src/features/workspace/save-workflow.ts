@@ -19,18 +19,9 @@ export type ExecuteSaveDeps = {
             previousSignatures?: SignaturePayload[];
             previousHashManuallyVerified?: boolean;
             openedDocumentHash?: string;
-            enableWebAuthn?: boolean;
-            userName?: string;
-            hardwareFallbackUsed?: boolean;
             certificateConfig?: CertificateSigningConfig;
         }
     ) => Promise<SaveDocResult>;
-    getSavedEmail: () => string;
-    setHardwarePrefNever: () => void;
-    toast: (msg: string) => void;
-    messages: {
-        hardwareProofUnavailable: string;
-    };
 };
 
 export type FinalizeSaveDeps = {
@@ -51,28 +42,6 @@ export type ShareLatestDeps = {
     };
 };
 
-export async function resolveHardwareUsage(input: {
-    hasHardwareSupport: boolean;
-    hasVisualSig: boolean;
-    hardwarePref: 'prompt' | 'always' | 'never';
-    isBasicMode: boolean;
-    requestPromptDecision: () => Promise<boolean | null>;
-}): Promise<{ cancelled: boolean; useHardware: boolean }> {
-    let useHardware = false;
-    if (input.hasHardwareSupport && input.hasVisualSig) {
-        if (input.hardwarePref === 'always') {
-            useHardware = true;
-        } else if (input.hardwarePref === 'never') {
-            useHardware = false;
-        } else if (!input.isBasicMode) {
-            const decision = await input.requestPromptDecision();
-            if (decision === null) return {cancelled: true, useHardware: false};
-            useHardware = decision;
-        }
-    }
-    return {cancelled: false, useHardware};
-}
-
 export async function executeSave(input: {
     deps: ExecuteSaveDeps;
     annotations: Annotation[];
@@ -83,51 +52,22 @@ export async function executeSave(input: {
     signaturesChain: SignaturePayload[];
     previousHashManuallyVerified: boolean;
     openedDocumentHash: string;
-    useHardware: boolean;
     certificateConfig?: CertificateSigningConfig;
-}): Promise<{ result: SaveDocResult; hardwareFallbackUsed: boolean }> {
-    const savedEmail = input.deps.getSavedEmail();
-    try {
-        const result = await input.deps.saveProfessional(
-            input.annotations,
-            input.pdfName,
-            input.includeAudit,
-            input.includeFooter,
-            input.validationMsg,
-            {
-                previousSignatures: input.signaturesChain,
-                previousHashManuallyVerified: input.previousHashManuallyVerified,
-                openedDocumentHash: input.openedDocumentHash,
-                enableWebAuthn: input.useHardware,
-                userName: savedEmail,
-                certificateConfig: input.certificateConfig,
-            }
-        );
-        return {result, hardwareFallbackUsed: false};
-    } catch (e: any) {
-        const message = String(e?.message || '');
-        if (!input.useHardware || !message.includes('Hardware proof unavailable')) throw e;
-
-        input.deps.setHardwarePrefNever();
-        input.deps.toast(input.deps.messages.hardwareProofUnavailable || 'Hardware proof unavailable on this browser. Saved as visual-only.');
-        const result = await input.deps.saveProfessional(
-            input.annotations,
-            input.pdfName,
-            input.includeAudit,
-            input.includeFooter,
-            input.validationMsg,
-            {
-                previousSignatures: input.signaturesChain,
-                previousHashManuallyVerified: input.previousHashManuallyVerified,
-                openedDocumentHash: input.openedDocumentHash,
-                enableWebAuthn: false,
-                userName: savedEmail,
-                hardwareFallbackUsed: true,
-                certificateConfig: input.certificateConfig,
-            }
-        );
-        return {result, hardwareFallbackUsed: true};
-    }
+}): Promise<{ result: SaveDocResult }> {
+    const result = await input.deps.saveProfessional(
+        input.annotations,
+        input.pdfName,
+        input.includeAudit,
+        input.includeFooter,
+        input.validationMsg,
+        {
+            previousSignatures: input.signaturesChain,
+            previousHashManuallyVerified: input.previousHashManuallyVerified,
+            openedDocumentHash: input.openedDocumentHash,
+            certificateConfig: input.certificateConfig,
+        }
+    );
+    return {result};
 }
 
 export async function finalizeSave(input: {

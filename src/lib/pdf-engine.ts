@@ -2,8 +2,7 @@ import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
 import {Annotation, CertificateSigningConfig, SignaturePayload} from '../types';
-import {WebAuthnService} from './webauthn-service';
-import {appendAuditPage, getHexToRgb, removeTrailingAuditPages, textToImage} from './pdf/audit-page-service';
+import {appendAuditPage, removeTrailingAuditPages, textToImage} from './pdf/audit-page-service';
 import {
     calculateDeterministicHashIgnoringSubject,
     calculateSHA256,
@@ -11,7 +10,7 @@ import {
     getSixDigitCode
 } from './pdf/hash-service';
 import {readMetadataID, setSignaturesSubject} from './pdf/metadata-service';
-import {verifySignatureChain as verifySignatureChainCore} from './pdf/webauthn-chain-service';
+import {verifySignatureChain as verifySignatureChainCore} from './pdf/signature-chain-service';
 import {signPdfWithCertificate} from './pdf/cms-signature-service';
 import {getTimestampProof} from './tsa-service';
 
@@ -32,10 +31,6 @@ export class PdfEngine {
 
     getSixDigitCode(hash: string): string {
         return getSixDigitCode(hash);
-    }
-
-    private get hexToRgb() {
-        return getHexToRgb();
     }
 
     destroy() {
@@ -173,9 +168,6 @@ export class PdfEngine {
             previousSignatures?: SignaturePayload[];
             previousHashManuallyVerified?: boolean;
             openedDocumentHash?: string;
-            enableWebAuthn?: boolean;
-            userName?: string;
-            hardwareFallbackUsed?: boolean;
             certificateConfig?: CertificateSigningConfig;
         }
     ): Promise<{
@@ -197,7 +189,6 @@ export class PdfEngine {
         const baseSignatures = [...(opts?.previousSignatures ?? existingMeta.signatures)];
         const openedDocumentHash = opts?.openedDocumentHash ?? contentHash;
         const previousHashManuallyVerified = baseSignatures.length === 0 ? true : !!opts?.previousHashManuallyVerified;
-        const useWebAuthn = !!opts?.enableWebAuthn;
 
         pdfDoc.setTitle('Signed Document');
         pdfDoc.setProducer('Open Waqf Signer');
@@ -232,72 +223,7 @@ export class PdfEngine {
             const page = pages[ann.page];
             const {width, height} = page.getSize();
 
-            if (ann.type === 'biometric') {
-                const targetWidth = width * (ann.widthPct || 0.2);
-                const targetHeight = 32;
-                const x = width * ann.xPct;
-                const y = height - (height * ann.yPct) - targetHeight;
-
-                const baseColor = rgb(0.05, 0.2, 0.45); // Official Navy Blue
-                const textColor = ann.color ? this.hexToRgb(ann.color) : baseColor;
-                
-                // Shadow
-                page.drawRectangle({
-                    x: x + 2, y: y - 2, width: targetWidth, height: targetHeight,
-                    color: rgb(0.8, 0.8, 0.8),
-                    opacity: 0.5
-                });
-
-                // Main box
-                page.drawRectangle({
-                    x, y, width: targetWidth, height: targetHeight,
-                    borderWidth: 1.5, borderColor: textColor,
-                    color: rgb(0.96, 0.98, 1.0)
-                });
-
-                const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-                // Add a visual "lock" marker on the left
-                page.drawRectangle({
-                    x: x + 4, y: y + 8, width: 14, height: 12,
-                    color: textColor
-                });
-                page.drawCircle({
-                    x: x + 11, y: y + 15, size: 1.5, color: rgb(1,1,1)
-                });
-                page.drawLine({
-                    start: {x: x+11, y: y+15},
-                    end: {x: x+11, y: y+11},
-                    thickness: 1.5, color: rgb(1,1,1)
-                });
-                // Lock shackle
-                page.drawRectangle({
-                    x: x + 6.5, y: y + 20, width: 9, height: 6,
-                    borderWidth: 1.5, borderColor: textColor
-                });
-                // Erase bottom of shackle so it blends into the base
-                page.drawLine({
-                    start: {x: x+6.5, y: y+20},
-                    end: {x: x+15.5, y: y+20},
-                    thickness: 2, color: rgb(0.96, 0.98, 1.0)
-                });
-
-                page.drawText('BIOMETRIC VERIFIED', {
-                    x: x + 24, y: y + 19, size: 7.5, font: fontBold, color: textColor,
-                });
-                
-                page.drawLine({
-                    start: {x: x + 24, y: y + 16},
-                    end: {x: x + targetWidth - 6, y: y + 16},
-                    thickness: 0.5,
-                    color: textColor,
-                    opacity: 0.5
-                });
-
-                page.drawText(`ID: ${ann.id.substring(0, 8).toUpperCase()}`, {
-                    x: x + 24, y: y + 7, size: 6, font, color: rgb(0.3, 0.3, 0.3),
-                });
-            } else if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
+            if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
                 const normalized = ann.data.replace(/\u200E/g, '').trim();
                 const isDateLike = /^\d{2}\/\d{2}\/\d{4}$/.test(normalized);
                 const textDirection: CanvasDirection = isDateLike ? 'ltr' : 'inherit';
@@ -340,8 +266,6 @@ export class PdfEngine {
             validationLog,
             refId: docId,
             auditPageIncluded: includeAuditTrail,
-            hardwareFallbackUsed: !!opts?.hardwareFallbackUsed,
-            isHardwareBacked: false,
         };
 
         const provisionalSignatures = [...baseSignatures, provisionalPayload];
@@ -357,23 +281,6 @@ export class PdfEngine {
         const challengeHash = integrityAnchorHash;
         const tsaProof = await getTimestampProof(challengeHash);
 
-        let webauthnData: SignaturePayload['webauthnData'] = undefined;
-        if (useWebAuthn) {
-            const challengeBytes = new Uint8Array(challengeHash.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)));
-            const signed = await WebAuthnService.sign(challengeBytes, opts?.userName || 'User');
-            if (!signed.publicKeySpki) {
-                throw new Error('Hardware proof unavailable on this browser.');
-            }
-            webauthnData = {
-                publicKey: signed.publicKeySpki,
-                assertion: JSON.stringify({
-                    signature: signed.signature,
-                    authData: signed.authData,
-                    clientDataJSON: signed.clientDataJSON,
-                })
-            };
-        }
-
         const finalizedSignatures = [...baseSignatures, {
             ...provisionalPayload,
             timestampIso: tsaProof.timestampIso,
@@ -383,8 +290,6 @@ export class PdfEngine {
             tsaFailureReason: tsaProof.tsaFailureReason,
             challengeHash,
             integrityAnchorHash,
-            isHardwareBacked: !!webauthnData,
-            webauthnData,
         }];
         const finalDoc = await PDFDocument.load(interimBytes, {updateMetadata: false});
         setSignaturesSubject(finalDoc, finalizedSignatures);

@@ -10,7 +10,6 @@ function baseDeps(overrides?: Partial<Parameters<typeof runHandoverCheck>[0]['de
         getFileHash: async () => hash,
         getSixDigitCode: () => '123456',
         verifySignatureChain: async () => ({valid: true}),
-        verifyLocalAssertion: async () => true,
         ...overrides,
     };
 }
@@ -20,7 +19,6 @@ test('handover-workflow mismatch returns fail result', async () => {
         handoverInput: '999999',
         loadedBytes: bytes,
         signaturesChain: [] as SignaturePayload[],
-        detectedAssertions: [],
         detectedRefId: 'REF1',
         deps: baseDeps(),
     });
@@ -35,7 +33,6 @@ test('handover-workflow valid hash with valid chain succeeds', async () => {
         handoverInput: hash,
         loadedBytes: bytes,
         signaturesChain: [{signerIndex: 1} as SignaturePayload],
-        detectedAssertions: [],
         detectedRefId: 'REF2',
         deps: baseDeps(),
     });
@@ -45,27 +42,18 @@ test('handover-workflow valid hash with valid chain succeeds', async () => {
     expect(result.shouldAutoClose).toBeTruthy();
 });
 
-test('handover-workflow valid code but invalid hardware proof fails', async () => {
+test('handover-workflow valid code but inconsistent signer history fails', async () => {
     const result = await runHandoverCheck({
         handoverInput: '123456',
         loadedBytes: bytes,
-        signaturesChain: [] as SignaturePayload[],
-        detectedAssertions: [{
-            publicKey: 'pk',
-            assertion: JSON.stringify({
-                signature: 'sig',
-                authData: 'auth',
-                clientDataJSON: 'client',
-            }),
-        }],
+        signaturesChain: [{signerIndex: 1} as SignaturePayload],
         detectedRefId: 'REF3',
         deps: baseDeps({
-            verifyLocalAssertion: async () => false,
+            verifySignatureChain: async () => ({valid: false}),
         }),
     });
 
     expect(result.handoverResult).toBe('fail');
-    expect(result.validationMessageKey).toBe('handoverHardwareFailMsg');
+    expect(result.validationMessageKey).toBe('handoverChainFailMsg');
     expect(result.shouldAutoClose).toBeFalsy();
 });
-

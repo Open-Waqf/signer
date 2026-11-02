@@ -1,6 +1,7 @@
 import {SignaturePayload} from '../../types';
-import {WebAuthnService} from '../webauthn-service';
 
+// Consistency of the signer history in the file. Information, not proof: anyone can
+// write such a history (see the Verify screen).
 export async function verifySignatureChain(input: {
     fileData: Uint8Array;
     signatures: SignaturePayload[];
@@ -31,26 +32,9 @@ export async function verifySignatureChain(input: {
             }
         }
 
-        if (payload.webauthnData?.publicKey && payload.webauthnData?.assertion) {
-            try {
-                const parsed = JSON.parse(payload.webauthnData.assertion);
-                const challengeBytes = new Uint8Array(payload.challengeHash.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) || []);
-                const ok = await WebAuthnService.verifyLocal(
-                    payload.webauthnData.publicKey,
-                    parsed.signature,
-                    parsed.authData,
-                    parsed.clientDataJSON,
-                    challengeBytes
-                );
-                if (!ok) {
-                    return {valid: false, failedSignerIndex: payload.signerIndex, signatures};
-                }
-            } catch {
-                return {valid: false, failedSignerIndex: payload.signerIndex, signatures};
-            }
-        } else if (payload.isHardwareBacked) {
-            return {valid: false, failedSignerIndex: payload.signerIndex, signatures};
-        }
+        // Older files may carry a WebAuthn assertion from the removed "hardware signing"
+        // feature. It is kept in the file but not checked: its check never worked reliably
+        // (DER vs raw signatures) and proved nothing about the file anyway.
     }
 
     return {valid: true, signatures};

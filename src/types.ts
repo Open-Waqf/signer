@@ -1,4 +1,4 @@
-export type AnnotationType = 'signature' | 'initials' | 'date' | 'stamp' | 'identity' | 'biometric';
+export type AnnotationType = 'signature' | 'initials' | 'date' | 'stamp' | 'identity';
 
 export interface Annotation {
     id: string;            // Unique ID to track items
@@ -43,6 +43,8 @@ export interface SignaturePayload {
     validationLog?: string | null;
     refId?: string;
     auditPageIncluded?: boolean;
+    // Legacy, from the removed hardware-signing feature: still read from older files,
+    // never written by this version.
     hardwareFallbackUsed?: boolean;
     isHardwareBacked?: boolean;
     webauthnData?: {

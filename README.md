@@ -35,9 +35,6 @@ device.
   app and local builds currently fall back to the device clock, labelled as such.
 * **Certificate signatures (.p12/.pfx):** Optionally sign with your own certificate. The file and password are used in
   memory for one save and never stored. Adobe Acrobat and other PDF readers can check this kind of signature.
-* **Hardware key (experimental, browsers only):** On browsers with a platform authenticator (Face ID, Touch ID,
-  Windows Hello, a security key), the app can add a WebAuthn assertion to the file. The Android app cannot use it, and
-  checking these assertions is still being fixed, so do not rely on it as proof.
 
 ### 🤝 Multi-Party Workflows
 

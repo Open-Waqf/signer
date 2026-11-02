@@ -1,10 +1,8 @@
-type HardwarePref = 'prompt' | 'always' | 'never';
 type UiMode = 'basic' | 'advanced';
 type ActiveSidebar = 'thumbnails' | 'annotations' | null;
 
 const KEYS = {
     lang: 'signer_lang',
-    hardwarePref: 'signer_hardware_pref',
     activeSidebar: 'signer_active_sidebar',
     uiMode: 'signer_ui_mode',
     userEmail: 'signer_user_email',
@@ -16,13 +14,6 @@ export const preferences = {
     },
     setLang(lang: string) {
         localStorage.setItem(KEYS.lang, lang);
-    },
-    getHardwarePref(): HardwarePref | null {
-        const value = localStorage.getItem(KEYS.hardwarePref);
-        return value === 'prompt' || value === 'always' || value === 'never' ? value : null;
-    },
-    setHardwarePref(value: HardwarePref) {
-        localStorage.setItem(KEYS.hardwarePref, value);
     },
     /** The saved sidebar choice; `fallback` when the user never chose. */
     getActiveSidebar(fallback: ActiveSidebar = 'thumbnails'): ActiveSidebar {
