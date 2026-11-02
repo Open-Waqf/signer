@@ -384,6 +384,8 @@ app-root {
     margin-top: 32px;
     display: flex;
     justify-content: center;
+    /* The links are 44 px touch targets: centre the dot on their text (bug P2). */
+    align-items: center;
     gap: 15px;
     font-size: 0.85rem;
 }

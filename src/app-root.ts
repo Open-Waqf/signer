@@ -840,7 +840,7 @@ export class AppRoot extends LitElement {
 
                         <div class="footer-links">
                             <button type="button" class="footer-link" data-testid="link-privacy" @click=${this.showPrivacy}>${i18n.t('privacyTitle')}</button>
-                            <span>•</span>
+                            <span aria-hidden="true">•</span>
                             <a href="mailto:${AppConfig.supportEmail}" class="footer-link">${i18n.t('contactUs')}</a>
                         </div>
 

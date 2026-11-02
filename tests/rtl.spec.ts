@@ -65,4 +65,20 @@ test.describe('13. Arabic, right to left @rtl-only', () => {
         await page.waitForTimeout(400); // let the slide-in finish
         await expectOnScreen(page, toast);
     });
+
+    test('13.5 Home footer: the dot between the two links is centred on their text (P2)', async ({page}) => {
+        await page.goto('/');
+        const centres = await page.evaluate(() => {
+            const row = document.querySelector('.footer-links')!;
+            const textCentre = (el: Element) => {
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                const r = range.getBoundingClientRect(); // where the text itself is drawn
+                return r.top + r.height / 2;
+            };
+            const [link, dot] = [row.querySelector('.footer-link')!, row.querySelector('span')!];
+            return {link: textCentre(link), dot: textCentre(dot)};
+        });
+        expect(Math.abs(centres.dot - centres.link)).toBeLessThan(3);
+    });
 });
