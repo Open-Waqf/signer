@@ -2183,3 +2183,48 @@ test.describe('11. Scanned PDFs', () => {
         }), {timeout: 15000}).toBeGreaterThan(1000);
     });
 });
+
+// ---------------------------------------------------------------------------
+// 14. Share App (home screen)
+// ---------------------------------------------------------------------------
+test.describe('14. Share App', () => {
+    test.use({permissions: ['clipboard-read', 'clipboard-write']});
+    const LINK = 'https://sign.open-waqf.org/?lang=en';
+
+    test('14.1 With a share sheet, Share App opens it and shows no toast (P1)', async ({page}) => {
+        await page.addInitScript(() => {
+            (window as any).__shared = [];
+            Object.defineProperty(navigator, 'share', {configurable: true, value: async (d: any) => { (window as any).__shared.push(d); }});
+        });
+        await page.goto('/');
+        await page.getByTestId('btn-share-app').click();
+        await expect.poll(() => page.evaluate(() => (window as any).__shared.length)).toBe(1);
+        expect(await page.evaluate(() => (window as any).__shared[0].url)).toBe(LINK);
+        await page.waitForTimeout(400);
+        // Count once, no retrying: a toast disappears by itself after ~3 s.
+        expect(await page.locator('.toast.show').count()).toBe(0);
+    });
+
+    test('14.2 Without a share sheet, Share App copies the link and says so', async ({page}) => {
+        await page.addInitScript(() => {
+            Object.defineProperty(navigator, 'share', {configurable: true, value: undefined});
+        });
+        await page.goto('/');
+        await page.getByTestId('btn-share-app').click();
+        await expect(page.locator('.toast.show')).toContainText('Link copied');
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(LINK);
+    });
+
+    test('14.3 Closing the share sheet does nothing else', async ({page}) => {
+        await page.addInitScript(() => {
+            Object.defineProperty(navigator, 'share', {configurable: true, value: async () => {
+                throw new DOMException('Share canceled', 'AbortError');
+            }});
+        });
+        await page.goto('/');
+        await page.getByTestId('btn-share-app').click();
+        await page.waitForTimeout(400);
+        // Count once, no retrying: a toast disappears by itself after ~3 s.
+        expect(await page.locator('.toast.show').count()).toBe(0);
+    });
+});

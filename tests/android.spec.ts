@@ -125,6 +125,17 @@ test.describe('12. Android app (fake Android bridge) @phone', () => {
         await expect(page.getByTestId('btn-exit')).toBeVisible();
         expect(await openDialogs(page)).toEqual([]);
     });
+    test('12.14 Share App opens the Android share sheet with the website link, no toast', async ({page}) => {
+        await fakeAndroid(page);
+        await page.goto('/');
+        await page.getByTestId('btn-share-app').click();
+        await expect.poll(async () => (await nativeCalls(page, 'Share')).length).toBe(1);
+        expect((await nativeCalls(page, 'Share'))[0].options.url).toBe('https://sign.open-waqf.org/?lang=en');
+        await page.waitForTimeout(400);
+        // Count once, no retrying: a toast disappears by itself after ~3 s.
+        expect(await page.locator('.toast.show').count()).toBe(0);
+    });
+
     test('12.10 Back with the leave-without-saving question open closes the question', async ({page}) => {
         await fakeAndroid(page);
         await openSample(page);

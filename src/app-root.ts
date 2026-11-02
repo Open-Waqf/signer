@@ -13,6 +13,7 @@ import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
 import {ICONS} from './lib/icons';
 import QRCode from 'qrcode';
 import {StatusBar, Style} from '@capacitor/status-bar';
+import {Share} from '@capacitor/share';
 import {IncomingFileController} from './features/intake/incoming-file-controller';
 import {VerifyController} from './features/verify/verify-controller';
 import {
@@ -251,6 +252,35 @@ export class AppRoot extends LitElement {
         this.integrityStatus = 'idle';
         this.chainStatus = initialChainStatus();
         this.hasStandardSignature = false;
+    }
+
+    // Share App: the system share sheet where there is one (Android app, phone browsers);
+    // otherwise copy the link and say so. Copying on Android 13+ also showed the phone's own
+    // "copied" popup next to ours (bug P1).
+    private async shareApp() {
+        const url = `${AppConfig.website}/?lang=${i18n.lang}`;
+        const payload = {title: i18n.t('appTitle'), text: i18n.t('tagline'), url};
+        try {
+            if (isNativePlatform()) {
+                await Share.share({...payload, dialogTitle: i18n.t('shareApp')});
+                return;
+            }
+            if (typeof navigator.share === 'function') {
+                await navigator.share(payload);
+                return;
+            }
+        } catch (e) {
+            const err = e as Error;
+            // The user closed the share sheet: nothing else to do.
+            if (err?.name === 'AbortError' || /cancel/i.test(String(err?.message))) return;
+            // Anything else: fall back to copying the link.
+        }
+        try {
+            await navigator.clipboard.writeText(url);
+            this.showToast(i18n.t('linkCopied'));
+        } catch {
+            this.showToast(url); // copying blocked: at least show the link
+        }
     }
 
     private exitToHome() {
@@ -814,10 +844,7 @@ export class AppRoot extends LitElement {
                             <a href="mailto:${AppConfig.supportEmail}" class="footer-link">${i18n.t('contactUs')}</a>
                         </div>
 
-                        <button class="btn share-app-btn" data-testid="btn-share-app" @click=${() => {
-                            navigator.clipboard.writeText(`${AppConfig.website}/?lang=${i18n.lang}`);
-                            this.showToast(i18n.t('linkCopied'));
-                        }}>
+                        <button class="btn share-app-btn" data-testid="btn-share-app" @click=${() => this.shareApp()}>
                             ${ICONS.link} ${i18n.t('shareApp')}
                         </button>
                     </div>

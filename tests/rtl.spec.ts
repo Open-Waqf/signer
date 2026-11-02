@@ -54,6 +54,10 @@ test.describe('13. Arabic, right to left @rtl-only', () => {
     });
 
     test('13.4 A toast (Share App, "link copied") is on screen', async ({page}) => {
+        // No share sheet here, so Share App copies the link and shows a toast.
+        await page.addInitScript(() => {
+            Object.defineProperty(navigator, 'share', {configurable: true, value: undefined});
+        });
         await page.goto('/');
         await page.getByTestId('btn-share-app').click();
         const toast = page.locator('.toast.show');
