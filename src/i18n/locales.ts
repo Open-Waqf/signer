@@ -96,8 +96,8 @@ export const resources = {
         sharedOpenFailed: "Failed to open shared PDF.",
 
         addIdentity: "+ Identity",
-        identityPrompt: "Enter your email address to claim this signature:",
-        signedBy: "Digitally Signed by",
+        identityPrompt: "Enter your name or email (shown on the page):",
+        signedBy: "Signed by",
 
         // The Email Logic
         emailSubject: "Signature Receipt for Document: {id}",
@@ -119,8 +119,8 @@ export const resources = {
         verifyingBtn: "Verifying…",
         strictVerified: "✅ <strong>Integrity Verified.</strong> Exact bytes match the sender hash.",
         strictMismatch: "❌ <strong>Integrity Failed.</strong> The file bytes do not match the sender hash.",
-        chainValidated: "✅ <strong>Cryptographic Chain Validated.</strong> All {count} signer links verified locally.",
-        chainValidatedPreliminary: "✅ <strong>Cryptographic Chain Validated (Preliminary).</strong> All {count} signer links verified locally. Complete strict hash verification to confirm exact file integrity.",
+        chainValidated: "ℹ️ <strong>Signer history found ({count} signers).</strong> It is consistent, but anyone could write such a history, so it is not proof. The fingerprint check above is the proof.",
+        chainValidatedPreliminary: "ℹ️ <strong>Signer history found ({count} signers).</strong> It shows who signed, but it is not proof that the file is unchanged. Paste the sender's fingerprint above to check that.",
         chainFailed: "❌ <strong>Chain validation failed.</strong> Break detected at signer {index}.",
         standardSignatureTitle: "Standard Digital Signature",
         standardSignatureDetectedBanner: "🔏 Standard Digital Signature Detected. This document contains a traditional cryptographic signature (e.g., .p12/.pfx). To cryptographically verify the signer's identity and certificate authority, please open this file in standard PDF software like Adobe Acrobat.",
@@ -312,8 +312,8 @@ export const resources = {
         errorReadingFile: "خطأ في قراءة الملف.",
         sharedOpenFailed: "تعذر فتح ملف PDF المُشارك.",
         addIdentity: "+ الهوية",
-        identityPrompt: "أدخل بريدك الإلكتروني لتوثيق هذا التوقيع:",
-        signedBy: "موقع رقمياً بواسطة",
+        identityPrompt: "أدخل اسمك أو بريدك الإلكتروني (سيظهر على الصفحة):",
+        signedBy: "وقّعه",
 
         emailSubject: "إيصال توقيع للمستند: {id}",
 
@@ -334,8 +334,8 @@ export const resources = {
         verifyingBtn: "جارٍ التحقق…",
         strictVerified: "✅ <strong>تم تأكيد النزاهة.</strong> البصمة مطابقة تمامًا لبصمة المرسل.",
         strictMismatch: "❌ <strong>فشل التحقق الصارم.</strong> البصمة لا تطابق بصمة المرسل.",
-        chainValidated: "✅ <strong>تم التحقق من السلسلة التشفيرية.</strong> تم التحقق محليًا من جميع روابط الموقّعين ({count}).",
-        chainValidatedPreliminary: "✅ <strong>تم التحقق من السلسلة التشفيرية (مبدئيًا).</strong> تم التحقق محليًا من جميع روابط الموقّعين ({count}). أكمل التحقق الصارم بالبصمة لتأكيد سلامة الملف بالكامل.",
+        chainValidated: "ℹ️ <strong>تم العثور على سجل الموقّعين ({count}).</strong> السجل متّسق، لكن يمكن لأي شخص كتابة سجل كهذا، فهو ليس دليلًا. فحص البصمة أعلاه هو الدليل.",
+        chainValidatedPreliminary: "ℹ️ <strong>تم العثور على سجل الموقّعين ({count}).</strong> يُظهر من وقّع، لكنه ليس دليلًا على أن الملف لم يتغيّر. الصق بصمة المرسل أعلاه للتحقق من ذلك.",
         chainFailed: "❌ <strong>فشل تحقق السلسلة.</strong> تم اكتشاف انقطاع عند الموقّع {index}.",
         standardSignatureTitle: "توقيع رقمي قياسي",
         standardSignatureDetectedBanner: "🔏 تم اكتشاف توقيع رقمي قياسي. يحتوي هذا المستند على توقيع تشفيري تقليدي (مثل ‎.p12/.pfx). للتحقق تشفيريًا من هوية الموقّع وسلطة الشهادة، يرجى فتح الملف في برنامج PDF قياسي مثل Adobe Acrobat.",
@@ -526,8 +526,8 @@ export const resources = {
         errorReadingFile: "Erreur de lecture du fichier.",
         sharedOpenFailed: "Impossible d'ouvrir le PDF partagé.",
         addIdentity: "+ Identité",
-        identityPrompt: "Entrez votre email pour certifier cette signature :",
-        signedBy: "Signé numériquement par",
+        identityPrompt: "Entrez votre nom ou votre email (affiché sur la page) :",
+        signedBy: "Signé par",
 
         emailSubject: "Reçu de signature pour : {id}",
 
@@ -548,8 +548,8 @@ export const resources = {
         verifyingBtn: "Vérification…",
         strictVerified: "✅ <strong>Intégrité vérifiée.</strong> Les octets correspondent exactement au hachage expéditeur.",
         strictMismatch: "❌ <strong>Échec de l'intégrité.</strong> Les octets du fichier ne correspondent pas au hachage expéditeur.",
-        chainValidated: "✅ <strong>Chaîne cryptographique validée.</strong> Les {count} liens signataires sont vérifiés localement.",
-        chainValidatedPreliminary: "✅ <strong>Chaîne cryptographique validée (préliminaire).</strong> Les {count} liens signataires sont vérifiés localement. Effectuez la vérification stricte du hachage pour confirmer l'intégrité exacte du fichier.",
+        chainValidated: "ℹ️ <strong>Historique des signataires trouvé ({count}).</strong> Il est cohérent, mais n'importe qui pourrait écrire un tel historique : ce n'est pas une preuve. La vérification de l'empreinte ci-dessus est la preuve.",
+        chainValidatedPreliminary: "ℹ️ <strong>Historique des signataires trouvé ({count}).</strong> Il indique qui a signé, mais ne prouve pas que le fichier est intact. Collez l'empreinte de l'expéditeur ci-dessus pour le vérifier.",
         chainFailed: "❌ <strong>Échec de la chaîne.</strong> Rupture détectée au signataire {index}.",
         standardSignatureTitle: "Signature numérique standard",
         standardSignatureDetectedBanner: "🔏 Signature numérique standard détectée. Ce document contient une signature cryptographique traditionnelle (ex. .p12/.pfx). Pour vérifier cryptographiquement l'identité du signataire et l'autorité du certificat, ouvrez ce fichier dans un lecteur PDF standard comme Adobe Acrobat.",

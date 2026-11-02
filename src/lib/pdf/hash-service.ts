@@ -1,6 +1,20 @@
 let HashWorkerConstructor: any;
 let worker: Worker | null = null;
 const pendingRequests = new Map<string, { resolve: (val: string) => void; reject: (err: any) => void }>();
+// A worker that crashes or never answers used to leave Save spinning forever. After this
+// long (big files on slow phones take a while) the job falls back to the main thread.
+const WORKER_TIMEOUT_MS = 120_000;
+
+// Stop a broken worker: fail its pending jobs (they fall back to the main thread) and let
+// the next job start a fresh one.
+function dropWorker(reason: string) {
+    if (worker) {
+        try { worker.terminate(); } catch { /* ignore */ }
+        worker = null;
+    }
+    for (const pending of pendingRequests.values()) pending.reject(new Error(reason));
+    pendingRequests.clear();
+}
 
 async function getWorker(): Promise<Worker | null> {
     if (typeof Worker === 'undefined') return null;
@@ -23,6 +37,11 @@ async function getWorker(): Promise<Worker | null> {
                 if (error) pending.reject(new Error(error));
                 else pending.resolve(hash);
             };
+            worker!.onerror = (event: ErrorEvent) => {
+                console.error('[OWQ][WorkerError]', event.message);
+                event.preventDefault();
+                dropWorker(`hash worker failed: ${event.message || 'unknown error'}`);
+            };
         } catch (e) {
             console.error('[OWQ][WorkerLoadError]', e);
             return null;
@@ -31,33 +50,45 @@ async function getWorker(): Promise<Worker | null> {
     return worker;
 }
 
-async function runInWorker(type: 'CALCULATE_SHA256' | 'CALCULATE_DETERMINISTIC_HASH', data: Uint8Array): Promise<string> {
-    const w = await getWorker();
-    
-    if (!w) {
-        if (type === 'CALCULATE_SHA256') {
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data as any);
-            return Array.from(new Uint8Array(hashBuffer))
-                .map((b) => b.toString(16).padStart(2, '0'))
-                .join('');
-        }
-        const {PDFDocument} = await import('pdf-lib');
-        const pdfDoc = await PDFDocument.load(data, {updateMetadata: false});
-        pdfDoc.setSubject('');
-        pdfDoc.setCreationDate(new Date(0));
-        pdfDoc.setModificationDate(new Date(0));
-        const normalized = await pdfDoc.save();
-        const hashBuffer = await crypto.subtle.digest('SHA-256', normalized as any);
+async function runOnMainThread(type: 'CALCULATE_SHA256' | 'CALCULATE_DETERMINISTIC_HASH', data: Uint8Array): Promise<string> {
+    if (type === 'CALCULATE_SHA256') {
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data as any);
         return Array.from(new Uint8Array(hashBuffer))
             .map((b) => b.toString(16).padStart(2, '0'))
             .join('');
     }
+    const {PDFDocument} = await import('pdf-lib');
+    const pdfDoc = await PDFDocument.load(data, {updateMetadata: false});
+    pdfDoc.setSubject('');
+    pdfDoc.setCreationDate(new Date(0));
+    pdfDoc.setModificationDate(new Date(0));
+    const normalized = await pdfDoc.save();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', normalized as any);
+    return Array.from(new Uint8Array(hashBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+async function runInWorker(type: 'CALCULATE_SHA256' | 'CALCULATE_DETERMINISTIC_HASH', data: Uint8Array): Promise<string> {
+    const w = await getWorker();
+    if (!w) return runOnMainThread(type, data);
 
     const id = crypto.randomUUID();
-    return new Promise((resolve, reject) => {
-        pendingRequests.set(id, {resolve, reject});
-        w.postMessage({id, type, data});
-    });
+    try {
+        return await new Promise<string>((resolve, reject) => {
+            const timer = setTimeout(() => dropWorker('hash worker timed out'), WORKER_TIMEOUT_MS);
+            pendingRequests.set(id, {
+                resolve: (v) => { clearTimeout(timer); resolve(v); },
+                reject: (e) => { clearTimeout(timer); reject(e); },
+            });
+            w.postMessage({id, type, data});
+        });
+    } catch (error) {
+        // A real hashing error from the worker would fail here too; the main thread then gives
+        // the same answer or the same error, so the result never depends on the worker.
+        console.warn('[OWQ][WorkerFallback]', error);
+        return runOnMainThread(type, data);
+    }
 }
 
 export async function generateHashID(text: string): Promise<string> {

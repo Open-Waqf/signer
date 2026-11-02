@@ -192,7 +192,12 @@ export async function appendAuditPage(
     y -= 30;
 
     if (validationLog) {
-        await drawLabel(`SECURITY ALERT: ${validationLog}`, 50, y, 9, true, rgb(0.8, 0.1, 0.1));
+        // The current signer's record says whether the handover check passed. A passed check
+        // used to be printed in red as "SECURITY ALERT" too, which frightened the reader.
+        const current = signatures[signatures.length - 1];
+        const passed = !!current?.previousHashManuallyVerified;
+        await drawLabel(`${passed ? 'Handover check' : 'SECURITY ALERT'}: ${validationLog}`, 50, y, 9, true,
+            passed ? rgb(0.1, 0.5, 0.2) : rgb(0.8, 0.1, 0.1));
         y -= 20;
     }
 
