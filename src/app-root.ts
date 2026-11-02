@@ -27,6 +27,7 @@ import {groupedHashPreview} from './domain/hash';
 import {preferences} from './lib/preferences';
 import {isNativeOrSmallViewport, isNativePlatform} from './lib/runtime-platform';
 import {requestStoragePersistence} from './lib/storage-persistence';
+import {clearDraft, readDraft, readDraftInfo} from './lib/draft-store';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -49,6 +50,8 @@ export class AppRoot extends LitElement {
     private logoTapTimeout: any = null;
     @state() showExitConfirm = false;
     @state() showPrivacyModal = false;
+    /** An unfinished document kept on this device (step 3), offered on the home screen. */
+    @state() draftInfo: {name: string; count: number} | null = null;
 
 
     private updateSW: ((reload: boolean) => void) | undefined;
@@ -127,6 +130,7 @@ export class AppRoot extends LitElement {
             window.history.replaceState({}, document.title, nextUrl);
         }
         const id = params.get('id');
+        void this.refreshDraftInfo();
 
         if (id) {
             this.verifyMode = true;
@@ -152,10 +156,12 @@ export class AppRoot extends LitElement {
         this.incomingFileController.setupIncomingNativeFileRouting();
 
         this.backButtonListener = App.addListener('backButton', () => this.handleBackButton());
+        window.addEventListener('beforeunload', this.warnBeforeLeaving);
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        window.removeEventListener('beforeunload', this.warnBeforeLeaving);
         window.removeEventListener('lang-changed', this.onLangChanged);
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.removeEventListener('message', this.incomingFileController.serviceWorkerMessageHandler);
@@ -232,6 +238,67 @@ export class AppRoot extends LitElement {
     private exitToHome() {
         this.workspace.reset();
         this.mode = 'home';
+        void this.workspace.draftIdle().then(() => this.refreshDraftInfo());
+    }
+
+    // Web only: closing or reloading the tab with unsaved changes asks first.
+    // (The draft would bring the work back, but a question is cheaper than a surprise.)
+    private warnBeforeLeaving = (e: BeforeUnloadEvent) => {
+        if (isNativePlatform() || this.mode !== 'workspace' || !this.workspace?.isDirty) return;
+        e.preventDefault();
+        e.returnValue = '';
+    };
+
+    private async refreshDraftInfo() {
+        this.draftInfo = await readDraftInfo();
+    }
+
+    private async continueDraft() {
+        this.setLoading(true);
+        try {
+            const draft = await readDraft();
+            if (!draft) throw new Error('No draft');
+            this.verifyMode = false;
+            this.mode = 'workspace';
+            const workspace = await this.resolveWorkspace();
+            if (!workspace) throw new Error('Workspace component not ready');
+            await workspace.restoreDraft(draft);
+            this.draftInfo = null;
+        } catch (e) {
+            console.error('Could not open the draft:', this.serializeError(e), e);
+            this.showToast(i18n.t('draftOpenFailed'));
+            this.mode = 'home';
+            await clearDraft().catch(() => undefined);
+            this.draftInfo = null;
+        } finally {
+            this.setLoading(false);
+        }
+    }
+
+    private async discardDraft() {
+        await clearDraft().catch(() => undefined);
+        this.draftInfo = null;
+    }
+
+    private renderDraftCard() {
+        if (!this.draftInfo || this.verifyMode) return '';
+        return html`
+            <div class="draft-card" id="draft-card" data-testid="draft-card" role="status">
+                <div class="draft-card-text">
+                    <strong>${i18n.t('draftTitle')}</strong>
+                    <span class="draft-card-name" dir="auto">${this.draftInfo.name}</span>
+                    <span class="sub">${i18n.t('draftItems').replace('{count}', String(this.draftInfo.count))}</span>
+                </div>
+                <div class="draft-card-actions">
+                    <button class="btn btn-primary" id="btn-draft-continue" data-testid="btn-draft-continue" @click=${this.continueDraft}>
+                        ${i18n.t('draftContinue')}
+                    </button>
+                    <button class="btn" id="btn-draft-discard" data-testid="btn-draft-discard" @click=${this.discardDraft}>
+                        ${i18n.t('draftDiscard')}
+                    </button>
+                </div>
+            </div>
+        `;
     }
 
     private closeSignatureModalIfOpen() {
@@ -423,7 +490,7 @@ export class AppRoot extends LitElement {
     clearAppCache() {
         if (confirm(i18n.t('confirmClear'))) {
             preferences.clearAll();
-            window.location.reload();
+            void clearDraft().catch(() => undefined).finally(() => window.location.reload());
         }
     }
 
@@ -519,6 +586,8 @@ export class AppRoot extends LitElement {
                         <p class="sub hero-subtitle">v${packageJson.version} • ${i18n.t('tagline')}</p>
 
                         ${this.renderModeToggle()}
+
+                        ${this.renderDraftCard()}
 
                         <div id="drop-area" data-testid="drop-area" class="drop-area-visual" @click=${() => this.openFile('home-drop')}>
                             <button class="btn btn-primary" data-testid="btn-select-file">
@@ -757,7 +826,7 @@ export class AppRoot extends LitElement {
                         <button class="btn modal-btn-flex" data-testid="btn-cancel-exit" @click=${() => this.showExitConfirm = false}>
                             ${i18n.t('cancel')}
                         </button>
-                        <button class="btn btn-danger modal-btn-flex" data-testid="btn-confirm-exit" @click=${() => {
+                        <button class="btn btn-danger modal-btn-flex" id="btn-confirm-exit" data-testid="btn-confirm-exit" @click=${() => {
                             this.showExitConfirm = false;
                             this.exitToHome();
                         }}>${i18n.t('exitBtn')}

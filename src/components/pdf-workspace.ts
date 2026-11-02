@@ -11,6 +11,7 @@ import {ICONS} from '../lib/icons';
 import {sharedStyles} from '../styles/shared-styles';
 import {LANGUAGES} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
+import {clearDraft, writeDraftPdf, writeDraftState, type Draft, type DraftState} from '../lib/draft-store';
 import {preferences} from '../lib/preferences';
 import {
     applyAnnotationStyle,
@@ -85,6 +86,16 @@ export class PdfWorkspace extends LitElement {
     private pendingCertificateName = '';
 
     @state() public isDirty = false;
+
+    // Draft autosave (step 3): unfinished work is kept on the device until Finish or leave.
+    private draftTimer: number | null = null;
+    /** This editor wrote the stored draft (so leaving or finishing may delete it). */
+    private draftOwned = false;
+    /** The PDF of the open document is already in the draft store. */
+    private draftPdfStored = false;
+    private restoringDraft = false;
+    /** Draft writes and deletes run one after another, never at the same time. */
+    private draftQueue: Promise<unknown> = Promise.resolve();
     @state() isRendering = false;
     private touchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1188,6 +1199,8 @@ export class PdfWorkspace extends LitElement {
         window.addEventListener('touchend', this.stopInteraction);
         window.addEventListener('touchcancel', this.stopInteraction);
         window.addEventListener('keydown', this.handleKeyboard);
+        document.addEventListener('visibilitychange', this.flushDraftWhenHidden);
+        window.addEventListener('pagehide', this.flushDraftWhenHidden);
     }
 
     disconnectedCallback() {
@@ -1202,6 +1215,93 @@ export class PdfWorkspace extends LitElement {
         window.removeEventListener('touchend', this.stopInteraction);
         window.removeEventListener('touchcancel', this.stopInteraction);
         window.removeEventListener('keydown', this.handleKeyboard);
+        document.removeEventListener('visibilitychange', this.flushDraftWhenHidden);
+        window.removeEventListener('pagehide', this.flushDraftWhenHidden);
+    }
+
+    private queueDraft(work: () => Promise<unknown>) {
+        this.draftQueue = this.draftQueue.then(work).catch((e) => console.warn('[OWQ][DRAFT]', e));
+        return this.draftQueue;
+    }
+
+    /** Resolves when every pending draft write or delete is done. */
+    public draftIdle(): Promise<void> {
+        return this.draftQueue.then(() => undefined);
+    }
+
+    private scheduleDraftSave() {
+        if (this.restoringDraft || !this.pdfName || !this.loadedBytes) return;
+        if (this.draftTimer) clearTimeout(this.draftTimer);
+        this.draftTimer = null;
+        if (this.isDirty && this.hasEdits) {
+            this.draftTimer = window.setTimeout(() => {
+                this.draftTimer = null;
+                void this.saveDraftNow();
+            }, 500);
+        } else if (this.draftOwned) {
+            // Finished (saved) or every item removed: nothing left to keep.
+            this.draftOwned = false;
+            this.draftPdfStored = false;
+            void this.queueDraft(() => clearDraft());
+        }
+    }
+
+    private saveDraftNow() {
+        if (!this.pdfName || !this.loadedBytes?.byteLength || !this.isDirty || !this.hasEdits) return this.draftQueue;
+        const name = this.pdfName;
+        const bytes = this.loadedBytes;
+        const state: DraftState = {
+            version: 1,
+            name,
+            savedAt: new Date().toISOString(),
+            annotations: this.annotations,
+            includeAudit: this.includeAudit,
+            includeFooter: this.includeFooter,
+            validationMsg: this.validationMsg,
+            isVerified: this.isVerified,
+            previousHashManuallyVerified: this.previousHashManuallyVerified,
+            handoverOpen: this.showHandoverModal,
+        };
+        const needPdf = !this.draftPdfStored;
+        this.draftPdfStored = true;
+        this.draftOwned = true;
+        return this.queueDraft(async () => {
+            if (needPdf) await writeDraftPdf({name, bytes});
+            await writeDraftState(state);
+        });
+    }
+
+    // Android may close the app soon after it goes to the background: save at once.
+    private flushDraftWhenHidden = () => {
+        if (document.visibilityState !== 'hidden' || !this.draftTimer) return;
+        clearTimeout(this.draftTimer);
+        this.draftTimer = null;
+        void this.saveDraftNow();
+    };
+
+    /** Open a stored draft: the same PDF with the items and handover answer it had. */
+    public async restoreDraft(draft: Draft) {
+        this.restoringDraft = true;
+        try {
+            await this.loadPdf(draft.pdf.bytes, draft.pdf.name);
+            const st = draft.state;
+            this.annotations = st.annotations;
+            this.includeAudit = st.includeAudit;
+            this.includeFooter = st.includeFooter;
+            this.validationMsg = st.validationMsg;
+            this.isVerified = st.isVerified;
+            this.previousHashManuallyVerified = st.previousHashManuallyVerified;
+            if (!st.handoverOpen) {
+                this.showHandoverModal = false;
+                this.handoverResult = 'idle';
+            }
+            this.isDirty = true;
+            this.draftOwned = true;
+            this.draftPdfStored = true;
+            await this.updateComplete;
+        } finally {
+            this.restoringDraft = false;
+        }
     }
 
     handleKeyboard = (e: KeyboardEvent) => {
@@ -1312,6 +1412,14 @@ export class PdfWorkspace extends LitElement {
     }
 
     async loadPdf(file: Uint8Array, name: string) {
+        if (this.draftTimer) {
+            // Keep the previous document's last edits before switching (e.g. "Open with").
+            clearTimeout(this.draftTimer);
+            this.draftTimer = null;
+            void this.saveDraftNow();
+        }
+        this.draftOwned = false; // the stored draft (if any) belongs to the previous document
+        this.draftPdfStored = false;
         this.closeAllDialogs(); // a new document never inherits the previous one's dialogs
         pdfEngine.destroy();
         this.resetThumbnailState();
@@ -1497,6 +1605,10 @@ export class PdfWorkspace extends LitElement {
 
     updated(changed: Map<string, unknown>) {
         this.keepStylePopupsOnScreen();
+        if (['annotations', 'includeAudit', 'includeFooter', 'isDirty', 'validationMsg', 'showHandoverModal']
+            .some((key) => changed.has(key))) {
+            this.scheduleDraftSave();
+        }
         if (changed.has('showProofModal') && this.showProofModal) {
             // The verification details always start closed when the Saved sheet opens.
             const details = this.shadowRoot?.querySelector<HTMLDetailsElement>('.saved-details');
@@ -2235,6 +2347,12 @@ export class PdfWorkspace extends LitElement {
     }
 
     public reset() {
+        // Leaving the editor (after Finish, or "leave without saving"): the draft goes too.
+        if (this.draftTimer) clearTimeout(this.draftTimer);
+        this.draftTimer = null;
+        if (this.draftOwned) void this.queueDraft(() => clearDraft());
+        this.draftOwned = false;
+        this.draftPdfStored = false;
         this.closeAllDialogs();
         pdfEngine.destroy();
         this.resetThumbnailState();

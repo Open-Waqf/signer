@@ -285,6 +285,45 @@ app-root {
     margin-top: 15px;
 }
 
+/* Unfinished document kept on this device (draft autosave) */
+.draft-card {
+    width: 100%;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: start;
+}
+
+.draft-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.draft-card-name {
+    overflow-wrap: anywhere;
+}
+
+.draft-card-text .sub {
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.draft-card-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.draft-card-actions .btn {
+    flex: 1;
+}
+
 .share-app-btn {
     margin-top: 20px;
     width: 100%;

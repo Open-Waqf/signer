@@ -1,0 +1,30 @@
+# Unfinished work survives Android closing the app (draft autosave, step 3).
+# Home sends the app to the background (the draft is saved at once), then the app is
+# stopped and started again: the home screen offers to continue.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "btn-sample"
+- tapOn:
+    id: "m-btn-add-date"
+- pressKey: home
+- stopApp
+- launchApp
+- assertVisible:
+    id: "draft-card"
+- tapOn:
+    id: "btn-draft-continue"
+- assertVisible:
+    id: "m-btn-finish"
+    enabled: true
+# Leaving without saving removes the draft.
+- tapOn:
+    id: "btn-exit"
+- tapOn:
+    id: "btn-confirm-exit"
+- assertVisible:
+    id: "btn-sample"
+- assertNotVisible:
+    id: "draft-card"
