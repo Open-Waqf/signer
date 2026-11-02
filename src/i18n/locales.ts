@@ -16,8 +16,8 @@ export const resources = {
         zoomOut: "Zoom Out",
         addSig: "+ Signature",
         addInitials: "+ Initials",
-        addDate: "+ Date",
-        addStamp: "+ Stamp", // ✨ NEW
+        addDate: "+\u00A0Date",
+        addStamp: "+\u00A0Stamp", // "+" never alone on a line
         stampLibraryTitle: "Stamp & Logo Presets",
         stampLibraryHelp: "Upload once, then reuse your stamps locally offline.",
         uploadStamp: "Upload Stamp",
@@ -222,8 +222,8 @@ export const resources = {
         zoomOut: "تصغير",
         addSig: "+ توقيع",
         addInitials: "+ أحرف",
-        addDate: "+ تاريخ",
-        addStamp: "+ ختم", // ✨ NEW
+        addDate: "+\u00A0تاريخ",
+        addStamp: "+\u00A0ختم",
         stampLibraryTitle: "قوالب الأختام والشعارات",
         stampLibraryHelp: "ارفع الختم مرة واحدة ثم أعد استخدامه محليًا بدون إنترنت.",
         uploadStamp: "رفع ختم",
@@ -425,8 +425,8 @@ export const resources = {
         zoomOut: "Zoom Arrière",
         addSig: "+ Signature",
         addInitials: "+ Initiales",
-        addDate: "+ Date",
-        addStamp: "+ Tampon", // ✨ NEW
+        addDate: "+\u00A0Date",
+        addStamp: "+\u00A0Tampon",
         stampLibraryTitle: "Préréglages Tampon & Logo",
         stampLibraryHelp: "Importez une fois, puis réutilisez vos tampons localement hors ligne.",
         uploadStamp: "Importer un tampon",

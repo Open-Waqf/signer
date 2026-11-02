@@ -1,4 +1,4 @@
-import {expect, test} from '@playwright/test';
+import {devices, expect, test} from '@playwright/test';
 import {generateTestPDF} from './utils';
 import {tid} from './support/ui';
 import {PDFDocument} from 'pdf-lib';
@@ -772,18 +772,13 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
     });
 
     test('6.2 Stamp presets persist across reload via IndexedDB @rtl', async ({page}) => {
-        const ensureAdvancedToolsVisible = async () => {
-            if (await tid(page, 'btn-add-stamp').count()) return;
-            await tid(page, 'btn-toggle-advanced').click();
-            await expect(tid(page, 'btn-add-stamp')).toBeVisible();
-        };
-
         await page.goto('/');
         await page.getByTestId('btn-sample').click();
         await expect(page.locator('pdf-workspace')).toBeVisible();
 
-        await expect(tid(page, 'btn-add-stamp')).toHaveCount(0);
-        await ensureAdvancedToolsVisible();
+        // The stamp is a basic tool: no "More tools" needed.
+        await expect(tid(page, 'btn-add-stamp')).toBeVisible();
+        await expect(tid(page, 'btn-add-initials')).toHaveCount(0);
 
         await tid(page, 'btn-add-stamp').click();
         await expect(page.getByTestId('stamp-library-modal')).toBeVisible();
@@ -811,7 +806,6 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.reload();
         await page.getByTestId('btn-sample').click();
         await expect(page.locator('pdf-workspace')).toBeVisible();
-        await ensureAdvancedToolsVisible();
         await tid(page, 'btn-add-stamp').click();
         await expect(page.locator('[data-testid^="stamp-preset-"]')).toHaveCount(1);
     });
@@ -1222,7 +1216,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('btn-sample').click();
         await expect(page.getByTestId('btn-exit')).toBeVisible();
         await tid(page, 'btn-toggle-advanced').click();
-        await expect(tid(page, 'btn-add-stamp')).toBeVisible();
+        await expect(tid(page, 'btn-add-initials')).toBeVisible();
         expect(await page.locator('[data-testid$="btn-hw-pref"]').count()).toBe(0);
 
         await tid(page, 'btn-add-date').click();
@@ -2285,6 +2279,31 @@ test.describe('15. Phone editor layout @phone', () => {
             return row.scrollWidth <= row.clientWidth + 1;
         });
         expect(fits).toBe(true);
+    });
+
+    test('15.7 The bottom bar (Sign, Date, Stamp, More tools, Finish) fits a 360 px phone in every language', async ({browser}) => {
+        for (const locale of ['en', 'fr', 'ar']) {
+            const ctx = await browser.newContext({...devices['Pixel 5'], viewport: {width: 360, height: 740}, locale});
+            const page = await ctx.newPage();
+            await page.goto('/');
+            await page.getByTestId('btn-sample').click();
+            await expect(page.getByTestId('btn-exit')).toBeVisible();
+            await expect(page.getByTestId('m-btn-add-stamp'), `${locale}: stamp is a basic tool`).toBeVisible();
+            const bar = await page.locator('pdf-workspace').evaluate((el) => {
+                const root = (el as HTMLElement).shadowRoot!;
+                const tools = root.querySelector('.bottom-tools') as HTMLElement;
+                const last = [...tools.querySelectorAll('button')].pop()!.getBoundingClientRect();
+                const finish = root.querySelector('.finish-bottom')!.getBoundingClientRect();
+                const rtl = getComputedStyle(tools).direction === 'rtl';
+                return {
+                    scrolls: tools.scrollWidth > tools.clientWidth + 1,
+                    overlap: rtl ? finish.right - last.left : last.right - finish.left,
+                };
+            });
+            expect(bar.scrolls, `${locale}: no hidden tools`).toBe(false);
+            expect(bar.overlap, `${locale}: Finish covers no tool`).toBeLessThanOrEqual(0);
+            await ctx.close();
+        }
     });
 
     test('15.5 The page is drawn sharp for the phone\'s pixel density', async ({page}) => {

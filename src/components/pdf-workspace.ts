@@ -459,9 +459,19 @@ export class PdfWorkspace extends LitElement {
         .btn-finish.finish-bottom {
             flex: none;
             min-height: 48px;
-            padding: 10px 18px;
+            padding: 10px 14px;
             border-radius: var(--radius-md);
             font-size: 1rem;
+        }
+
+        @media (max-width: 380px) {
+            /* Small phones: room for four labelled tools next to a long "Terminer". */
+            .btn-finish.finish-bottom {
+                padding: 10px;
+            }
+            .toolbar-bottom {
+                gap: 4px;
+            }
         }
 
         /* Saved sheet */
@@ -585,11 +595,12 @@ export class PdfWorkspace extends LitElement {
         .btn-tool {
             flex-direction: column;
             gap: 4px;
-            padding: 8px !important;
+            /* Four tools and Finish must fit a 360 px phone in every language (step 5). */
+            padding: 6px 4px !important;
             border: none !important;
             background: transparent !important;
             color: var(--text-sub) !important;
-            min-width: 64px;
+            min-width: 56px;
             transition: var(--transition-fast);
             border-radius: var(--radius-sm);
         }
@@ -604,6 +615,8 @@ export class PdfWorkspace extends LitElement {
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.02em;
+            text-align: center;
+            line-height: 1.2;
         }
 
         .btn-tool:active {
@@ -3031,6 +3044,11 @@ export class PdfWorkspace extends LitElement {
                             @click=${this.addDateStamp}>
                         ${ICONS.date}<span class="btn-label">${i18n.t('addDate')}</span>
                     </button>
+                    <!-- In the basic tools: in Morocco and the region a company stamp is part of signing. -->
+                    <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
+                            @click=${this.openStampLibrary}>
+                        ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
+                    </button>
                         <button data-testid="btn-toggle-advanced" class="btn"
                                 aria-label="${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}"
                                 @click=${this.toggleUIMode}>
@@ -3054,10 +3072,6 @@ export class PdfWorkspace extends LitElement {
                                 aria-label="${i18n.t('signWithCertificate')}"
                                 @click=${this.openCertificatePicker}>
                             ${ICONS.certificate}<span class="btn-label">${i18n.t('signWithCertificate')}</span>
-                        </button>
-                        <button data-testid="btn-add-stamp" class="btn" aria-label="${i18n.t('addStamp')}"
-                                @click=${this.openStampLibrary}>
-                            ${ICONS.stamp}<span class="btn-label">${i18n.t('addStamp')}</span>
                         </button>
                     ` : ''}
                 </div>
@@ -3122,6 +3136,10 @@ export class PdfWorkspace extends LitElement {
                         @click=${this.addDateStamp}>
                     ${ICONS.date} <span>${i18n.t('addDate')}</span>
                 </button>
+                <button id="m-btn-add-stamp" data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
+                        @click=${this.openStampLibrary}>
+                    ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
+                </button>
                 <button data-testid="m-btn-toggle-advanced" class="btn btn-tool"
                         aria-label="${this.isBasicMode ? i18n.t('moreTools') : i18n.t('lessTools')}"
                         @click=${this.toggleUIMode}>
@@ -3145,10 +3163,6 @@ export class PdfWorkspace extends LitElement {
                             aria-label="${i18n.t('signWithCertificate')}"
                             @click=${this.openCertificatePicker}>
                         ${ICONS.certificate} <span>${i18n.t('signWithCertificate')}</span>
-                    </button>
-                    <button data-testid="m-btn-add-stamp" class="btn btn-tool" aria-label="${i18n.t('addStamp')}"
-                            @click=${this.openStampLibrary}>
-                        ${ICONS.stamp} <span>${i18n.t('addStamp')}</span>
                     </button>
                 ` : ''}
                 </div>

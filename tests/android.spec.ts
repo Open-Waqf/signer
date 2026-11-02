@@ -117,7 +117,6 @@ test.describe('12. Android app (fake Android bridge) @phone', () => {
     test('12.9 Back with the stamp library open closes it and stays in the editor', async ({page}) => {
         await fakeAndroid(page);
         await openSample(page);
-        await tid(page, 'btn-toggle-advanced').click();
         await tid(page, 'btn-add-stamp').click();
         await expect(page.getByTestId('stamp-library-modal')).toBeVisible();
         await pressBack(page);
