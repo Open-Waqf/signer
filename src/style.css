@@ -811,6 +811,14 @@ app-root {
     bottom: 60px;
 }
 
+/* Phones: show toasts above the editor's bottom toolbar (about 80 px tall) and the
+   gesture bar, so they never cover Finish (bug N2). */
+@media (max-width: 768px) {
+    .toast.show {
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 92px);
+    }
+}
+
 /* Status Panels */
 .info-panel {
     background: var(--workspace-toolbar-gradient-end);

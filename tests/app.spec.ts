@@ -2083,6 +2083,31 @@ test.describe('10. Finish and Saved sheet', () => {
         expect(gap).toBeLessThanOrEqual(48 + 20);
     });
 
+    test('10.7 On a phone, a toast does not cover the bottom toolbar @phone', async ({page}) => {
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send('Emulation.setSafeAreaInsetsOverride', {insets: {top: 44, bottom: 48, left: 0, right: 0}});
+        const doc = await PDFDocument.create();
+        for (let i = 0; i < 3; i++) doc.addPage([595, 842]);
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({name: 'three.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await doc.save())});
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+
+        // "Apply to all pages" shows a toast ("Applied to 2 page(s)").
+        await tid(page, 'btn-add-date').click();
+        await page.locator('[data-testid^="annotation-"]').first().click();
+        await page.getByTestId('btn-apply-all').click();
+        const toast = page.locator('.toast.show');
+        await expect(toast).toBeVisible();
+        await page.waitForTimeout(400); // let the slide-in finish
+
+        const toastBox = (await toast.boundingBox())!;
+        const barTop = await page.locator('pdf-workspace').evaluate(
+            (el) => (el as HTMLElement).shadowRoot!.querySelector('.toolbar-bottom')!.getBoundingClientRect().top);
+        expect(toastBox.y + toastBox.height).toBeLessThanOrEqual(barTop);
+    });
+
     test('10.5 Finish with no new changes reopens the sheet without saving again @rtl', async ({page}) => {
         await openSample(page);
         await tid(page, 'btn-add-date').click();
