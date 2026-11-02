@@ -261,33 +261,6 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await expect(page.getByTestId('btn-exit')).toBeVisible({timeout: 15000});
     });
 
-    test('4. Workflow: Air-Gap sender initializes without runtime crash', async ({page}) => {
-        const pageErrors: string[] = [];
-        page.on('pageerror', (error) => pageErrors.push(error.message));
-        const consoleErrors: string[] = [];
-        page.on('console', (msg) => {
-            if (msg.type() === 'error') consoleErrors.push(msg.text());
-        });
-
-        await page.goto('/');
-        await page.getByTestId('btn-sample').click();
-        await expect(page.getByTestId('btn-exit')).toBeVisible();
-        await tid(page, 'btn-add-date').click();
-        await page.getByTestId('btn-airgap-transfer').click();
-
-        const errorBlock = page.locator('.info-panel').filter({hasText: /Failed to prepare|تعذر تجهيز|Échec de préparation/i});
-        await page.waitForTimeout(1000);
-        const errorCount = await errorBlock.count();
-        if (errorCount > 0) {
-            const errorText = await errorBlock.first().innerText();
-            throw new Error(`Air-Gap prepare failed: ${errorText}\nConsole errors:\n${consoleErrors.join('\n')}\nPage errors:\n${pageErrors.join('\n')}`);
-        }
-        await expect(page.getByTestId('airgap-send-canvas')).toBeVisible({timeout: 15000});
-
-        const combinedErrors = `${pageErrors.join('\n')}\n${consoleErrors.join('\n')}`;
-        expect(combinedErrors).not.toContain('process is not defined');
-    });
-
     test('4.5 Workflow: Certificate signing with .p12 works and wrong password is handled', async ({page}) => {
         const certPath = path.join(process.cwd(), 'tests/fixtures/test-cert.p12');
         const certBuffer = fs.readFileSync(certPath);

@@ -4,7 +4,7 @@
 
 | Kind | Where in package.json | Reaches users? | Examples |
 |---|---|---|---|
-| **Shipped** | `dependencies` | Yes: bundled into the web app or built into the Android app | lit, pdf-lib, pdfjs-dist, node-forge, @signpdf/*, qrcode, fflate, @capacitor/core and plugins, @capacitor/android |
+| **Shipped** | `dependencies` | Yes: bundled into the web app or built into the Android app | lit, pdf-lib, pdfjs-dist, node-forge, @signpdf/*, qrcode, @capacitor/core and plugins, @capacitor/android |
 | **Tools** | `devDependencies` | No: they only run on your machine or in CI | vite, vite-plugin-pwa, typescript, @playwright/test, @capacitor/cli, @types/* |
 
 Rule: if a package is not imported by `src/` and not compiled into the Android app, it is a

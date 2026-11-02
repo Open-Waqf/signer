@@ -65,8 +65,6 @@ device.
 * **Offline first (PWA):** Installs from the browser on Android, iOS, Windows and Mac, and works without internet.
 * **Android app:** On Google Play. PDFs open in Signer from file managers and other apps with **Open with**.
 * **Web share target:** The installed web app accepts PDFs shared from other apps (Android and Windows).
-* **Air-gapped QR transfer:** Send a PDF between two offline devices with animated QR codes (slow: about 1.4 KB per
-  second, so best for small files).
 * **Languages:** English, Arabic (right-to-left) and French.
 
 ---

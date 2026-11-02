@@ -34,7 +34,6 @@ const METHODS: Record<string, string[]> = {
     Share: ['share'],
     Haptics: ['impact', 'notification', 'vibrate', 'selectionStart', 'selectionChanged', 'selectionEnd'],
     StatusBar: ['setStyle', 'setBackgroundColor', 'setOverlaysWebView', 'show', 'hide'],
-    BarcodeScanner: ['isSupported', 'requestPermissions', 'startScan', 'stopScan', 'addListener', 'removeListener', 'removeAllListeners'],
 };
 
 export async function fakeAndroid(page: Page, options: FakeAndroidOptions = {}) {
@@ -72,8 +71,6 @@ export async function fakeAndroid(page: Page, options: FakeAndroidOptions = {}) 
                     return {data: files[o.path].join('')};
                 case 'App.getLaunchUrl':
                     return options.launchUrl ? {url: options.launchUrl} : {};
-                case 'BarcodeScanner.isSupported':
-                    return {supported: false};
                 default:
                     return {};
             }

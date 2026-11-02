@@ -2611,28 +2611,6 @@ export class PdfWorkspace extends LitElement {
         });
     }
 
-    async startAirGapTransfer() {
-        if ((this.isDirty || !this.lastSavedBytes) && this.hasEdits) {
-            await this.saveDocument({silentWeb: true, showToast: false, suppressProofModal: true});
-        }
-
-        const data = this.lastSavedBytes ?? this.loadedBytes;
-        if (!data) {
-            this.toast(i18n.t('noChanges'));
-            return;
-        }
-
-        const name = this.outputFilename || this.pdfName || 'Transferred_Document.pdf';
-        this.dispatchEvent(new CustomEvent('airgap-send', {
-            detail: {
-                data: new Uint8Array(data),
-                name,
-            },
-            bubbles: true,
-            composed: true,
-        }));
-    }
-
     requestExit() {
         this.dispatchEvent(new CustomEvent('exit-workspace', {bubbles: true, composed: true}));
     }
@@ -3096,7 +3074,6 @@ export class PdfWorkspace extends LitElement {
 
     render() {
         const saveDisabled = !this.pdfName || !this.hasEdits || this.isSaving;
-        const shareDisabled = !this.pdfName || !this.hasEdits;
         const finishButton = (testId: string, extraClass: string) => html`
             <button id=${testId} data-testid=${testId} class="btn btn-primary btn-finish ${extraClass}"
                     @click=${() => this.finish()}
@@ -3220,13 +3197,6 @@ export class PdfWorkspace extends LitElement {
                                 ${ICONS.audit}
                             </button>
                         ` : ''}
-                        <button data-testid="btn-airgap-transfer" class="btn toolbar-btn-compact"
-                                aria-label="${i18n.t('airGapTransfer')}"
-                                title="${i18n.t('airGapTransfer')}"
-                                @click=${this.startAirGapTransfer}
-                                ?disabled=${shareDisabled}>
-                            ${ICONS.qr}
-                        </button>
                         ${finishButton('btn-save', 'toolbar-btn-compact finish-top')}
                     </div>
                 </div>
