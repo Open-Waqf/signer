@@ -2068,6 +2068,21 @@ test.describe('10. Finish and Saved sheet', () => {
         await expect(page.getByTestId('btn-share-saved')).toHaveCount(0);
     });
 
+    test('10.6 With a phone gesture bar, Finish sits just above it, not double spaced @phone', async ({page}) => {
+        // Emulate Android's gesture bar (48 px), as the real app reports it through env(safe-area-inset-*).
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send('Emulation.setSafeAreaInsetsOverride', {insets: {top: 44, bottom: 48, left: 0, right: 0}});
+        await page.goto('/');
+        await page.getByTestId('btn-sample').click();
+        const finish = page.getByTestId('m-btn-finish');
+        await expect(finish).toBeVisible();
+        const box = (await finish.boundingBox())!;
+        const gap = page.viewportSize()!.height - (box.y + box.height);
+        // The gesture bar takes 48 px; the toolbar adds only a little padding under the button.
+        expect(gap).toBeGreaterThanOrEqual(48);
+        expect(gap).toBeLessThanOrEqual(48 + 20);
+    });
+
     test('10.5 Finish with no new changes reopens the sheet without saving again @rtl', async ({page}) => {
         await openSample(page);
         await tid(page, 'btn-add-date').click();

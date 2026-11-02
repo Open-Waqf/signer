@@ -399,7 +399,9 @@ export class PdfWorkspace extends LitElement {
             display: none; /* Desktop hidden */
             background: var(--bg-surface);
             border-top: 1px solid var(--border);
-            padding: 8px 8px calc(max(env(safe-area-inset-bottom), 12px) + 8px);
+            /* No safe-area here: the page body already keeps clear of the gesture bar
+               (style.css). Adding it again lifted Finish ~50 px too high (bug N1). */
+            padding: 8px 8px 12px;
             z-index: 200;
             box-shadow: var(--workspace-bottom-bar-shadow);
             align-items: center;
