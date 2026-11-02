@@ -24,11 +24,13 @@ export const preferences = {
     setHardwarePref(value: HardwarePref) {
         localStorage.setItem(KEYS.hardwarePref, value);
     },
-    getActiveSidebar(): ActiveSidebar {
+    /** The saved sidebar choice; `fallback` when the user never chose. */
+    getActiveSidebar(fallback: ActiveSidebar = 'thumbnails'): ActiveSidebar {
         const value = localStorage.getItem(KEYS.activeSidebar);
         if (value === 'annotations') return 'annotations';
+        if (value === 'thumbnails') return 'thumbnails';
         if (value === 'none') return null;
-        return 'thumbnails';
+        return fallback;
     },
     setActiveSidebar(value: ActiveSidebar) {
         localStorage.setItem(KEYS.activeSidebar, value ?? 'none');

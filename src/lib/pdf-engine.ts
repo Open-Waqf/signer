@@ -97,11 +97,24 @@ export class PdfEngine {
         throw new Error(`Failed to load PDF document: ${this.describeError(lastError)}`);
     }
 
+    /** Page size in PDF points (scale 1), e.g. 595 x 842 for A4. */
+    async getPageSize(pageNumber = 1): Promise<{ width: number; height: number }> {
+        if (!this.pdfDoc) throw new Error('No PDF loaded');
+        const page = await this.pdfDoc.getPage(pageNumber);
+        const {width, height} = page.getViewport({scale: 1});
+        return {width, height};
+    }
+
+    /**
+     * Draw a page into the canvas. The canvas keeps the on-screen size of `scale`;
+     * `pixelRatio` adds that many device pixels per screen pixel so text is sharp on phones
+     * (capped by `maxPixels` to protect memory). Thumbnails call it without a pixel ratio.
+     */
     async renderPage(
         pageNumber: number,
         canvas: HTMLCanvasElement,
         scale = 1.5,
-        opts?: { signal?: AbortSignal }
+        opts?: { signal?: AbortSignal; pixelRatio?: number; maxPixels?: number }
     ) {
         if (!this.pdfDoc) throw new Error('No PDF loaded');
         if (opts?.signal?.aborted) {
@@ -112,14 +125,25 @@ export class PdfEngine {
             throw new DOMException('Render aborted', 'AbortError');
         }
         const viewport = page.getViewport({scale});
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
+        let ratio = Math.max(1, opts?.pixelRatio ?? 1);
+        if (opts?.maxPixels) {
+            ratio = Math.max(1, Math.min(ratio, Math.sqrt(opts.maxPixels / (viewport.width * viewport.height))));
+        }
+        canvas.width = Math.floor(viewport.width * ratio);
+        canvas.height = Math.floor(viewport.height * ratio);
+        // On-screen size stays the same as before, whatever the pixel ratio.
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
         const canvasContext = canvas.getContext('2d')!;
         // Keep PDF glyph shaping stable regardless of UI direction (RTL/LTR).
         if ('direction' in canvasContext) {
             (canvasContext as CanvasRenderingContext2D & { direction?: CanvasDirection }).direction = 'ltr';
         }
-        const renderTask = page.render({canvasContext, viewport});
+        const renderTask = page.render({
+            canvasContext,
+            viewport,
+            ...(ratio !== 1 ? {transform: [ratio, 0, 0, ratio, 0, 0]} : {}),
+        });
         if (opts?.signal) {
             const onAbort = () => {
                 try {

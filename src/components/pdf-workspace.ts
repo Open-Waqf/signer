@@ -25,7 +25,7 @@ import {HistoryController} from './controllers/history-controller';
 import {InteractionController} from './controllers/interaction-controller';
 import {runHandoverCheck} from '../features/workspace/handover-workflow';
 import {executeSave, finalizeSave, resolveHardwareUsage, shareLatestDocument} from '../features/workspace/save-workflow';
-import {isNativePlatform} from '../lib/runtime-platform';
+import {isMobileViewport, isNativePlatform} from '../lib/runtime-platform';
 import {
     validatePkcs12Certificate,
     wipeCertificateConfig
@@ -124,7 +124,9 @@ export class PdfWorkspace extends LitElement {
     @query('.viewport') viewport!: HTMLDivElement;
     @query('#cert-input') certInput!: HTMLInputElement;
 
-    @state() activeSidebar: 'thumbnails' | 'annotations' | null = preferences.getActiveSidebar();
+    // Phones start without the sidebar (it took a fifth of the screen, bug O3); desktop starts
+    // with thumbnails. Once the user chooses, that choice is remembered on any screen.
+    @state() activeSidebar: 'thumbnails' | 'annotations' | null = preferences.getActiveSidebar(isMobileViewport() ? null : 'thumbnails');
     @state() thumbnailURLs: Array<string | null> = [];
     @state() thumbPanelScrollTop = 0;
     @state() thumbPanelClientHeight = 0;
@@ -841,6 +843,20 @@ export class PdfWorkspace extends LitElement {
             border: none;
         }
 
+        /* Phones: a compact bar that fits the screen (it was wider than the screen, bug O3). */
+        @media (max-width: 768px) {
+            .viewport {
+                padding: 12px;
+            }
+
+            .workspace-top-controls {
+                max-width: 100%;
+                gap: 4px;
+                padding: 4px 8px;
+                margin-bottom: 12px;
+            }
+        }
+
         .pager-btn {
             padding: 6px 12px;
         }
@@ -946,7 +962,12 @@ export class PdfWorkspace extends LitElement {
             position: absolute;
             top: -56px;
             inset-inline-start: 50%;
-            transform: translateX(-50%);
+            transform: translateX(calc(-50% + var(--popup-shift, 0px)));
+            /* One row sized to its buttons (not to the small annotation it hangs from);
+               wraps only on a screen narrower than the row. */
+            width: max-content;
+            max-width: calc(100vw - 24px);
+            flex-wrap: wrap;
             background: var(--workspace-style-popup-bg);
             border-radius: 8px;
             padding: 6px;
@@ -1095,7 +1116,7 @@ export class PdfWorkspace extends LitElement {
         :host([dir="rtl"]) .style-popup {
             left: auto;
             right: 50%;
-            transform: translateX(50%);
+            transform: translateX(calc(50% + var(--popup-shift, 0px)));
         }
 
         .page-container[data-near-top] .style-popup {
@@ -1353,7 +1374,7 @@ export class PdfWorkspace extends LitElement {
             this.detectedAssertions = [];
         }
         this.currentPage = 1;
-        this.scale = window.innerWidth < 768 ? 0.55 : 1.0;
+        this.scale = 1.0; // phones: fitted to the screen width once the page area is laid out
         this.annotations = [];
         this.selectedIds = [];
         if (this.activeSidebar === 'annotations') {
@@ -1373,6 +1394,7 @@ export class PdfWorkspace extends LitElement {
         this.thumbnailURLs = new Array(this.totalPages).fill(null);
 
         await this.updateComplete;
+        await this.fitPageToWidth();
         void this.renderPage();
         if (this.activeSidebar === 'thumbnails') {
             this.setupThumbnailObserver();
@@ -1435,6 +1457,36 @@ export class PdfWorkspace extends LitElement {
         }
     }
 
+    // Phones: open the page at the width of the page area, so it is not cut off at the sides
+    // (bug O3; in Arabic the left part could not even be scrolled to). Never above 100 %.
+    private async fitPageToWidth() {
+        if (!isMobileViewport() || this.totalPages === 0) return;
+        const area = this.shadowRoot?.querySelector('.viewport') as HTMLElement | null;
+        if (!area) return;
+        const {width} = await pdfEngine.getPageSize(this.currentPage);
+        const style = getComputedStyle(area);
+        const available = area.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        if (available > 0 && width > 0) this.scale = Math.min(1, available / (width * 1.5));
+    }
+
+    // Keep the annotation style toolbar inside the page area: it was wider than a phone's
+    // free space and ran off the edge, or under the sidebar in Arabic (bugs O3, R1).
+    private keepStylePopupsOnScreen() {
+        const area = this.shadowRoot?.querySelector('.viewport') as HTMLElement | null;
+        const popups = this.shadowRoot?.querySelectorAll<HTMLElement>('.style-popup');
+        if (!area || !popups?.length) return;
+        const a = area.getBoundingClientRect();
+        const margin = 8;
+        for (const popup of popups) {
+            popup.style.removeProperty('--popup-shift');
+            const p = popup.getBoundingClientRect();
+            let shift = 0;
+            if (p.right > a.right - margin) shift = (a.right - margin) - p.right;
+            if (p.left + shift < a.left + margin) shift = (a.left + margin) - p.left;
+            if (shift) popup.style.setProperty('--popup-shift', `${shift}px`);
+        }
+    }
+
     async renderPage() {
         if (!this.canvas) return;
         // Cancel any in-flight render before starting a new one. Rapid page
@@ -1447,7 +1499,12 @@ export class PdfWorkspace extends LitElement {
         this.isRendering = true;
         try {
             const renderScale = Math.min(3.0, 1.5 * this.scale);
-            await pdfEngine.renderPage(this.currentPage, this.canvas, renderScale, {signal: controller.signal});
+            // Sharp on phones: up to 2 device pixels per screen pixel, at most 8 megapixels.
+            await pdfEngine.renderPage(this.currentPage, this.canvas, renderScale, {
+                signal: controller.signal,
+                pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+                maxPixels: 8_000_000,
+            });
         } catch (e) {
             // A superseded render was cancelled — ignore it and let the newer
             // render own the canvas and the isRendering flag.
@@ -1471,6 +1528,7 @@ export class PdfWorkspace extends LitElement {
     }
 
     updated(changed: Map<string, unknown>) {
+        this.keepStylePopupsOnScreen();
         if (changed.has('showProofModal') && this.showProofModal) {
             // The verification details always start closed when the Saved sheet opens.
             const details = this.shadowRoot?.querySelector<HTMLDetailsElement>('.saved-details');
@@ -2992,6 +3050,7 @@ export class PdfWorkspace extends LitElement {
     private renderWorkspaceTopControls() {
         return html`
             <div class="workspace-top-controls">
+                ${this.totalPages > 1 ? html`
                 <button data-testid="btn-prev-page" class="btn pager-btn"
                         aria-label="${i18n.t('prevPage')}"
                         @click=${() => this.changePage(-1)}
@@ -3003,6 +3062,7 @@ export class PdfWorkspace extends LitElement {
                         @click=${() => this.changePage(1)} ?disabled=${this.currentPage === this.totalPages}>›
                 </button>
                 <div class="workspace-control-divider"></div>
+                ` : ''}
                 <button data-testid="btn-toggle-thumbs"
                         class="btn toggle panel-toggle panel-toggle-btn ${this.activeSidebar === 'thumbnails' ? 'active' : ''}"
                         aria-label="${i18n.t('toggleThumbs')}"

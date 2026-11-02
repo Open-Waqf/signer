@@ -435,8 +435,6 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
     });
 
     test('4. Workflow: Full Signing Loop with Annotation controls @rtl', async ({page}, testInfo) => {
-        // Known bug R1: in Arabic on phones the thumbnail sidebar covers "Apply to all pages".
-        test.fixme(testInfo.project.name === 'phone-ar', 'Bug R1: thumbnail sidebar covers the style toolbar in Arabic');
         const pdfBuffer = await generateTestPDF();
         await page.goto('/');
 
@@ -537,8 +535,9 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('btn-sample').click();
 
         const pageIndicator = page.getByTestId('page-indicator');
-        // Handle "1 / X" or localized "1 of X"
-        await expect(pageIndicator).toHaveText(/1\s*(?:\/|of)\s*\d+/);
+        // The sample has one page: no "1 of 1" counter (O3). Multi-page is test 15.3.
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        await expect(pageIndicator).toHaveCount(0);
 
         // Toggle Thumbnails
         const toggleBtn = page.getByTestId('btn-toggle-thumbs');
@@ -2226,5 +2225,82 @@ test.describe('14. Share App', () => {
         await page.waitForTimeout(400);
         // Count once, no retrying: a toast disappears by itself after ~3 s.
         expect(await page.locator('.toast.show').count()).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 15. Phone editor layout (O3, R1)
+// ---------------------------------------------------------------------------
+test.describe('15. Phone editor layout @phone', () => {
+    async function openPdf(page: import('@playwright/test').Page, pages: number) {
+        const doc = await PDFDocument.create();
+        for (let i = 0; i < pages; i++) doc.addPage([595, 842]);
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({name: `pages-${pages}.pdf`, mimeType: 'application/pdf', buffer: Buffer.from(await doc.save())});
+        await expect(page.getByTestId('btn-exit')).toBeVisible();
+    }
+
+    const canvasBox = (page: import('@playwright/test').Page) => page.locator('pdf-workspace').evaluate((el) => {
+        const c = (el as HTMLElement).shadowRoot!.querySelector('#pdf-canvas') as HTMLCanvasElement;
+        const r = c.getBoundingClientRect();
+        return {left: r.left, right: r.right, cssWidth: r.width, pixelWidth: c.width};
+    });
+
+    test('15.1 The page fits the screen width when a PDF opens @rtl', async ({page}) => {
+        await openPdf(page, 1);
+        const width = page.viewportSize()!.width;
+        // A blank canvas is 300 px wide: wait for the drawn page.
+        await expect.poll(async () => (await canvasBox(page)).cssWidth).toBeGreaterThan(width * 0.85);
+        const box = await canvasBox(page);
+        expect(box.left).toBeGreaterThanOrEqual(0);
+        expect(box.right).toBeLessThanOrEqual(width);
+        expect(box.cssWidth).toBeGreaterThan(width * 0.85); // fills the width, not a tiny page
+    });
+
+    test('15.2 The thumbnail sidebar starts closed on a phone; a choice is remembered', async ({page}) => {
+        await openPdf(page, 3);
+        await expect(page.locator('.thumb-panel')).toHaveCount(0);
+        await page.getByTestId('btn-toggle-thumbs').click();
+        await expect(page.locator('.thumb-panel')).toBeVisible();
+        await page.getByTestId('btn-exit').click();
+        await page.getByTestId('btn-sample').click();
+        await expect(page.locator('.thumb-panel')).toBeVisible();
+    });
+
+    test('15.3 The page bar shows "1 of N" only for several pages, and fits the screen @rtl', async ({page}) => {
+        await openPdf(page, 1);
+        await expect(page.getByTestId('page-indicator')).toHaveCount(0);
+        await openPdf(page, 3);
+        await expect(page.getByTestId('page-indicator')).toBeVisible();
+        const bar = await page.locator('pdf-workspace').evaluate((el) => {
+            const r = (el as HTMLElement).shadowRoot!.querySelector('.workspace-top-controls')!.getBoundingClientRect();
+            return {left: r.left, right: r.right};
+        });
+        expect(bar.left).toBeGreaterThanOrEqual(0);
+        expect(bar.right).toBeLessThanOrEqual(page.viewportSize()!.width);
+    });
+
+    test('15.4 The style toolbar stays on screen and "Apply to all pages" can be tapped @rtl', async ({page}) => {
+        await openPdf(page, 3);
+        await tid(page, 'btn-add-date').click();
+        await page.locator('[data-testid^="annotation-"]').first().click();
+        const popup = page.getByTestId('style-popup');
+        await expect(popup).toBeVisible();
+        const box = (await popup.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+        await page.getByTestId('btn-apply-all').click({timeout: 3000});
+        await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1); // this page; others got copies
+    });
+
+    test('15.5 The page is drawn sharp for the phone\'s pixel density', async ({page}) => {
+        await openPdf(page, 1);
+        const expected = Math.min(await page.evaluate(() => devicePixelRatio), 2);
+        await expect.poll(async () => {
+            const box = await canvasBox(page);
+            return box.cssWidth > 300 ? box.pixelWidth / box.cssWidth : 0;
+        }).toBeGreaterThan(expected - 0.05);
     });
 });
