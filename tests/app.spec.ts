@@ -848,9 +848,6 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
     });
 
     test('6.3 Thumbnails lazy-load with blob URLs and deep pages render on demand', async ({page}, testInfo) => {
-        // Known bug T1: on phone screens the thumbnail panel jumps back near the top after a
-        // long scroll, so deep thumbnails never load. Remove this line when T1 is fixed.
-        test.fixme(testInfo.project.name.startsWith('phone'), 'Bug T1: phone thumbnail panel jumps back on scroll');
         const bigPdf = await PDFDocument.create();
         for (let i = 0; i < 120; i++) {
             bigPdf.addPage([595, 842]);
@@ -960,7 +957,6 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
     });
 
     test('6.6 Thumbnail rapid-scroll prioritizes final viewport pages', async ({page}, testInfo) => {
-        test.fixme(testInfo.project.name.startsWith('phone'), 'Bug T1: phone thumbnail panel jumps back on scroll');
         const bigPdf = await PDFDocument.create();
         for (let i = 0; i < 220; i++) {
             bigPdf.addPage([595, 842]);
@@ -997,6 +993,32 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
             const src = await page.getByTestId('thumb-page-220').locator('img').getAttribute('src');
             return src || '';
         }).toMatch(/^blob:/);
+    });
+
+    test('6.8 The thumbnail list stays where it was scrolled (T1)', async ({page}) => {
+        const doc = await PDFDocument.create();
+        for (let i = 0; i < 120; i++) doc.addPage([595, 842]);
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles({name: 'list-120.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await doc.save())});
+        const ws = page.locator('pdf-workspace');
+        await expect(ws).toBeVisible();
+        const toggle = page.getByTestId('btn-toggle-thumbs');
+        if (!(await toggle.evaluate((el) => el.classList.contains('active')))) await toggle.click();
+        await expect(page.getByTestId('thumb-page-1')).toBeVisible();
+
+        await ws.evaluate((el) => {
+            const panel = el.shadowRoot!.querySelector('.thumb-panel') as HTMLElement;
+            panel.scrollTop = panel.scrollHeight;
+        });
+        await page.waitForTimeout(2000); // the old list drifted back towards page 1 here
+        const state = await ws.evaluate((el) => {
+            const panel = el.shadowRoot!.querySelector('.thumb-panel') as HTMLElement;
+            return {fromBottom: panel.scrollHeight - panel.clientHeight - panel.scrollTop};
+        });
+        expect(state.fromBottom).toBeLessThan(200);
+        await expect(page.getByTestId('thumb-page-120')).toBeVisible();
     });
 
     test('6.7 Thumbnail blob cache stays under cap after deep scrolling', async ({page}) => {

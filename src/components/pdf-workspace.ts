@@ -106,7 +106,10 @@ export class PdfWorkspace extends LitElement {
     private thumbRenderToken = 0;
     private readonly thumbScale = 0.18;
     private readonly maxThumbnailBlobUrls = 48;
-    private readonly thumbVirtualItemHeight = 84;
+    // First guess for one thumbnail row (item + gap). The real height depends on the panel
+    // width (phones are narrower), so it is measured from the rendered rows: a wrong value
+    // made the virtual list jump back on phones after a long scroll (bug T1).
+    @state() thumbItemPitch = 84;
     private readonly thumbVirtualOverscan = 8;
     private readonly maxStampUploadBytes = 5 * 1024 * 1024;
     private readonly maxStampImagePixels = 12_000_000;
@@ -695,9 +698,14 @@ export class PdfWorkspace extends LitElement {
             box-shadow: var(--shadow-raised);
         }
 
+        /* Same box as the placeholder, so a row keeps one height before and after its
+           image loads; the virtual list needs equal rows (bug T1). The page is fitted
+           inside (A4 gets a thin margin at the sides). */
         .thumb-image {
             width: 100%;
             display: block;
+            aspect-ratio: 1 / 1.35;
+            object-fit: contain;
         }
 
         .thumb-placeholder {
@@ -1480,6 +1488,10 @@ export class PdfWorkspace extends LitElement {
                 this.disconnectThumbnailObserver();
             }
         }
+        if (this.activeSidebar === 'thumbnails'
+            && (changed.has('totalPages') || changed.has('activeSidebar') || changed.has('thumbPanelClientHeight') || changed.has('thumbnailURLs'))) {
+            this.measureThumbItemPitch();
+        }
         if (changed.has('thumbPanelScrollTop') || changed.has('thumbPanelClientHeight')) {
             this.scheduleThumbObserverRefresh();
         }
@@ -1591,8 +1603,8 @@ export class PdfWorkspace extends LitElement {
             if (page < this.totalPages) targets.add(page + 1);
         }
         const panelHeight = this.thumbPanelClientHeight || 500;
-        const approxTotalHeight = this.totalPages * this.thumbVirtualItemHeight;
-        const nearBottom = (this.thumbPanelScrollTop + panelHeight) >= (approxTotalHeight - (this.thumbVirtualItemHeight * 2));
+        const approxTotalHeight = this.totalPages * this.thumbItemPitch;
+        const nearBottom = (this.thumbPanelScrollTop + panelHeight) >= (approxTotalHeight - (this.thumbItemPitch * 2));
         const pages = Array.from(targets)
             .filter((page) => !this.thumbnailURLs[page - 1])
             .sort((a, b) => nearBottom ? b - a : a - b);
@@ -1749,16 +1761,25 @@ export class PdfWorkspace extends LitElement {
 
     private onThumbPanelScroll = (e: Event) => {
         const panel = e.currentTarget as HTMLElement;
+        this.measureThumbItemPitch();
         this.thumbPanelScrollTop = panel.scrollTop;
         this.thumbPanelClientHeight = panel.clientHeight;
         this.scheduleThumbnailQueueFlush();
     };
 
+    // Distance from one rendered thumbnail row to the next (item height + gap).
+    private measureThumbItemPitch() {
+        const items = this.shadowRoot?.querySelectorAll<HTMLElement>('.thumb-panel .thumb-item[data-page]');
+        if (!items || items.length < 2) return;
+        const pitch = items[1].getBoundingClientRect().top - items[0].getBoundingClientRect().top;
+        if (pitch > 0 && Math.abs(pitch - this.thumbItemPitch) > 0.5) this.thumbItemPitch = pitch;
+    }
+
     private ensureThumbPageVisible(page: number) {
         const panel = this.shadowRoot?.querySelector('.thumb-panel') as HTMLElement | null;
         if (!panel) return;
-        const top = (page - 1) * this.thumbVirtualItemHeight;
-        const bottom = top + this.thumbVirtualItemHeight;
+        const top = (page - 1) * this.thumbItemPitch;
+        const bottom = top + this.thumbItemPitch;
         const viewTop = panel.scrollTop;
         const viewBottom = viewTop + panel.clientHeight;
         if (top < viewTop) {
@@ -1773,15 +1794,15 @@ export class PdfWorkspace extends LitElement {
             return {startPage: 1, endPage: 0, topSpacer: 0, bottomSpacer: 0};
         }
         const panelHeight = this.thumbPanelClientHeight || 500;
-        const firstVisible = Math.floor(this.thumbPanelScrollTop / this.thumbVirtualItemHeight);
+        const firstVisible = Math.floor(this.thumbPanelScrollTop / this.thumbItemPitch);
         const startIndex = Math.max(0, firstVisible - this.thumbVirtualOverscan);
-        const visibleCount = Math.ceil(panelHeight / this.thumbVirtualItemHeight) + (this.thumbVirtualOverscan * 2);
+        const visibleCount = Math.ceil(panelHeight / this.thumbItemPitch) + (this.thumbVirtualOverscan * 2);
         const endIndex = Math.min(this.totalPages - 1, startIndex + visibleCount - 1);
         return {
             startPage: startIndex + 1,
             endPage: endIndex + 1,
-            topSpacer: startIndex * this.thumbVirtualItemHeight,
-            bottomSpacer: Math.max(0, (this.totalPages - 1 - endIndex) * this.thumbVirtualItemHeight),
+            topSpacer: startIndex * this.thumbItemPitch,
+            bottomSpacer: Math.max(0, (this.totalPages - 1 - endIndex) * this.thumbItemPitch),
         };
     }
 
