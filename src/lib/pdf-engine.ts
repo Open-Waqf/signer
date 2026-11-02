@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import {PDFDocument, rgb, StandardFonts} from 'pdf-lib';
+import {PDFDocument, type PDFImage, rgb, StandardFonts} from 'pdf-lib';
 import pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
 import {Annotation, CertificateSigningConfig, SignaturePayload} from '../types';
 import {appendAuditPage, removeTrailingAuditPages, textToImage} from './pdf/audit-page-service';
@@ -11,6 +11,7 @@ import {
 } from './pdf/hash-service';
 import {readMetadataID, setSignaturesSubject} from './pdf/metadata-service';
 import {verifySignatureChain as verifySignatureChainCore} from './pdf/signature-chain-service';
+import {shownFrame} from './pdf/page-frame';
 import {signPdfWithCertificate} from './pdf/cms-signature-service';
 import {getTimestampProof} from './tsa-service';
 
@@ -211,9 +212,10 @@ export class PdfEngine {
         if (includeFooter) {
             const footerText = `Signed via Open Waqf | Ref: ${docId}`;
             for (const page of pages) {
-                const {width} = page.getSize();
+                const frame = shownFrame(page);
                 page.drawText(footerText, {
-                    x: width / 2 - 90, y: 8, size: 6, font, color: rgb(0.6, 0.6, 0.6),
+                    ...frame.toPage(frame.width / 2 - 90, 8), rotate: frame.rotate,
+                    size: 6, font, color: rgb(0.6, 0.6, 0.6),
                 });
             }
         }
@@ -221,7 +223,12 @@ export class PdfEngine {
         for (const ann of annotations) {
             if (ann.page < 0 || ann.page >= pages.length) continue;
             const page = pages[ann.page];
-            const {width, height} = page.getSize();
+            // Positions are fractions of the page as shown (turned and cropped).
+            const frame = shownFrame(page);
+            const {width, height} = frame;
+            // Draw a w x h image whose top-left corner is at (left, top) of the shown page.
+            const drawShown = (image: PDFImage, left: number, top: number, w: number, h: number) =>
+                page.drawImage(image, {...frame.toPage(left, height - top - h), width: w, height: h, rotate: frame.rotate});
 
             if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
                 const normalized = ann.data.replace(/\u200E/g, '').trim();
@@ -239,20 +246,14 @@ export class PdfEngine {
                 const scaleFactor = 0.75;
                 const w = (pngImage.width / 3) * scaleFactor;
                 const h = (pngImage.height / 3) * scaleFactor;
-                const pdfY = height - (height * ann.yPct) - h;
-                page.drawImage(pngImage, {x: width * ann.xPct, y: pdfY, width: w, height: h});
+                drawShown(pngImage, width * ann.xPct, height * ann.yPct, w, h);
             } else if (ann.data) {
                 const pngImage = await pdfDoc.embedPng(ann.data);
                 const targetWidth = width * (ann.widthPct || 0.2);
                 const imgDims = pngImage.scale(1);
                 const ratio = imgDims.height / imgDims.width;
                 const targetHeight = targetWidth * ratio;
-                page.drawImage(pngImage, {
-                    x: width * ann.xPct,
-                    y: height - (height * ann.yPct) - targetHeight,
-                    width: targetWidth,
-                    height: targetHeight,
-                });
+                drawShown(pngImage, width * ann.xPct, height * ann.yPct, targetWidth, targetHeight);
             }
         }
 
