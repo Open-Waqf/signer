@@ -42,6 +42,10 @@ Do not upgrade these, and decline any tool (npm, Dependabot) that offers to.
 - **Vite 8** reads the `default` export of CommonJS packages as the whole module. The app
   now imports the named class `SignPdf` from `@signpdf/signpdf`. Test 4.5 (certificate
   signing) fails if this comes back.
+- **`buffer`** must stay a direct dependency. The certificate signing libraries
+  (`@signpdf/*`) expect Node's `Buffer`, and the app loads this package for them at signing
+  time. It used to arrive through the QR scanner libraries, so removing those (Nov 2026)
+  silently broke certificate signing. Test 4.5 catches this.
 - **pdf.js 6** (`pdfjs-dist`):
   - `PDFDocumentProxy.destroy()` is gone. Call `doc.loadingTask.destroy()`.
   - JBIG2 and CCITT (fax) images, common in scans, are decoded with files in
