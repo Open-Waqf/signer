@@ -54,8 +54,6 @@ test.describe('13. Arabic, right to left @rtl-only', () => {
     });
 
     test('13.4 A toast (Share App, "link copied") is on screen', async ({page}) => {
-        // Known bugs O4 / P1: in Arabic the toast is placed mostly off the left edge.
-        test.fixme(true, 'Bug O4/P1: toasts are off-screen in Arabic');
         await page.goto('/');
         await page.getByTestId('btn-share-app').click();
         const toast = page.locator('.toast.show');

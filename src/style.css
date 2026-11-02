@@ -787,7 +787,9 @@ app-root {
     padding: 16px 24px;
     position: fixed;
     z-index: 210000; /* Highest z-index to always be visible */
-    inset-inline-start: 50%;
+    /* Physical left + translate centres the toast in every language. With
+       inset-inline-start, Arabic (RTL) put it mostly off the left edge (bug O4). */
+    left: 50%;
     bottom: 30px;
     transform: translateX(-50%);
     font-size: 0.95rem;
