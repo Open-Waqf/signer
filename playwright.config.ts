@@ -5,6 +5,12 @@ import {defineConfig, devices} from '@playwright/test';
 // `vite preview`, so build-only bugs are caught before deploy. Default: the dev server.
 const testBuild = !!process.env.TEST_BUILD;
 
+// Tests always start their own fresh server on their own port, never one already running.
+// A dev server left running for hours kept serving an old copy of a removed package, so
+// local checks passed while CI failed (certificate signing, Nov 2026). A separate port also
+// lets `npm run dev` or `npm run android:live` (port 5173) keep running during a check.
+const PORT = 5174;
+
 export default defineConfig({
     testDir: './tests',
     fullyParallel: true,
@@ -19,7 +25,7 @@ export default defineConfig({
 
     use: {
         // 1. Base URL: Matches your local Vite dev server
-        baseURL: 'http://localhost:5173',
+        baseURL: `http://localhost:${PORT}`,
 
         // 2. Trace: Record a video/trace on failure so you can see what happened
         trace: 'on-first-retry',
@@ -27,10 +33,9 @@ export default defineConfig({
 
     // 3. Web Server: Start the app before running tests
     webServer: {
-        command: testBuild ? 'npx vite preview --port 5173 --strictPort' : 'npm run dev',
-        url: 'http://localhost:5173',
-        // Never reuse a running dev server when the build is what must be tested.
-        reuseExistingServer: !process.env.CI && !testBuild,
+        command: testBuild ? `npx vite preview --port ${PORT} --strictPort` : `npx vite --port ${PORT} --strictPort`,
+        url: `http://localhost:${PORT}`,
+        reuseExistingServer: false,
         timeout: 120 * 1000,
     },
 

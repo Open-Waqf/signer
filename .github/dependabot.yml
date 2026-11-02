@@ -11,6 +11,10 @@ updates:
       interval: monthly
     open-pull-requests-limit: 5
     groups:
+      # The @signpdf packages share one internal package and must move together: a
+      # pull request that bumps only one of them fails the certificate signing tests.
+      signpdf:
+        patterns: ["@signpdf/*"]
       # All minor and patch updates together, in one pull request.
       npm-minor-and-patch:
         update-types: [minor, patch]
