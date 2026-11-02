@@ -2593,6 +2593,14 @@ export class PdfWorkspace extends LitElement {
         await this.saveDocument();
     }
 
+    // "Done" on the Saved sheet: the document is saved, so finishing means going back home
+    // (bug N4: Finish never closed the document). Back, Escape or a tap outside the sheet
+    // still keep the document open for more editing.
+    doneAfterSave() {
+        this.showProofModal = false;
+        this.requestExit();
+    }
+
     async shareFromSavedSheet() {
         this.showProofModal = false;
         await this.shareLatest();
@@ -2765,9 +2773,9 @@ export class PdfWorkspace extends LitElement {
                             ${ICONS.share} ${i18n.t('share')}
                         </button>
                     ` : ''}
-                    <button class="btn" id="btn-close-proof" data-testid="btn-close-proof"
-                            @click=${() => this.showProofModal = false}>
-                        ${i18n.t('close')}
+                    <button class="btn" id="btn-saved-done" data-testid="btn-saved-done"
+                            @click=${this.doneAfterSave}>
+                        ${i18n.t('done')}
                     </button>
                 </div>
                 <details class="saved-details" data-testid="saved-details">

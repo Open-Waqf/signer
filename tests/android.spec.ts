@@ -160,7 +160,7 @@ test.describe('12. Android app (fake Android bridge) @phone', () => {
         await openSample(page);
         await tid(page, 'btn-add-date').click();
         await finish(page);
-        await page.getByTestId('btn-close-proof').click();
+        await page.keyboard.press('Escape'); // close the sheet, keep editing
         await tid(page, 'btn-add-date').click();
         await finish(page);
 

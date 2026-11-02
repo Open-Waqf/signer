@@ -47,7 +47,7 @@ test.describe('13. Arabic, right to left @rtl-only', () => {
         await tid(page, 'btn-save').click();
         await download;
         await expect(page.getByTestId('proof-modal')).toBeVisible();
-        await expectOnScreen(page, page.getByTestId('btn-close-proof'));
+        await expectOnScreen(page, page.getByTestId('btn-saved-done'));
         await page.getByTestId('btn-saved-details').click();
         await expectOnScreen(page, page.getByTestId('btn-copy-hash'));
         await expectOnScreen(page, page.getByTestId('saved-doc-hash'));

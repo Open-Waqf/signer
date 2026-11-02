@@ -213,8 +213,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const downloadPromise = page.waitForEvent('download');
         await tid(page, 'btn-save').click();
         await downloadPromise;
-        await page.getByTestId('btn-close-proof').click();
-        await page.getByTestId('btn-exit').click();
+        await page.getByTestId('btn-saved-done').click(); // Done goes home
         await expect(page.getByTestId('btn-select-file')).toBeVisible();
 
         const fileChooserPromise = page.waitForEvent('filechooser');
@@ -338,8 +337,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         for await (const chunk of stream) chunks.push(chunk);
         const signedBuffer = Buffer.concat(chunks);
 
-        await page.getByTestId('btn-close-proof').click();
-        await page.getByTestId('btn-exit').click();
+        await page.getByTestId('btn-saved-done').click(); // Done goes home
         await page.getByTestId('btn-verify-mode').click();
 
         const fileChooserPromise = page.waitForEvent('filechooser');
@@ -471,9 +469,10 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('btn-saved-details').click();
         const savedId = await page.getByTestId('saved-doc-id').innerText();
         expect(savedId.length).toBeGreaterThan(5);
-        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-saved-done').click();
 
-        await expect(page.getByTestId('btn-exit')).toBeVisible();
+        // Done goes back home (N4).
+        await expect(page.getByTestId('btn-select-file')).toBeVisible();
     });
 
     test('5. Robustness: Exit Confirmation (Dirty State) @rtl', async ({page}) => {
@@ -1753,7 +1752,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chunksA = [];
         for await (const chunk of streamA) chunksA.push(chunk);
         signerABuffer = Buffer.concat(chunksA);
-        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-saved-done').click();
 
         await page.goto('/');
         const chooserB = page.waitForEvent('filechooser');
@@ -1773,7 +1772,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chunksB = [];
         for await (const chunk of streamB) chunksB.push(chunk);
         signerBBuffer = Buffer.concat(chunksB);
-        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-saved-done').click();
 
         await page.goto('/');
         await page.getByTestId('btn-verify-mode').click();
@@ -1803,7 +1802,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chunks = [];
         for await (const chunk of stream) chunks.push(chunk);
         const signerBSkipped = Buffer.concat(chunks);
-        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-saved-done').click();
 
         const signatures = await readPdfSignatures(signerBSkipped);
         expect(signatures.length).toBe(2);
@@ -1834,7 +1833,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chunksA = [];
         for await (const chunk of streamA!) chunksA.push(chunk);
         const bufA = Buffer.concat(chunksA);
-        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-saved-done').click();
 
         await page.goto('/');
         const chooseB = page.waitForEvent('filechooser');
@@ -1854,7 +1853,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chunksB = [];
         for await (const chunk of streamB!) chunksB.push(chunk);
         const bufB = Buffer.concat(chunksB);
-        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-saved-done').click();
 
         await page.goto('/');
         const chooseC = page.waitForEvent('filechooser');
@@ -1871,7 +1870,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chunksC = [];
         for await (const chunk of streamC!) chunksC.push(chunk);
         signerCSingleAuditBuffer = Buffer.concat(chunksC);
-        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-saved-done').click();
 
         const pdf = await PDFDocument.load(signerCSingleAuditBuffer, {updateMetadata: false});
         expect(pdf.getPageCount()).toBe(2);
@@ -1962,7 +1961,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chunks = [];
         for await (const chunk of stream!) chunks.push(chunk);
         const tamperedSignedByB = Buffer.concat(chunks);
-        await page.getByTestId('btn-close-proof').click();
+        await page.getByTestId('btn-saved-done').click();
 
         await page.goto('/');
         await page.getByTestId('btn-verify-mode').click();
@@ -2111,7 +2110,7 @@ test.describe('10. Finish and Saved sheet', () => {
         await tid(page, 'btn-save').click();
         await first;
         await page.getByTestId('btn-saved-details').click();
-        await page.getByTestId('btn-close-proof').click();
+        await page.keyboard.press('Escape'); // close the sheet, keep editing
         await expect(page.getByTestId('proof-modal')).toBeHidden();
 
         await tid(page, 'btn-save').click();
@@ -2122,7 +2121,7 @@ test.describe('10. Finish and Saved sheet', () => {
         expect(downloads).toBe(1);
 
         // A real change saves again.
-        await page.getByTestId('btn-close-proof').click();
+        await page.keyboard.press('Escape'); // close the sheet, keep editing
         await tid(page, 'btn-add-date').click();
         const second = page.waitForEvent('download');
         await tid(page, 'btn-save').click();
