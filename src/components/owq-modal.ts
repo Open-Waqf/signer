@@ -8,6 +8,8 @@ export class OwqModal extends LitElement {
     @property({type: Boolean}) center = false;
     /** On phones, dock the card to the bottom of the screen like a native sheet. */
     @property({type: Boolean, reflect: true}) sheet = false;
+    /** Near the top instead of centred: for dialogs whose content grows while open (Verify). */
+    @property({type: Boolean, reflect: true}) top = false;
     @property({type: Boolean}) closeOnBackdrop = true;
     @property({type: Boolean}) closeOnEsc = true;
     @property({type: String}) ariaLabel = '';
@@ -55,19 +57,30 @@ export class OwqModal extends LitElement {
             min-height: 100dvh;
             display: flex;
             flex-direction: column;
-            /* Horizontally centre the card, but anchor it near the top so a modal
-               whose content grows after opening (e.g. verify alerts) does not
-               re-centre and jump under the reader. */
+            /* Centred. The bottom padding grows by the height of the phone keyboard
+               (--owq-keyboard, set while open), so the card moves up above the keyboard.
+               The card scrolls inside itself when it is taller than the space. */
             align-items: center;
-            justify-content: flex-start;
+            justify-content: center;
             /* Respect device safe areas (notch / home indicator) — the top-layer
                dialog lives outside <body>, so body safe-area padding never applies. */
             padding:
-                max(8vh, env(safe-area-inset-top, 0px))
+                max(var(--owq-modal-padding, 12px), env(safe-area-inset-top, 0px))
                 max(var(--owq-modal-padding, 12px), env(safe-area-inset-right, 0px))
-                max(var(--owq-modal-padding, 12px), env(safe-area-inset-bottom, 0px))
+                calc(max(var(--owq-modal-padding, 12px), env(safe-area-inset-bottom, 0px)) + var(--owq-keyboard, 0px))
                 max(var(--owq-modal-padding, 12px), env(safe-area-inset-left, 0px));
             box-sizing: border-box;
+        }
+
+        /* Dialogs whose content grows after opening (Verify results) stay near the top,
+           so they do not re-centre and jump under the reader. */
+        :host([top]) .modal-shell {
+            justify-content: flex-start;
+            padding-top: max(8vh, env(safe-area-inset-top, 0px));
+        }
+
+        :host .modal-card {
+            max-height: calc(100dvh - 24px - var(--owq-keyboard, 0px));
         }
 
         /* Bottom sheet on phones: the card sits on the bottom edge, under the thumb. */
@@ -100,9 +113,38 @@ export class OwqModal extends LitElement {
         this.syncDialogState();
     }
 
+    // The phone keyboard: when it covers part of the screen (the visual viewport is
+    // smaller than the window), lift the card above it. Where the system instead shrinks
+    // the whole window, this stays 0 and the centring follows the smaller window.
+    private onViewportChange = () => {
+        const vv = window.visualViewport;
+        const covered = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+        this.style.setProperty('--owq-keyboard', `${Math.round(covered)}px`);
+    };
+
+    private watchKeyboard(on: boolean) {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        if (on) {
+            vv.addEventListener('resize', this.onViewportChange);
+            vv.addEventListener('scroll', this.onViewportChange);
+            this.onViewportChange();
+        } else {
+            vv.removeEventListener('resize', this.onViewportChange);
+            vv.removeEventListener('scroll', this.onViewportChange);
+            this.style.removeProperty('--owq-keyboard');
+        }
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        this.watchKeyboard(false);
+    }
+
     updated(changed: Map<string, unknown>) {
         if (changed.has('open')) {
             this.syncDialogState();
+            this.watchKeyboard(this.open);
         }
         if (changed.has('open') && this.open) {
             queueMicrotask(() => this.focusFirstElement());

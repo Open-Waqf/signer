@@ -1146,6 +1146,12 @@ export class PdfWorkspace extends LitElement {
         .prompt-input {
             margin-bottom: 20px;
             font-size: 1rem;
+            /* .input-field lives in style.css, which does not reach inside this component. */
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px 14px;
+            border: 1px solid var(--border, #e5e7eb);
+            border-radius: var(--radius-md, 10px);
         }
 
         .stamp-presets {

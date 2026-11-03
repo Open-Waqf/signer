@@ -649,7 +649,8 @@ export class AppRoot extends LitElement {
 
     private renderPrivacyModal() {
         return html`
-            <owq-modal .open=${this.showPrivacyModal}
+            <owq-modal .top=${true}
+                       .open=${this.showPrivacyModal}
                        .closeOnBackdrop=${false}
                        data-testid="privacy-modal"
                        ariaLabel="${i18n.t('privacyTitle')}"
@@ -688,7 +689,8 @@ export class AppRoot extends LitElement {
     private renderDiagnosticsModal() {
         if (!this.showDiagnostics) return '';
         return html`
-            <owq-modal .open=${this.showDiagnostics}
+            <owq-modal .top=${true}
+                       .open=${this.showDiagnostics}
                        data-testid="diagnostics-modal"
                        ariaLabel="${i18n.t('diagnostics')}"
                        @modal-close=${() => this.showDiagnostics = false}>
@@ -828,6 +830,7 @@ export class AppRoot extends LitElement {
     private renderVerifyModal() {
         return html`
             <owq-modal .open=${this.showVerifyModal}
+                       .top=${true}
                        .closeOnBackdrop=${false}
                        ariaLabel="${i18n.t('verifyMode')}"
                        @modal-close=${this.closeVerify}>
