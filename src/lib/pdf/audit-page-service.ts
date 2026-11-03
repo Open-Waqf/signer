@@ -63,6 +63,9 @@ export async function textToImage(
     ctx.fillStyle = color;
     ctx.textBaseline = 'middle';
     ctx.direction = direction;
+    // 'left', not the default 'start': with right-to-left text 'start' is the right edge,
+    // which would draw the text off the image (left of x = 0).
+    ctx.textAlign = 'left';
     ctx.fillText(text, 0, height / 2);
 
     return new Promise((resolve, reject) => {

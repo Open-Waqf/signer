@@ -13,6 +13,10 @@ export interface Annotation {
     fontWeight?: 'normal' | 'bold';
     fontFamily?: string;
     color?: string; // hex color e.g. #000000
+    /** Set only on a placed date (not on "Add text", which shares the type). */
+    dateFormat?: 'numeric' | 'long' | 'hijri';
+    /** The signing date itself, to show it again in another format. */
+    dateIso?: string;
     
     // WebAuthn / Hardware Proofs
     publicKey?: string;    // SPKI Public Key (Base64)

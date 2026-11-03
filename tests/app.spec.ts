@@ -1105,6 +1105,8 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
                 xPct: 0.1 + (i * 0.22),
                 yPct: 0.12 + (i * 0.08),
             }));
+            // Start with nothing selected: the last date's style bar would sit over the area.
+            comp.selectedIds = [];
             comp.requestUpdate();
         });
 

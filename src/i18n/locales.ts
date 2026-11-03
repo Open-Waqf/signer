@@ -18,6 +18,7 @@ export const resources = {
         addInitials: "+ Initials",
         addDate: "+\u00A0Date",
         addStamp: "+\u00A0Stamp", // "+" never alone on a line
+        dateFormat: "Date format",
         sigInputMode: "How to sign",
         sigDraw: "Draw",
         sigType: "Type",
@@ -229,6 +230,7 @@ export const resources = {
         addInitials: "+ أحرف",
         addDate: "+\u00A0تاريخ",
         addStamp: "+\u00A0ختم",
+        dateFormat: "صيغة التاريخ",
         sigInputMode: "طريقة التوقيع",
         sigDraw: "رسم",
         sigType: "كتابة",
@@ -437,6 +439,7 @@ export const resources = {
         addInitials: "+ Initiales",
         addDate: "+\u00A0Date",
         addStamp: "+\u00A0Tampon",
+        dateFormat: "Format de la date",
         sigInputMode: "Façon de signer",
         sigDraw: "Dessiner",
         sigType: "Saisir",

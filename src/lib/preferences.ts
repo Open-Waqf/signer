@@ -6,6 +6,7 @@ const KEYS = {
     activeSidebar: 'signer_active_sidebar',
     uiMode: 'signer_ui_mode',
     userEmail: 'signer_user_email',
+    dateFormat: 'signer_date_format',
 } as const;
 
 export const preferences = {
@@ -14,6 +15,14 @@ export const preferences = {
     },
     setLang(lang: string) {
         localStorage.setItem(KEYS.lang, lang);
+    },
+    /** The date format chosen last time (numeric by default). */
+    getDateFormat(): 'numeric' | 'long' | 'hijri' {
+        const value = localStorage.getItem(KEYS.dateFormat);
+        return value === 'long' || value === 'hijri' ? value : 'numeric';
+    },
+    setDateFormat(value: 'numeric' | 'long' | 'hijri') {
+        localStorage.setItem(KEYS.dateFormat, value);
     },
     /** The saved sidebar choice; `fallback` when the user never chose. */
     getActiveSidebar(fallback: ActiveSidebar = 'thumbnails'): ActiveSidebar {

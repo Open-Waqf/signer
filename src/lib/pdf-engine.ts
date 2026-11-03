@@ -233,7 +233,10 @@ export class PdfEngine {
             if ((ann.type === 'date' || ann.type === 'identity') && ann.data) {
                 const normalized = ann.data.replace(/\u200E/g, '').trim();
                 const isDateLike = /^\d{2}\/\d{2}\/\d{4}$/.test(normalized);
-                const textDirection: CanvasDirection = isDateLike ? 'ltr' : 'inherit';
+                // Like dir="auto" on screen: the first letter decides (Arabic: right to left).
+                // Not the page language, so Arabic text is right in an English session too.
+                const firstStrong = normalized.match(/[A-Za-z\u00C0-\u024F\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/)?.[0] ?? '';
+                const textDirection: CanvasDirection = !isDateLike && /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/.test(firstStrong) ? 'rtl' : 'ltr';
                 const imgBuffer = await textToImage(
                     ann.data,
                     ann.fontSize || 12,

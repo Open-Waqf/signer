@@ -13,6 +13,7 @@ import {LANGUAGES} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
 import {clearDraft, writeDraftPdf, writeDraftState, type Draft, type DraftState} from '../lib/draft-store';
 import {preferences} from '../lib/preferences';
+import {DATE_FORMATS, formatSigningDate, isDateFormat, type DateFormat} from '../domain/date-format';
 import {
     applyAnnotationStyle,
     applyToAllPages as applyToAllPagesStore,
@@ -990,7 +991,9 @@ export class PdfWorkspace extends LitElement {
 
         .style-popup {
             position: absolute;
-            top: -56px;
+            /* Anchored by its bottom edge: when it wraps to two rows on a phone it grows
+               upward, never down over the item being styled. */
+            bottom: calc(100% + 10px);
             inset-inline-start: 50%;
             transform: translateX(calc(-50% + var(--popup-shift, 0px)));
             /* One row sized to its buttons (not to the small annotation it hangs from);
@@ -1005,7 +1008,6 @@ export class PdfWorkspace extends LitElement {
             gap: 8px;
             z-index: 200;
             box-shadow: var(--shadow-floating);
-            transition: top 0.2s;
         }
 
         .style-tool-btn {
@@ -1136,7 +1138,9 @@ export class PdfWorkspace extends LitElement {
             transform: translateX(calc(50% + var(--popup-shift, 0px)));
         }
 
+        .style-popup.below,
         .page-container[data-near-top] .style-popup {
+            bottom: auto;
             top: 100%;
             margin-top: 10px;
         }
@@ -1150,6 +1154,12 @@ export class PdfWorkspace extends LitElement {
             line-height: 1.2;
             pointer-events: none;
             padding: 2px 4px;
+        }
+
+        /* Room for the delete button, so it never covers text (in Arabic it hid the day).
+           Physical right, in every language: the button sits on the right corner. */
+        .draggable.selected .text-content {
+            padding-right: 22px;
         }
 
         .toolbar-row {
@@ -1568,6 +1578,9 @@ export class PdfWorkspace extends LitElement {
         const margin = 8;
         for (const popup of popups) {
             popup.style.removeProperty('--popup-shift');
+            // Above the item by default; below it when there is no room above.
+            popup.classList.remove('below');
+            if (popup.getBoundingClientRect().top < a.top + margin) popup.classList.add('below');
             const p = popup.getBoundingClientRect();
             let shift = 0;
             if (p.right > a.right - margin) shift = (a.right - margin) - p.right;
@@ -2231,25 +2244,19 @@ export class PdfWorkspace extends LitElement {
 
     addDateStamp() {
         const now = new Date();
-        const parts = new Intl.DateTimeFormat(i18n.lang, {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            numberingSystem: 'latn',
-        }).formatToParts(now);
-        const day = parts.find((p) => p.type === 'day')?.value ?? '';
-        const month = parts.find((p) => p.type === 'month')?.value ?? '';
-        const year = parts.find((p) => p.type === 'year')?.value ?? '';
-        const lrm = '\u200E';
-        const dateStr = (day && month && year)
-            ? `${lrm}${day}/${month}/${year}${lrm}`
-            : new Intl.DateTimeFormat('en-GB', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                numberingSystem: 'latn',
-            }).format(now);
-        this.addAnnotation('date', dateStr, 0.3);
+        const format = preferences.getDateFormat();
+        this.addAnnotation('date', formatSigningDate(now, i18n.lang, format), 0.3);
+        const placed = this.annotations[this.annotations.length - 1];
+        this.annotations = [...this.annotations.slice(0, -1), {...placed, dateFormat: format, dateIso: now.toISOString()}];
+    }
+
+    /** Show a placed date in another format; the choice is remembered for the next date. */
+    changeDateFormat(id: string, format: DateFormat) {
+        const ann = this.annotations.find((a) => a.id === id);
+        if (!ann?.dateIso || this.isAnnotationLocked(id)) return;
+        this.snapshot();
+        this.updateAnnotation(id, {data: formatSigningDate(new Date(ann.dateIso), i18n.lang, format), dateFormat: format});
+        preferences.setDateFormat(format);
     }
 
     openCertificatePicker() {
@@ -3227,6 +3234,24 @@ export class PdfWorkspace extends LitElement {
                                                         this.handleTextEdit(ann.id, ann.data);
                                                     }}>✎
                                             </button>
+                                            ${ann.dateFormat && ann.dateIso ? html`
+                                                <select data-testid="select-date-format"
+                                                        dir=${i18n.lang === 'ar' ? 'rtl' : 'ltr'}
+                                                        aria-label="${i18n.t('dateFormat')}"
+                                                        class="style-tool-select"
+                                                        @click=${(e: Event) => e.stopPropagation()}
+                                                        @change=${(e: Event) => {
+                                                            e.stopPropagation();
+                                                            const value = (e.target as HTMLSelectElement).value;
+                                                            if (isDateFormat(value)) this.changeDateFormat(ann.id, value);
+                                                        }}>
+                                                    ${DATE_FORMATS.map((format) => html`
+                                                        <option value=${format} ?selected=${ann.dateFormat === format}>
+                                                            ${formatSigningDate(new Date(ann.dateIso!), i18n.lang, format).replace(/\u200E/g, '')}
+                                                        </option>
+                                                    `)}
+                                                </select>
+                                            ` : ''}
                                             <select data-testid="select-font"
                                                     aria-label="${i18n.t('fontFamily')}"
                                                     class="style-tool-select"
@@ -3302,7 +3327,7 @@ export class PdfWorkspace extends LitElement {
                                         <img src="${ann.data}" alt="${ann.type} annotation"
                                              class="draggable-stamp"/>
                                     ` : html`
-                                        <span class="text-content"
+                                        <span class="text-content" dir="auto"
                                               style=${styleMap(this.textStyle(ann))}
                                               @dblclick=${(e: Event) => {
                                                   e.stopPropagation();
