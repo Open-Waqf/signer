@@ -9,3 +9,5 @@ appId: ${APP_ID}
 - runFlow: flows/03-arabic.yaml
 - runFlow: flows/04-back-closes-saved-sheet.yaml
 - runFlow: flows/05-draft-after-app-closed.yaml
+- runFlow: flows/06-share-to-signer.yaml
+- runFlow: flows/07-typed-signature-hijri.yaml

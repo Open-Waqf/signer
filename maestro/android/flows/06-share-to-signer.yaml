@@ -1,0 +1,19 @@
+# "Share to Signer": a PDF shared from another app opens in the editor.
+# A real share through Android's share sheet: Signer Dev shares its own saved file to itself.
+# The share sheet is the phone's own screen, so the target is found by its label.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "btn-sample"
+- tapOn:
+    id: "m-btn-add-date"
+- tapOn:
+    id: "m-btn-finish"
+- tapOn:
+    id: "btn-share-saved"
+- tapOn: "Signer Dev"
+# The shared file was signed before, so it opens with the handover banner.
+- assertVisible:
+    id: "handover-banner"

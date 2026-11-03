@@ -944,14 +944,14 @@ export class SignatureModal extends LitElement {
                                 aria-pressed="${this.entryMode === 'draw'}" @click=${() => this.setEntryMode('draw')}>
                             ${i18n.t('sigDraw')}
                         </button>
-                        <button class="btn btn-sm ${this.entryMode === 'type' ? 'active' : ''}" data-testid="btn-sig-type"
+                        <button class="btn btn-sm ${this.entryMode === 'type' ? 'active' : ''}" id="btn-sig-type" data-testid="btn-sig-type"
                                 aria-pressed="${this.entryMode === 'type'}" @click=${() => this.setEntryMode('type')}>
                             ${i18n.t('sigType')}
                         </button>
                     </div>
 
                     ${this.entryMode === 'type' ? html`
-                        <input type="text" class="input-field typed-input" data-testid="input-typed-sig"
+                        <input type="text" class="input-field typed-input" id="input-typed-sig" data-testid="input-typed-sig"
                                dir="auto" maxlength="40" autocomplete="name"
                                aria-label="${i18n.t('typeYourName')}" placeholder="${i18n.t('typeYourName')}"
                                .value=${this.typedText}
@@ -1010,7 +1010,7 @@ export class SignatureModal extends LitElement {
                     <div class="actions">
                         <button class="btn" @click=${() => this.remove()}>${i18n.t('cancel')}</button>
                         <button class="btn btn-danger" data-testid="btn-clear-sig" @click=${() => this.clear()}>${i18n.t('clear')}</button>
-                        <button class="btn btn-primary" data-testid="btn-save-sig"
+                        <button class="btn btn-primary" id="btn-save-sig" data-testid="btn-save-sig"
                                 ?disabled=${!this.isDirty && !this.originalData}
                                 @click=${() => this.save()}>${i18n.t('done')}</button>
                     </div>

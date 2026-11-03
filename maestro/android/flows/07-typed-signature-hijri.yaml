@@ -1,0 +1,23 @@
+# Typed signature and the Hijri date work with the phone's own WebView and fonts.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "btn-sample"
+- tapOn:
+    id: "m-btn-add-sig"
+- tapOn:
+    id: "btn-sig-type"
+- tapOn:
+    id: "input-typed-sig"
+- inputText: "Amina Haddad"
+- hideKeyboard
+- tapOn:
+    id: "btn-save-sig"
+- tapOn:
+    id: "m-btn-add-date"
+- tapOn:
+    id: "select-date-format"
+- tapOn: ".*1448.*"
+- assertVisible: ".*1448.*"
