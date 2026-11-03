@@ -13,6 +13,8 @@ export function createCenteredAnnotation(input: {
     pageRect: DOMRect;
     viewportRect: DOMRect;
     generateId: () => string;
+    /** Items already placed: a new one never lands exactly on top of one of them. */
+    existing?: Annotation[];
 }): Annotation {
     const aspectRatio = input.aspectRatio ?? 1;
     const screenCenterX = input.viewportRect.left + input.viewportRect.width / 2;
@@ -20,7 +22,15 @@ export function createCenteredAnnotation(input: {
     const relativeX = screenCenterX - input.pageRect.left;
     const relativeY = screenCenterY - input.pageRect.top;
     const xPct = Math.max(0.1, Math.min(0.8, relativeX / input.pageRect.width));
-    const yPct = Math.max(0.1, Math.min(0.8, relativeY / input.pageRect.height));
+    let yPct = Math.max(0.1, Math.min(0.8, relativeY / input.pageRect.height));
+    // Same spot as an item on this page (e.g. a date added right after a signature):
+    // move the new one down a step, so both stay visible and easy to grab.
+    const page = input.currentPage - 1;
+    const taken = (y: number) => (input.existing ?? []).some((a) =>
+        a.page === page && Math.abs(a.xPct - xPct) < 0.05 && Math.abs(a.yPct - y) < 0.05);
+    for (let step = 0; step < 8 && taken(yPct); step++) {
+        yPct = yPct + 0.07 > 0.9 ? 0.1 + step * 0.01 : yPct + 0.07;
+    }
     const widthPct = input.widthPct ?? (input.type === 'initials' ? 0.15 : 0.25);
 
     return {

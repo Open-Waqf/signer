@@ -1,4 +1,5 @@
 import {html, LitElement, PropertyValues} from 'lit';
+import {SystemBars, SystemBarsStyle} from '@capacitor/core';
 import {customElement, query, state} from 'lit/decorators.js';
 import {App} from '@capacitor/app';
 import {fileService} from './lib/file-service';
@@ -146,6 +147,8 @@ export class AppRoot extends LitElement {
         void requestStoragePersistence();
         if (isNativePlatform()) {
             StatusBar.setStyle({style: Style.Light}).catch(console.error);
+            // Also the bottom navigation buttons (see capacitor.config.ts SystemBars).
+            SystemBars.setStyle({style: SystemBarsStyle.Light}).catch(console.error);
             StatusBar.setBackgroundColor({color: '#ffffff'}).catch(console.error);
         }
         window.addEventListener('lang-changed', this.onLangChanged);

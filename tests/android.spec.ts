@@ -124,6 +124,13 @@ test.describe('12. Android app (fake Android bridge) @phone', () => {
         await expect(page.getByTestId('btn-exit')).toBeVisible();
         expect(await openDialogs(page)).toEqual([]);
     });
+    test('12.17 Both system bars get dark icons (the app is light, even with the phone in dark mode)', async ({page}) => {
+        await fakeAndroid(page);
+        await page.goto('/');
+        await expect.poll(async () => (await nativeCalls(page, 'SystemBars'))
+            .some((c) => c.method === 'setStyle' && c.options.style === 'LIGHT' && !c.options.bar)).toBe(true);
+    });
+
     test('12.14 Share App opens the Android share sheet with the website link, no toast', async ({page}) => {
         await fakeAndroid(page);
         await page.goto('/');

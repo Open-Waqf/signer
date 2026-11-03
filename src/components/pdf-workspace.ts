@@ -213,7 +213,7 @@ export class PdfWorkspace extends LitElement {
         if (!this.detectedRefId || this.handoverBannerClosed) return '';
         const checked = this.isVerified;
         return html`
-            <div class="handover-banner ${checked ? 'is-checked' : ''}" data-testid="handover-banner"
+            <div class="handover-banner ${checked ? 'is-checked' : ''}" id="handover-banner" data-testid="handover-banner"
                  data-checked="${checked}" role="status">
                 <div class="handover-banner-text">
                     ${checked ? ICONS.check : ICONS.alert}
@@ -2106,6 +2106,7 @@ export class PdfWorkspace extends LitElement {
             pageRect: this.container.getBoundingClientRect(),
             viewportRect: this.viewport.getBoundingClientRect(),
             generateId: () => this.generateId(),
+            existing: this.annotations,
         });
 
         this.annotations = [...this.annotations, newAnn];
@@ -3221,7 +3222,7 @@ export class PdfWorkspace extends LitElement {
 
             <div class="toolbar-bottom" role="toolbar" aria-label="${i18n.t('ariaToolbar')}">
                 <div class="bottom-tools">
-                <button data-testid="m-btn-add-sig" class="btn btn-tool" aria-label="${i18n.t('signMode')}"
+                <button id="m-btn-add-sig" data-testid="m-btn-add-sig" class="btn btn-tool" aria-label="${i18n.t('signMode')}"
                         @click=${this.openSignModal}>
                     ${ICONS.sign} <span>${i18n.t('signMode')}</span>
                 </button>
@@ -3322,7 +3323,7 @@ export class PdfWorkspace extends LitElement {
                                                     }}>✎
                                             </button>
                                             ${ann.dateFormat && ann.dateIso ? html`
-                                                <select data-testid="select-date-format"
+                                                <select id="select-date-format" data-testid="select-date-format"
                                                         dir=${i18n.lang === 'ar' ? 'rtl' : 'ltr'}
                                                         aria-label="${i18n.t('dateFormat')}"
                                                         class="style-tool-select"

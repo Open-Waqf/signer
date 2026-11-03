@@ -34,6 +34,7 @@ const METHODS: Record<string, string[]> = {
     Share: ['share'],
     Haptics: ['impact', 'notification', 'vibrate', 'selectionStart', 'selectionChanged', 'selectionEnd'],
     StatusBar: ['setStyle', 'setBackgroundColor', 'setOverlaysWebView', 'show', 'hide'],
+    SystemBars: ['setStyle', 'show', 'hide', 'setAnimation'],
 };
 
 export async function fakeAndroid(page: Page, options: FakeAndroidOptions = {}) {

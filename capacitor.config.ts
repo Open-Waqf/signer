@@ -5,6 +5,11 @@ const config: CapacitorConfig = {
     appName: 'Open Signer',
     webDir: 'dist',
     plugins: {
+        // Dark icons on both system bars: the app has only a light design. With the phone in
+        // dark mode the default made the bottom navigation buttons white, barely visible.
+        SystemBars: {
+            style: 'LIGHT',
+        },
         StatusBar: {
             style: 'LIGHT',
             backgroundColor: '#ffffff',

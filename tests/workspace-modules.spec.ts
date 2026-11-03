@@ -77,3 +77,21 @@ test('10.4 finalizeSave on native does not open the share sheet by itself', asyn
     expect(shared).toEqual([]);
     expect(toasts).not.toContain('Exporting');
 });
+
+test('createCenteredAnnotation: a new item never lands exactly on top of another', async () => {
+    const {createCenteredAnnotation} = await import('../src/features/workspace/annotation-store');
+    const rect = (l: number, t: number, w: number, h: number) => ({left: l, top: t, width: w, height: h}) as DOMRect;
+    let n = 0;
+    const make = (existing: any[]) => createCenteredAnnotation({
+        type: 'date', data: 'x', currentPage: 1, existing,
+        pageRect: rect(0, 0, 400, 800), viewportRect: rect(0, 0, 400, 800), generateId: () => `a${n++}`,
+    });
+    const first = make([]);
+    const second = make([first]);
+    const third = make([first, second]);
+    expect(second.yPct - first.yPct).toBeGreaterThan(0.05);
+    expect(third.yPct - second.yPct).toBeGreaterThan(0.05);
+    expect(second.xPct).toBe(first.xPct);
+    // Another page does not count.
+    expect(make([{...first, page: 3}]).yPct).toBe(first.yPct);
+});
