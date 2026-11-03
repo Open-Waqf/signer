@@ -17,10 +17,7 @@ export interface Annotation {
     dateFormat?: 'numeric' | 'long' | 'hijri';
     /** The signing date itself, to show it again in another format. */
     dateIso?: string;
-    
-    // WebAuthn / Hardware Proofs
-    publicKey?: string;    // SPKI Public Key (Base64)
-    assertion?: string;    // JSON stringified WebAuthn response (sig, authData, clientData)
+
     lockedByChain?: boolean;
 }
 
