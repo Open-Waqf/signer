@@ -21,6 +21,38 @@ const INK_COLORS: Array<{ value: string; labelKey: TranslationKey }> = [
     {value: '#1e8449', labelKey: 'inkGreen'},
 ];
 
+// Typed signature: handwriting fonts bundled with the app (works offline), loaded only
+// when Type is opened. Licences: public/fonts/OFL-*.txt.
+const TYPE_FONTS: Array<{ id: string; family: string; file: string | null; sample: string }> = [
+    {id: 'script', family: 'OWQ Script', file: 'fonts/DancingScript.ttf', sample: 'Aa'},
+    {id: 'ruqaa', family: 'OWQ Ruqaa', file: 'fonts/ArefRuqaa-Regular.ttf', sample: 'أب'},
+    {id: 'amiri', family: 'Amiri', file: null, sample: 'أب Aa'}, // already loaded by style.css
+];
+const fontLoads = new Map<string, Promise<void>>();
+
+function loadTypeFont(font: (typeof TYPE_FONTS)[number]): Promise<void> {
+    let pending = fontLoads.get(font.id);
+    if (!pending) {
+        pending = (async () => {
+            if (font.file) {
+                const url = new URL(font.file, new URL(import.meta.env.BASE_URL, window.location.href)).toString();
+                const face = new FontFace(font.family, `url(${url})`);
+                await face.load();
+                document.fonts.add(face);
+            } else {
+                await document.fonts.load(`48px "${font.family}"`);
+            }
+        })().catch((e) => {
+            fontLoads.delete(font.id); // try again next time
+            console.warn('[OWQ] Could not load font', font.family, e);
+        });
+        fontLoads.set(font.id, pending);
+    }
+    return pending;
+}
+
+const hasArabic = (text: string) => /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+
 const MAX_PRESETS = 5;
 const MIN_STROKE_DISTANCE = 6;
 
@@ -56,6 +88,12 @@ export class SignatureModal extends LitElement {
     @state() private originalData: string | null = null;
     @state() private isDirty = false;
 
+    /** Draw with a finger, or type the name in a handwriting font (step 5). */
+    @state() private entryMode: 'draw' | 'type' = localStorage.getItem('signer_sig_input') === 'type' ? 'type' : 'draw';
+    @state() private typedText = '';
+    @state() private typedFont = localStorage.getItem('signer_sig_font') ?? (i18n.lang === 'ar' ? 'ruqaa' : 'script');
+    private typedRenderToken = 0;
+
         static styles = [sharedStyles, css`
         canvas {
             border: 2px dashed var(--border, #e5e7eb);
@@ -75,6 +113,68 @@ export class SignatureModal extends LitElement {
             canvas {
                 min-height: 140px;
             }
+        }
+
+        canvas.typed {
+            cursor: default;
+        }
+
+        .input-mode {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        /* Compact, so Done stays on screen on phones in Type mode. */
+        .input-mode .btn,
+        .font-choice {
+            flex: 1;
+            min-height: 40px;
+            padding: 6px 10px;
+        }
+
+        .input-mode .btn.active,
+        .input-mode .btn.active:hover:not(:disabled),
+        .font-choice.active,
+        .font-choice.active:hover:not(:disabled) {
+            border-color: var(--primary, #1d4ed8);
+            color: var(--primary, #1d4ed8);
+            background: color-mix(in srgb, var(--primary, #1d4ed8), transparent 92%);
+        }
+
+        /* .input-field lives in style.css, which does not reach inside this component. */
+        .input-field {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border, #e5e7eb);
+            border-radius: var(--radius-md, 10px);
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 1rem;
+            outline: none;
+            background: var(--bg-surface, #ffffff);
+            color: var(--text-main, #1f2937);
+        }
+
+        .input-field:focus {
+            border-color: var(--primary, #1d4ed8);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .typed-input {
+            margin-bottom: 8px;
+            padding: 10px 14px;
+        }
+
+        .font-strip {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .font-choice {
+            font-size: 1.15rem;
+            text-transform: none;
         }
 
         .actions {
@@ -277,6 +377,7 @@ export class SignatureModal extends LitElement {
         window.addEventListener('resize', this._resizeHandler!);
         this.setupEvents();
         await this.loadSaved();
+        if (this.entryMode === 'type') void this.loadTypeFonts();
         // Focus trapping and Escape-to-close are handled by the native <dialog>
         // showModal() in owq-modal (same as every other modal), so no custom
         // keydown trap is needed here.
@@ -400,13 +501,74 @@ export class SignatureModal extends LitElement {
                 this.ctx.lineWidth = 4 * ratio;
                 this.ctx.fillStyle = this.inkColor;
                 this.ctx.strokeStyle = this.inkColor;
-                if (hadPixels) {
+                if (this.entryMode === 'type' && this.typedText.trim()) {
+                    void this.renderTyped();
+                } else if (hadPixels) {
                     this.ctx.drawImage(snapshot, 0, 0, nextWidth, nextHeight);
                 } else if (this.originalData) {
                     this.drawFromData(this.originalData);
                 }
             }
         }
+    }
+
+    private setEntryMode(mode: 'draw' | 'type') {
+        if (this.entryMode === mode) return;
+        HapticService.selection();
+        this.entryMode = mode;
+        localStorage.setItem('signer_sig_input', mode);
+        if (mode === 'type' && this.typedText.trim()) void this.renderTyped();
+        if (mode === 'type') {
+            void this.loadTypeFonts();
+            void this.updateComplete.then(() =>
+                this.shadowRoot?.querySelector<HTMLInputElement>('[data-testid="input-typed-sig"]')?.focus());
+        }
+    }
+
+    private setTypedFont(id: string) {
+        HapticService.selection();
+        this.typedFont = id;
+        localStorage.setItem('signer_sig_font', id);
+        void this.loadTypeFonts(); // keep the style buttons' samples right
+        if (this.typedText.trim()) void this.renderTyped();
+    }
+
+    private onTypedInput(value: string) {
+        this.typedText = value;
+        void this.renderTyped();
+    }
+
+    private loadTypeFonts() {
+        return Promise.all(TYPE_FONTS.map(loadTypeFont)).then(() => this.requestUpdate());
+    }
+
+    /** Draw the typed name on the pad, as large as fits, in the chosen font and ink. */
+    private async renderTyped() {
+        const token = ++this.typedRenderToken;
+        const font = TYPE_FONTS.find((f) => f.id === this.typedFont) ?? TYPE_FONTS[0];
+        await loadTypeFont(font);
+        if (token !== this.typedRenderToken || !this.ctx || !this.canvas) return;
+        const ctx = this.ctx;
+        const text = this.typedText.trim();
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.originalData = null;
+        this.isDirty = text.length > 0;
+        if (!text) return;
+        let size = Math.round(this.canvas.height * 0.42);
+        const maxWidth = this.canvas.width * 0.88;
+        ctx.font = `${size}px "${font.family}"`;
+        const width = ctx.measureText(text).width;
+        if (width > maxWidth) {
+            size = Math.max(12, Math.floor(size * maxWidth / width));
+            ctx.font = `${size}px "${font.family}"`;
+        }
+        ctx.save();
+        ctx.fillStyle = this.inkColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        (ctx as CanvasRenderingContext2D & { direction?: CanvasDirection }).direction = hasArabic(text) ? 'rtl' : 'ltr';
+        ctx.fillText(text, this.canvas.width / 2, this.canvas.height / 2);
+        ctx.restore();
     }
 
     getMousePos(e: { clientX: number, clientY: number }) {
@@ -419,6 +581,7 @@ export class SignatureModal extends LitElement {
 
     setupEvents() {
         this._pointerDownHandler = (e: PointerEvent) => {
+            if (this.entryMode === 'type') return; // the pad only shows the typed name
             if (e.button !== 0 && e.pointerType === 'mouse') return;
             e.preventDefault();
             this.activePointerId = e.pointerId;
@@ -514,6 +677,8 @@ export class SignatureModal extends LitElement {
 
     clear() {
         HapticService.impact();
+        this.typedRenderToken++;
+        this.typedText = '';
         this.ctx?.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.isDirty = false;
         this.originalData = null;
@@ -532,10 +697,13 @@ export class SignatureModal extends LitElement {
             this.ctx.strokeStyle = color;
             this.ctx.fillStyle = color;
         }
+        if (this.entryMode === 'type' && this.typedText.trim()) void this.renderTyped();
     }
 
     private usePreset(preset: SignaturePreset) {
         HapticService.impact();
+        this.typedRenderToken++;
+        this.typedText = '';
         this.originalData = preset.dataURL;
         this.isDirty = false;
         if (this.ctx) {
@@ -771,7 +939,36 @@ export class SignatureModal extends LitElement {
                         `)}
                     </div>
 
+                    <div class="input-mode" role="group" aria-label="${i18n.t('sigInputMode')}">
+                        <button class="btn btn-sm ${this.entryMode === 'draw' ? 'active' : ''}" data-testid="btn-sig-draw"
+                                aria-pressed="${this.entryMode === 'draw'}" @click=${() => this.setEntryMode('draw')}>
+                            ${i18n.t('sigDraw')}
+                        </button>
+                        <button class="btn btn-sm ${this.entryMode === 'type' ? 'active' : ''}" data-testid="btn-sig-type"
+                                aria-pressed="${this.entryMode === 'type'}" @click=${() => this.setEntryMode('type')}>
+                            ${i18n.t('sigType')}
+                        </button>
+                    </div>
+
+                    ${this.entryMode === 'type' ? html`
+                        <input type="text" class="input-field typed-input" data-testid="input-typed-sig"
+                               dir="auto" maxlength="40" autocomplete="name"
+                               aria-label="${i18n.t('typeYourName')}" placeholder="${i18n.t('typeYourName')}"
+                               .value=${this.typedText}
+                               @input=${(e: Event) => this.onTypedInput((e.target as HTMLInputElement).value)}>
+                        <div class="font-strip" role="group" aria-label="${i18n.t('sigFontStyle')}">
+                            ${TYPE_FONTS.map((f) => html`
+                                <button class="btn btn-sm font-choice ${this.typedFont === f.id ? 'active' : ''}"
+                                        data-testid="btn-sig-font-${f.id}"
+                                        aria-pressed="${this.typedFont === f.id}"
+                                        style="font-family: '${f.family}'"
+                                        @click=${() => this.setTypedFont(f.id)}>${f.sample}</button>
+                            `)}
+                        </div>
+                    ` : ''}
+
                     <canvas id="signature-pad" data-testid="signature-pad"
+                            class="${this.entryMode === 'type' ? 'typed' : ''}"
                             tabindex="0" autofocus
                             role="img" aria-label="${i18n.t('signaturePadLabel')}"></canvas>
 
