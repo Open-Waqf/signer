@@ -4,7 +4,7 @@ import {App} from '@capacitor/app';
 import {fileService} from './lib/file-service';
 import {i18n} from './lib/i18n-service';
 import packageJson from '../package.json';
-import './components/pdf-workspace';
+import {ENCRYPTED_PDF} from './components/pdf-workspace';
 import './components/owq-modal';
 import {registerSW} from 'virtual:pwa-register';
 import {AppConfig} from './config';
@@ -187,11 +187,15 @@ export class AppRoot extends LitElement {
         }
     }
 
-    showToast(msg: string) {
+    private toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** A longer message can stay longer (ms), so it can be read to the end. */
+    showToast(msg: string, ms = 3000) {
         this.toastMsg = msg;
-        setTimeout(() => {
+        if (this.toastTimer) clearTimeout(this.toastTimer);
+        this.toastTimer = setTimeout(() => {
             this.toastMsg = null;
-        }, 3000);
+        }, ms);
     }
 
     private setLoading(isLoading: boolean) {
@@ -395,7 +399,10 @@ export class AppRoot extends LitElement {
         } catch (e) {
             this.logMarker('[OWQ][WORKSPACE_LOAD_FAILED]');
             console.error('Error loading file into workspace:', this.serializeError(e), e);
-            this.showToast(i18n.t('errorLoading'));
+            // pdf.js names a PDF that needs a password to open PasswordException.
+            const locked = (e as Error)?.message === ENCRYPTED_PDF || (e as Error)?.name === 'PasswordException';
+            if (locked) this.showToast(i18n.t('lockedPdf'), 8000);
+            else this.showToast(i18n.t('errorLoading'));
             this.mode = 'home';
         } finally {
             this.setLoading(false);

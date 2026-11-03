@@ -13,6 +13,9 @@ import {LANGUAGES} from '../i18n/locales';
 import {HapticService} from '../lib/haptic-service';
 import {clearDraft, writeDraftPdf, writeDraftState, type Draft, type DraftState} from '../lib/draft-store';
 import {preferences} from '../lib/preferences';
+
+/** Thrown by loadPdf for a password-protected PDF. */
+export const ENCRYPTED_PDF = 'OWQ_ENCRYPTED_PDF';
 import {DATE_FORMATS, formatSigningDate, isDateFormat, type DateFormat} from '../domain/date-format';
 import {
     applyAnnotationStyle,
@@ -1526,6 +1529,11 @@ export class PdfWorkspace extends LitElement {
         try {
             this.openedDocumentHash = await pdfEngine.getIntegrityAnchorHash(file);
         } catch (error) {
+            // A password-protected PDF cannot be changed safely: stop now with a clear
+            // message, not after the user did all the work (it used to fail at Finish).
+            if (/is encrypted/i.test(String((error as Error)?.message ?? error))) {
+                throw new Error(ENCRYPTED_PDF);
+            }
             // Some Android WebView/PDF edge cases fail deterministic normalization.
             // Fall back to direct SHA-256 so the document can still be opened/signed.
             console.error('[OWQ][INTEGRITY_HASH_FALLBACK]', error);
