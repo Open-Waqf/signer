@@ -211,14 +211,28 @@ export class PdfEngine {
 
         if (includeFooter) {
             const footerText = `Signed via Open Waqf | Ref: ${docId}`;
+            // Each signer's footer one line above the earlier ones, never printed over them.
+            const footerY = 8 + 9 * baseSignatures.length;
             for (const page of pages) {
                 const frame = shownFrame(page);
                 page.drawText(footerText, {
-                    ...frame.toPage(frame.width / 2 - 90, 8), rotate: frame.rotate,
+                    ...frame.toPage(frame.width / 2 - 90, footerY), rotate: frame.rotate,
                     size: 6, font, color: rgb(0.6, 0.6, 0.6),
                 });
             }
         }
+
+        // Each picture is stored in the file once and reused: "Apply to all pages" on a
+        // 50-page file used to store the same signature 50 times.
+        const embedded = new Map<string, PDFImage>();
+        const embedOnce = async (key: string, png: () => Promise<Uint8Array | string>) => {
+            let image = embedded.get(key);
+            if (!image) {
+                image = await pdfDoc.embedPng(await png());
+                embedded.set(key, image);
+            }
+            return image;
+        };
 
         for (const ann of annotations) {
             if (ann.page < 0 || ann.page >= pages.length) continue;
@@ -237,21 +251,15 @@ export class PdfEngine {
                 // Not the page language, so Arabic text is right in an English session too.
                 const firstStrong = normalized.match(/[A-Za-z\u00C0-\u024F\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/)?.[0] ?? '';
                 const textDirection: CanvasDirection = !isDateLike && /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/.test(firstStrong) ? 'rtl' : 'ltr';
-                const imgBuffer = await textToImage(
-                    ann.data,
-                    ann.fontSize || 12,
-                    ann.fontWeight === 'bold',
-                    ann.fontFamily || 'Amiri',
-                    ann.color || '#000000',
-                    textDirection
-                );
-                const pngImage = await pdfDoc.embedPng(imgBuffer);
+                const style = [ann.data, ann.fontSize || 12, ann.fontWeight === 'bold', ann.fontFamily || 'Amiri', ann.color || '#000000', textDirection] as const;
+                const pngImage = await embedOnce(`text:${JSON.stringify(style)}`, () => textToImage(...style));
                 const scaleFactor = 0.75;
                 const w = (pngImage.width / 3) * scaleFactor;
                 const h = (pngImage.height / 3) * scaleFactor;
                 drawShown(pngImage, width * ann.xPct, height * ann.yPct, w, h);
             } else if (ann.data) {
-                const pngImage = await pdfDoc.embedPng(ann.data);
+                const data = ann.data;
+                const pngImage = await embedOnce(`image:${data}`, async () => data);
                 const targetWidth = width * (ann.widthPct || 0.2);
                 const imgDims = pngImage.scale(1);
                 const ratio = imgDims.height / imgDims.width;
