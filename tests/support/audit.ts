@@ -11,13 +11,15 @@ export async function signAndRead(page: Page, signedPdf?: Buffer, handoverCode?:
         const chooser = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
         (await chooser).setFiles({name: 'signed.pdf', mimeType: 'application/pdf', buffer: signedPdf});
+        // A file from another signer shows a banner; the code check opens from it.
+        await expect(page.getByTestId('handover-banner')).toBeVisible();
         if (handoverCode) {
+            await page.getByTestId('btn-handover-check').click();
             await page.getByTestId('input-handover-hash').fill(handoverCode);
             await page.getByTestId('btn-verify-handover').click();
             await expect(page.getByTestId('handover-modal')).toBeHidden({timeout: 5000});
-        } else {
-            await page.getByTestId('btn-skip-handover').click();
         }
+        // No code: just go on signing (it counts as "not checked").
     } else {
         await page.getByTestId('btn-sample').click();
     }

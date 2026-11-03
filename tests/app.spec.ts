@@ -1738,6 +1738,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('btn-select-file').click();
         (await chooserB).setFiles({name: 'tc01_a.pdf', mimeType: 'application/pdf', buffer: signerABuffer});
 
+        await page.getByTestId('btn-handover-check').click();
         await expect(page.getByTestId('handover-modal')).toBeVisible();
         await page.getByTestId('input-handover-hash').fill(codeA);
         await page.getByTestId('btn-verify-handover').click();
@@ -1769,8 +1770,8 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('btn-select-file').click();
         (await chooser).setFiles({name: 'tc02_a.pdf', mimeType: 'application/pdf', buffer: signerABuffer!});
 
-        await expect(page.getByTestId('handover-modal')).toBeVisible();
-        await page.getByTestId('btn-skip-handover').click();
+        await expect(page.getByTestId('handover-banner')).toBeVisible(); // no blocking question
+        expect(await page.getByTestId('handover-modal').count()).toBe(0);
         await expect(page.locator('[data-testid^=\"annotation-\"]')).toHaveCount(0);
 
         await tid(page, 'btn-add-date').click();
@@ -1818,6 +1819,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chooseB = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
         (await chooseB).setFiles({name: 'tc04_a.pdf', mimeType: 'application/pdf', buffer: bufA});
+        await page.getByTestId('btn-handover-check').click();
         await page.getByTestId('input-handover-hash').fill(codeA);
         await page.getByTestId('btn-verify-handover').click();
         await expect(page.getByTestId('handover-modal')).not.toBeVisible();
@@ -1838,6 +1840,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chooseC = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
         (await chooseC).setFiles({name: 'tc04_b.pdf', mimeType: 'application/pdf', buffer: bufB});
+        await page.getByTestId('btn-handover-check').click();
         await page.getByTestId('input-handover-hash').fill(codeB);
         await page.getByTestId('btn-verify-handover').click();
         await expect(page.getByTestId('handover-modal')).not.toBeVisible();
@@ -1893,8 +1896,8 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('btn-select-file').click();
         (await chooser).setFiles({name: 'external-appended.pdf', mimeType: 'application/pdf', buffer: externallyAppended});
 
-        await expect(page.getByTestId('handover-modal')).toBeVisible();
-        await page.getByTestId('btn-skip-handover').click();
+        await expect(page.getByTestId('handover-banner')).toBeVisible(); // no blocking question
+        expect(await page.getByTestId('handover-modal').count()).toBe(0);
         await tid(page, 'btn-add-date').click();
 
         await page.locator('pdf-workspace').evaluate(async (el) => {
@@ -1929,8 +1932,8 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chooserB = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
         (await chooserB).setFiles({name: 'tampered-a.pdf', mimeType: 'application/pdf', buffer: tamperedABuffer});
-        await expect(page.getByTestId('handover-modal')).toBeVisible();
-        await page.getByTestId('btn-skip-handover').click();
+        await expect(page.getByTestId('handover-banner')).toBeVisible(); // no blocking question
+        expect(await page.getByTestId('handover-modal').count()).toBe(0);
         await tid(page, 'btn-add-date').click();
 
         const dl = page.waitForEvent('download');

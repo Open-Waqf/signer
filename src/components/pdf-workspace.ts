@@ -63,6 +63,8 @@ export class PdfWorkspace extends LitElement {
     @state() includeAudit = false;
 
     @state() showHandoverModal = false;
+    /** The "signed before by someone else" banner was closed for this file (step 6). */
+    @state() handoverBannerClosed = false;
     @state() handoverHashInput = '';
     @state() handoverResult: 'idle' | 'success' | 'fail' = 'idle';
     @state() detectedRefId = '';
@@ -196,6 +198,36 @@ export class PdfWorkspace extends LitElement {
         this.showProofModal = false;
         this.showHandoverModal = false;
         this.handoverResult = 'idle';
+    }
+
+    private openHandoverCheck() {
+        this.handoverHashInput = '';
+        this.handoverResult = 'idle';
+        this.showHandoverModal = true;
+    }
+
+    private renderHandoverBanner() {
+        if (!this.detectedRefId || this.handoverBannerClosed) return '';
+        const checked = this.isVerified;
+        return html`
+            <div class="handover-banner ${checked ? 'is-checked' : ''}" data-testid="handover-banner"
+                 data-checked="${checked}" role="status">
+                <div class="handover-banner-text">
+                    ${checked ? ICONS.check : ICONS.alert}
+                    <span>${(checked ? i18n.t('handoverBannerChecked') : i18n.t('handoverBannerText'))
+                        .replace('{ref}', this.detectedRefId)}</span>
+                </div>
+                <div class="handover-banner-actions">
+                    ${checked ? '' : html`
+                        <button class="btn btn-sm btn-primary" data-testid="btn-handover-check"
+                                @click=${this.openHandoverCheck}>${i18n.t('handoverCheckCode')}</button>
+                    `}
+                    <button class="btn btn-sm" data-testid="btn-handover-banner-close"
+                            aria-label="${i18n.t('close')}"
+                            @click=${() => { this.handoverBannerClosed = true; }}>×</button>
+                </div>
+            </div>
+        `;
     }
 
     private closeHandoverModal(markSkipped = false) {
@@ -858,6 +890,48 @@ export class PdfWorkspace extends LitElement {
             border: 1px solid var(--border);
         }
 
+        .handover-banner {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px 12px;
+            width: min(100%, 640px);
+            box-sizing: border-box;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            border: 1px solid color-mix(in srgb, var(--warning, #f59e0b), #fff 40%);
+            background: var(--warning-bg, #fffbeb);
+            color: var(--warning-text, #92400e);
+            font-size: 0.88rem;
+            line-height: 1.4;
+        }
+
+        .handover-banner.is-checked {
+            border-color: color-mix(in srgb, var(--success-text, #166534), #fff 55%);
+            background: color-mix(in srgb, var(--success-text, #166534), transparent 92%);
+            color: var(--success-text, #166534);
+        }
+
+        .handover-banner-text {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            flex: 1 1 220px;
+        }
+
+        .handover-banner-text svg {
+            flex: none;
+            margin-top: 1px;
+        }
+
+        .handover-banner-actions {
+            display: flex;
+            gap: 6px;
+            margin-inline-start: auto;
+        }
+
         .workspace-top-controls {
             display: flex;
             align-items: center;
@@ -1470,12 +1544,16 @@ export class PdfWorkspace extends LitElement {
         this.signaturesChain = meta.signatures || [];
         if (existingID || this.signaturesChain.length > 0) {
             this.includeAudit = true;
-            this.toast(i18n.t('previousSigDetected'));
             this.detectedRefId = existingID || this.signaturesChain[this.signaturesChain.length - 1]?.refId || '';
             this.previousHashManuallyVerified = false;
             this.handoverHashInput = '';
             this.handoverResult = 'idle';
-            this.showHandoverModal = true;
+            // A banner, not a blocking question: the next signer usually never got a code
+            // (step 6). Until a code is checked, the file counts as "not checked", the same
+            // as skipping the question used to, so the audit page stays honest.
+            this.validationMsg = i18n.t('handoverSkippedMsg').replace('{ref}', this.detectedRefId);
+            this.isVerified = false;
+            this.handoverBannerClosed = false;
         } else {
             this.includeAudit = false;
             this.detectedRefId = '';
@@ -3180,6 +3258,7 @@ export class PdfWorkspace extends LitElement {
                 ${this.renderWorkspaceSidebar()}
 
                 <div class="viewport ${this.interactionManager.isDragging ? 'drag-active' : ''}" @mousedown=${this.onContainerClick} @touchstart=${this.onContainerClick}>
+                    ${this.renderHandoverBanner()}
                     ${this.renderWorkspaceTopControls()}
                     <div class="page-container" data-testid="page-container" @mousedown=${this.startMarqueeSelection}>
                         ${this.interactionManager.guideLines.map(guide => guide.axis === 'x' ? html`

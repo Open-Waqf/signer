@@ -119,6 +119,7 @@ test.describe('19. Unfinished work is kept (draft)', () => {
         const chooser = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
         (await chooser).setFiles({name: 'signed.pdf', mimeType: 'application/pdf', buffer: first.pdf});
+        await page.getByTestId('btn-handover-check').click();
         await page.getByTestId('input-handover-hash').fill(first.code);
         await page.getByTestId('btn-verify-handover').click();
         await expect(page.getByTestId('handover-modal')).toBeHidden({timeout: 5000});
