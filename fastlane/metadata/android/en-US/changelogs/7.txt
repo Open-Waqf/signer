@@ -1,0 +1,10 @@
+Version 1.0
+• Type your signature instead of drawing it
+• Dates in your language, including Hijri
+• Unfinished work is kept if the app closes
+• Share a PDF to Open Signer from any app
+• Scanned, rotated and cropped pages sign in the right place
+• Verify gives a plain answer: Intact, Changed or Not confirmed
+• New languages: Spanish and Italian
+• Lighter design with more room for the page
+• Many fixes
