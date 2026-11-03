@@ -53,3 +53,17 @@ test.describe('28. Popup position @phone', () => {
         expect(box.top).toBeLessThan(box.height * 0.15);
     });
 });
+
+test('28.4 Only the selected item shows its delete button @phone', async ({page}) => {
+    await page.goto('/');
+    await page.getByTestId('btn-sample').click();
+    await expect(page.getByTestId('btn-exit')).toBeVisible();
+    await page.getByTestId('m-btn-add-date').click();
+    await page.getByTestId('m-btn-add-date').click(); // the second date is selected
+    const deletes = page.locator('pdf-workspace [data-testid="btn-delete-ann"]');
+    await expect(deletes).toHaveCount(2);
+    await expect(deletes.nth(0)).toBeHidden();
+    await expect(deletes.nth(1)).toBeVisible();
+    await page.locator('pdf-workspace').evaluate((el: any) => { el.selectedIds = []; });
+    await expect(deletes.nth(1)).toBeHidden();
+});

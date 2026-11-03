@@ -1099,6 +1099,13 @@ export class PdfWorkspace extends LitElement {
             opacity: 0.92;
         }
 
+        /* "hidden" must win over the display rules below: the × and the resize handle
+           belong to the selected item only (they showed on every item, covering text). */
+        .delete-btn[hidden],
+        .resize-handle[hidden] {
+            display: none !important;
+        }
+
         .delete-btn {
             position: absolute;
             top: -14px;
