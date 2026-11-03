@@ -30,16 +30,17 @@ device.
   recognises files it processed. This shows where a file came from; on its own it does not prove the file is unchanged
   (anyone can edit metadata).
 * **Audit page:** Optionally appends a page with a **QR code**, the signer history and the fingerprint.
-* **Timestamp (best effort):** When online, the web app asks a public Time Stamping Authority (FreeTSA, through our
-  relay) to timestamp the fingerprint and stores the reply in the file. The reply is not checked yet, and the Android
-  app and local builds currently fall back to the device clock, labelled as such.
+* **Timestamp (best effort):** When online, the app (web and Android) asks a public Time Stamping Authority
+  (FreeTSA, through our relay) to timestamp the fingerprint and stores the reply in the file. The app does not check
+  the reply itself (standard tools such as `openssl ts -verify` can). Offline, it uses the device clock, labelled as
+  such.
 * **Certificate signatures (.p12/.pfx):** Optionally sign with your own certificate. The file and password are used in
   memory for one save and never stored. Adobe Acrobat and other PDF readers can check this kind of signature.
 
 ### 🤝 Multi-Party Workflows
 
-* **Handover between signers:** When you open a file signed by someone else, the app recognises it and asks for the
-  previous signer's **6-digit handover code** (you can skip it). A matching code shows the file was not changed by
+* **Handover between signers:** When you open a file signed by someone else, a banner says so and offers to check
+  the previous signer's **6-digit handover code**. It never blocks signing. A matching code shows the file was not changed by
   accident on the way. It is short, so it is not protection against deliberate forgery: for that, compare the full
   fingerprint.
 * **Signer history:** Each signer's entry records the fingerprint of the file they opened, whether they checked the
@@ -49,20 +50,30 @@ device.
 ### ✍️ Tools
 
 * **Responsive design:** One interface (Web Components, Lit) for phones and desktops, respecting phone safe areas.
-* **Beginner-friendly:** Opens with the essentials (signature, date, Finish); **More Tools** reveals initials, text,
-  stamps, certificate signing and the footer and audit-page options.
+* **Beginner-friendly:** Opens with the essentials (signature, date, stamp, Finish); **More Tools** reveals initials,
+  text, certificate signing and the footer and audit-page options.
+* **Typed signature:** Type your name instead of drawing it, in a handwriting style (Latin script or Arabic Ruqaa).
+  The fonts ship with the app, so it works offline.
+* **Dates your way:** Day/month/year numbers, written out in your language, or Hijri (Umm al-Qura calendar; the text
+  can be corrected by hand when the local moon sighting differs by a day).
+* **Unfinished work is kept:** If the app is closed before Finish (Android often closes apps in the background), the
+  home screen offers to continue where you left off.
 * **Saved signatures and stamps:** Draw once, reuse offline. Stored only on your device (IndexedDB).
 * **Layout help:** Drag, resize, snap guides, multi-select, keyboard nudging.
 * **Undo/Redo:** `Ctrl+Z`, `Ctrl+Y`.
-* **Accessibility:** Labelled controls, keyboard shortcuts, native dialogs, 44 px touch targets for the main actions.
-  Signing itself still needs drawing (typed signatures are planned).
+* **Accessibility:** Labelled controls, keyboard shortcuts, native dialogs, 44 px touch targets for the main actions,
+  and a typed signature for anyone who cannot draw one.
+* **Scanned and locked PDFs:** Items land where you placed them on turned (rotated) and cropped pages. A
+  password-protected PDF is refused when it opens, with a clear message, instead of failing at Finish.
 
 ### 🌍 Universal Access
 
 * **Offline first (PWA):** Installs from the browser on Android, iOS, Windows and Mac, and works without internet.
-* **Android app:** On Google Play. PDFs open in Signer from file managers and other apps with **Open with**.
+* **Android app:** On Google Play. PDFs open in Signer from file managers and other apps with **Open with** or
+  **Share**.
 * **Web share target:** The installed web app accepts PDFs shared from other apps (Android and Windows).
-* **Languages:** English, Arabic (right-to-left) and French.
+* **Languages:** English, Arabic (right-to-left), French, Spanish and Italian. The Spanish and Italian texts still
+  need a review by a native speaker.
 
 ---
 
@@ -74,12 +85,16 @@ We believe in **Data Sovereignty**.
 * **No tracking:** No analytics, no telemetry, no cookies, no accounts.
 * **Your data stays local:** Saved signatures, stamps and settings live in your browser or app storage, and
   **Forget My Data** deletes them.
+* **Unfinished work stays local too:** While you edit, the open PDF and your placed items are kept in the app's
+  storage on this device, so they survive the app being closed. They are deleted when you finish, leave without
+  saving, or tap the delete button on the home screen. A certificate or its password is never kept.
 
 ---
 
 ## 🧪 Engineering & Stability
 
-* **End-to-end tests:** About 90 Playwright tests click through the real app: signing, saving, verifying,
+* **End-to-end tests:** About 330 Playwright test runs (on a phone screen, in Arabic where it matters, and on
+  desktop) click through the real app: signing, saving, verifying,
   multi-signer handover, certificate signing, right-to-left layout, scanned PDFs, and more. They use stable
   `data-testid` attributes, not translated text.
 * **Strict TypeScript** and a translation check (every language has every text) run before the tests:
@@ -97,17 +112,18 @@ We believe in **Data Sovereignty**.
 1. **Alice** signs and taps **Finish**. The app saves the file and, under **For verification**, shows the file
    fingerprint and a 6-digit **code for the next signer**.
 2. Alice sends Bob the PDF, and the code in a separate message.
-3. **Bob** opens the PDF in Signer. The app recognises Alice's signature and asks for the code.
-4. **Bob** enters the code (or skips), signs, and taps **Finish**. The new file has a new fingerprint covering both
+3. **Bob** opens the PDF in Signer. A banner says Alice signed it before and offers **Check code**.
+4. **Bob** checks the code (or not), signs, and taps **Finish**. The new file has a new fingerprint covering both
    signatures.
 
 ### Scenario B: Checking a signed file (the receiver)
 
 1. Open Signer in **Verify** mode (or scan the QR code on the audit page).
-2. Select the PDF you received. The app reports whether it carries a Signer record.
+2. Select the PDF you received. A plain answer sits at the top: **Not confirmed yet** until you paste a fingerprint
+   (a Signer record in the file alone proves nothing).
 3. Paste the fingerprint the sender gave you in a separate message:
-    * ✅ **Integrity Verified:** the file is exactly the one the sender saved.
-    * ❌ **Integrity Failed:** the file is different (even one changed byte).
+    * ✅ **Intact:** the file is exactly the one the sender saved.
+    * ❌ **Changed:** the file is different (even one changed byte), or it is not the file a verify link was made for.
 
 ---
 
@@ -222,9 +238,10 @@ npx @capacitor/assets generate --android
 
 ### Phone tests (Maestro)
 
-Four short flows in `maestro/android/` tap through the real app on your phone, for what only a
+Seven short flows in `maestro/android/` tap through the real app on your phone, for what only a
 real phone shows: opening a PDF, saving into Documents and the Android share sheet, the
-Android language picker, and the Back button closing the Saved sheet. They always target Signer Dev, never the Play Store app. After the
+Android language picker, the Back button closing the Saved sheet, a draft surviving the app being
+closed, **Share to Signer** through the real share sheet, and a typed signature with a Hijri date. They always target Signer Dev, never the Play Store app. After the
 run, the command checks through adb that a new signed PDF really is in the phone's Documents
 folder. A flow that waits for a bug fix goes in `maestro/android/pending/` (not run) until the fix lands.
 

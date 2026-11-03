@@ -12,7 +12,7 @@ This project is released under the **Polyform Noncommercial License 1.0.0**.
 1. **Security First:** If you find a vulnerability, email security@open-waqf.org. DO NOT open a public issue.
 2. **Checks:** Run `npm run check` (typecheck, translations, all tests) before opening a pull request. GitHub runs
    the same checks on every pull request into `develop`.
-3. **Translations:** Every text in `src/i18n/locales.ts` must exist in every language (English, Arabic, French).
+3. **Translations:** Every text in `src/i18n/locales.ts` must exist in every language (English, Arabic, French, Spanish, Italian).
    `npm run check-i18n` lists anything missing.
 4. **No Servers:** Do not submit PRs that add backend dependencies (Firebase, AWS, analytics, etc.). This is a
    client-side app: documents never leave the device.

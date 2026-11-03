@@ -285,43 +285,50 @@ app-root {
     margin-top: 15px;
 }
 
-/* Unfinished document kept on this device (draft autosave) */
+/* Unfinished document kept on this device (draft autosave): one slim line. */
 .draft-card {
     width: 100%;
-    margin-bottom: 16px;
-    padding: 14px 16px;
-    border: 1px solid var(--primary);
+    box-sizing: border-box;
+    margin-bottom: 14px;
+    padding: 6px 6px 6px 12px;
     border-radius: var(--radius-md);
-    background: var(--bg-surface);
+    background: var(--bg-muted);
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    align-items: center;
+    gap: 8px;
     text-align: start;
+    font-size: 0.88rem;
 }
 
 .draft-card-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    flex: 1;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .draft-card-name {
-    overflow-wrap: anywhere;
+    margin-inline-start: 4px;
 }
 
-.draft-card-text .sub {
-    margin: 0;
-    font-size: 0.85rem;
+.draft-card-count {
+    color: var(--text-sub);
+    margin-inline-start: 4px;
 }
 
-.draft-card-actions {
-    display: flex;
-    gap: 8px;
+.draft-card .btn-sm {
+    min-height: 36px;
+    padding: 4px 12px;
+    flex: none;
 }
 
-.draft-card-actions .btn {
-    flex: 1;
+.draft-card-delete {
+    min-width: 36px;
+    padding: 4px 8px;
+    font-size: 1.1rem;
+    background: transparent;
+    border-color: transparent;
 }
 
 .share-app-btn {

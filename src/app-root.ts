@@ -291,20 +291,18 @@ export class AppRoot extends LitElement {
     private renderDraftCard() {
         if (!this.draftInfo || this.verifyMode) return '';
         return html`
+            <!-- One slim line, so it never looks like an alert or part of another message. -->
             <div class="draft-card" id="draft-card" data-testid="draft-card" role="status">
-                <div class="draft-card-text">
+                <span class="draft-card-text">
                     <strong>${i18n.t('draftTitle')}</strong>
                     <span class="draft-card-name" dir="auto">${this.draftInfo.name}</span>
-                    <span class="sub">${i18n.t('draftItems').replace('{count}', String(this.draftInfo.count))}</span>
-                </div>
-                <div class="draft-card-actions">
-                    <button class="btn btn-primary" id="btn-draft-continue" data-testid="btn-draft-continue" @click=${this.continueDraft}>
-                        ${i18n.t('draftContinue')}
-                    </button>
-                    <button class="btn" id="btn-draft-discard" data-testid="btn-draft-discard" @click=${this.discardDraft}>
-                        ${i18n.t('draftDiscard')}
-                    </button>
-                </div>
+                    <span class="draft-card-count">(${i18n.t('draftItems').replace('{count}', String(this.draftInfo.count))})</span>
+                </span>
+                <button class="btn btn-primary btn-sm" id="btn-draft-continue" data-testid="btn-draft-continue" @click=${this.continueDraft}>
+                    ${i18n.t('draftContinue')}
+                </button>
+                <button class="btn btn-sm draft-card-delete" id="btn-draft-discard" data-testid="btn-draft-discard"
+                        aria-label="${i18n.t('draftDiscard')}" title="${i18n.t('draftDiscard')}" @click=${this.discardDraft}>×</button>
             </div>
         `;
     }
@@ -659,6 +657,7 @@ export class AppRoot extends LitElement {
                 <div class="dialog-content">
                     <h2 id="privacy-title" class="modal-title">${i18n.t('privacyTitle')}</h2>
                     <p class="modal-copy">${i18n.t('privacyContent')}</p>
+                    <p class="modal-copy">${i18n.t('privacyDraftNote')}</p>
                     <p class="modal-note">${i18n.t('privacyTimestampNote')}</p>
 
                     <div class="amanah-panel">
