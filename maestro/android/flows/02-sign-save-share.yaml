@@ -4,6 +4,10 @@ appId: ${APP_ID}
 ---
 - launchApp:
     clearState: true
+- extendedWaitUntil: # the first start after an install can take a few seconds
+    visible:
+      id: "btn-sample"
+    timeout: 20000
 - tapOn:
     id: "btn-sample"
 - tapOn:
