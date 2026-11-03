@@ -68,6 +68,8 @@ export class PdfWorkspace extends LitElement {
     @state() showHandoverModal = false;
     /** The "signed before by someone else" banner was closed for this file (step 6). */
     @state() handoverBannerClosed = false;
+    /** The style bar shows its rarer controls (font, colour, bold, apply to all). */
+    @state() styleBarExpanded = false;
     @state() handoverHashInput = '';
     @state() handoverResult: 'idle' | 'success' | 'fail' = 'idle';
     @state() detectedRefId = '';
@@ -626,6 +628,67 @@ export class PdfWorkspace extends LitElement {
             .brand .brand-title {
                 display: none;
             }
+
+            /* One top row on phones: back button, then undo/redo/zoom. The logo and the
+               language picker (already on the home screen) give the room to the page. */
+            :host {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr);
+                grid-template-rows: auto minmax(0, 1fr) auto;
+            }
+
+            header {
+                grid-column: 1;
+                grid-row: 1;
+                min-height: 0;
+                padding: 0 0 0 8px;
+                box-shadow: none;
+                background: var(--bg-muted); /* same as the tool row next to it */
+            }
+
+            .toolbar-top {
+                grid-column: 2;
+                grid-row: 1;
+            }
+
+            .workspace-area {
+                grid-column: 1 / -1;
+                grid-row: 2;
+                min-height: 0;
+            }
+
+            .toolbar-bottom {
+                grid-column: 1 / -1;
+                grid-row: 3;
+            }
+
+            .brand img,
+            header .lang-select,
+            .option-toggles {
+                display: none;
+            }
+
+            .workspace-top-controls {
+                margin-bottom: 8px;
+                padding: 2px 8px;
+            }
+
+            /* More tools: a second row of tools instead of a strip that scrolls sideways,
+               so no tool is ever out of sight. */
+            .bottom-tools.wrap {
+                flex-wrap: wrap;
+                overflow-x: visible;
+                row-gap: 2px;
+            }
+
+            .btn-tool.active {
+                color: var(--primary) !important;
+            }
+
+            /* With two rows of tools, Finish stays on the bottom edge, under the thumb. */
+            .btn-finish.finish-bottom {
+                align-self: flex-end;
+            }
         }
 
         .btn-tool {
@@ -1150,7 +1213,7 @@ export class PdfWorkspace extends LitElement {
             width: 100%;
             box-sizing: border-box;
             padding: 12px 14px;
-            border: 1px solid var(--border, #e5e7eb);
+            border: 1px solid var(--border-input, #958a78);
             border-radius: var(--radius-md, 10px);
         }
 
@@ -1723,6 +1786,7 @@ export class PdfWorkspace extends LitElement {
 
     updated(changed: Map<string, unknown>) {
         this.keepStylePopupsOnScreen();
+        if (changed.has('selectedIds') && this.styleBarExpanded) this.styleBarExpanded = false;
         if (['annotations', 'includeAudit', 'includeFooter', 'isDirty', 'validationMsg', 'showHandoverModal']
             .some((key) => changed.has(key))) {
             this.scheduleDraftSave();
@@ -3198,7 +3262,7 @@ export class PdfWorkspace extends LitElement {
                         </button>
                     </div>
 
-                    <div class="toolbar-group">
+                    <div class="toolbar-group option-toggles">
                         ${!this.isBasicMode ? html`
                             <button data-testid="btn-toggle-footer" class="btn toggle toolbar-btn-compact labelled-toggle ${this.includeFooter ? 'active' : ''}"
                                     aria-label="${i18n.t('addPageFooter')}"
@@ -3227,7 +3291,7 @@ export class PdfWorkspace extends LitElement {
             </div>
 
             <div class="toolbar-bottom" role="toolbar" aria-label="${i18n.t('ariaToolbar')}">
-                <div class="bottom-tools">
+                <div class="bottom-tools ${this.isBasicMode ? '' : 'wrap'}">
                 <button id="m-btn-add-sig" data-testid="m-btn-add-sig" class="btn btn-tool" aria-label="${i18n.t('signMode')}"
                         @click=${this.openSignModal}>
                     ${ICONS.sign} <span>${i18n.t('signMode')}</span>
@@ -3263,6 +3327,20 @@ export class PdfWorkspace extends LitElement {
                             aria-label="${i18n.t('signWithCertificate')}"
                             @click=${this.openCertificatePicker}>
                         ${ICONS.certificate} <span>${i18n.t('signWithCertificate')}</span>
+                    </button>
+                ` : ''}
+                ${!this.isBasicMode ? html`
+                    <button data-testid="m-btn-toggle-footer" class="btn btn-tool ${this.includeFooter ? 'active' : ''}"
+                            aria-pressed="${this.includeFooter}" aria-label="${i18n.t('addPageFooter')}"
+                            @click=${() => { this.includeFooter = !this.includeFooter; this.isDirty = true; }}>
+                        ${ICONS.footer} <span class="toggle-label">${i18n.t('footerShort')}</span>
+                    </button>
+                ` : ''}
+                ${(!this.isBasicMode || this.includeAudit) ? html`
+                    <button data-testid="m-btn-toggle-audit" class="btn btn-tool ${this.includeAudit ? 'active' : ''}"
+                            aria-pressed="${this.includeAudit}" aria-label="${i18n.t('addAuditPage')}"
+                            @click=${() => { this.includeAudit = !this.includeAudit; this.isDirty = true; }}>
+                        ${ICONS.audit} <span class="toggle-label">${i18n.t('auditShort')}</span>
                     </button>
                 ` : ''}
                 </div>
@@ -3346,6 +3424,23 @@ export class PdfWorkspace extends LitElement {
                                                     `)}
                                                 </select>
                                             ` : ''}
+                                            <button data-testid="btn-font-down"
+                                                    aria-label="${i18n.t('decreaseFont')}"
+                                                    class="style-tool-btn"
+                                                    @click=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
+                                                    }}>A-
+                                            </button>
+                                            <button data-testid="btn-font-up"
+                                                    aria-label="${i18n.t('increaseFont')}"
+                                                    class="style-tool-btn"
+                                                    @click=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
+                                                    }}>A+
+                                            </button>
+                                            ${this.styleBarExpanded ? html`
                                             <select data-testid="select-font"
                                                     aria-label="${i18n.t('fontFamily')}"
                                                     class="style-tool-select"
@@ -3375,22 +3470,6 @@ export class PdfWorkspace extends LitElement {
                                                         this.updateStyle(ann.id, {fontWeight: ann.fontWeight === 'bold' ? 'normal' : 'bold'});
                                                     }}>B
                                             </button>
-                                            <button data-testid="btn-font-down"
-                                                    aria-label="${i18n.t('decreaseFont')}"
-                                                    class="style-tool-btn"
-                                                    @click=${(e: Event) => {
-                                                        e.stopPropagation();
-                                                        this.updateStyle(ann.id, {fontSize: Math.max(8, (ann.fontSize || 12) - 2)});
-                                                    }}>A-
-                                            </button>
-                                            <button data-testid="btn-font-up"
-                                                    aria-label="${i18n.t('increaseFont')}"
-                                                    class="style-tool-btn"
-                                                    @click=${(e: Event) => {
-                                                        e.stopPropagation();
-                                                        this.updateStyle(ann.id, {fontSize: Math.min(60, (ann.fontSize || 12) + 2)});
-                                                    }}>A+
-                                            </button>
                                             <button data-testid="btn-apply-all"
                                                     aria-label="${i18n.t('applyAll')}"
                                                     class="style-tool-btn"
@@ -3398,6 +3477,16 @@ export class PdfWorkspace extends LitElement {
                                                         e.stopPropagation();
                                                         this.applyToAllPages(ann.id);
                                                     }}>📄
+                                            </button>
+                                            ` : ''}
+                                            <button data-testid="btn-style-more"
+                                                    aria-label="${i18n.t('moreTools')}"
+                                                    aria-expanded="${this.styleBarExpanded}"
+                                                    class="style-tool-btn"
+                                                    @click=${(e: Event) => {
+                                                        e.stopPropagation();
+                                                        this.styleBarExpanded = !this.styleBarExpanded;
+                                                    }}>${this.styleBarExpanded ? '‹' : '⋯'}
                                             </button>
                                         </div>
                                     ` : isSelected && !isText && !isLocked ? html`

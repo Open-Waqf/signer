@@ -1,6 +1,6 @@
 import {devices, expect, test} from '@playwright/test';
 import {generateTestPDF} from './utils';
-import {tid} from './support/ui';
+import {tid, applyToAllPages, openVerifyDetails} from './support/ui';
 import {PDFDocument} from 'pdf-lib';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -350,6 +350,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         });
 
         await expect(page.getByTestId('cms-signature-banner')).toBeVisible();
+        await openVerifyDetails(page);
         await expect(page.getByTestId('verify-success-title')).toBeVisible();
 
         await page.getByTestId('input-verify-hash').fill(generatedHash);
@@ -438,7 +439,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
 
         // Action within menu
         await page.getByTestId('btn-font-up').click();
-        await page.getByTestId('btn-apply-all').click();
+        await applyToAllPages(page);
 
         // Signature Modal
         await tid(page, 'btn-add-sig').click();
@@ -1041,8 +1042,9 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         });
 
         // Verification success
+        await openVerifyDetails(page);
         await expect(page.getByTestId('verify-success-title')).toBeVisible();
-        await expect(page.getByText(/Step 2|الخطوة 2|Étape 2/)).toBeVisible();
+        await expect(page.getByTestId('input-verify-hash')).toBeVisible(); // the fingerprint check
 
         // Hash check (fail)
         await page.getByTestId('input-verify-hash').fill('wrong_hash');
@@ -1759,6 +1761,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chooserV = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
         (await chooserV).setFiles({name: 'tc01_b.pdf', mimeType: 'application/pdf', buffer: signerBBuffer});
+        await openVerifyDetails(page);
         await expect(page.getByTestId('chain-success')).toBeVisible();
     });
 
@@ -1793,6 +1796,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         const chooserV = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
         (await chooserV).setFiles({name: 'tc02_b.pdf', mimeType: 'application/pdf', buffer: signerBSkipped});
+        await openVerifyDetails(page);
         await expect(page.getByTestId('chain-success')).toBeVisible();
     });
 
@@ -1823,7 +1827,7 @@ test.describe.serial('🛡️ Open Waqf Signer: robust UX & Navigation Audit', (
         await page.getByTestId('input-handover-hash').fill(codeA);
         await page.getByTestId('btn-verify-handover').click();
         await expect(page.getByTestId('handover-modal')).not.toBeVisible();
-        await page.getByTestId('btn-toggle-audit').click(); // Signer B audit OFF
+        await tid(page, 'btn-toggle-audit').click(); // Signer B audit OFF
         await tid(page, 'btn-add-date').click();
         const dlB = page.waitForEvent('download');
         await tid(page, 'btn-save').click();
@@ -1968,8 +1972,10 @@ test.describe('10. Finish and Saved sheet', () => {
     for (const lang of ['en', 'ar'] as const) {
         test(`10.1 On a 360px phone (${lang}) Finish is fully on screen even with all tools shown`, async ({page}) => {
             await page.setViewportSize({width: 360, height: 740});
-            await openSample(page);
-            if (lang === 'ar') await page.getByTestId('select-lang').selectOption('ar');
+            // Phones have no language picker in the editor: open the app in that language.
+            await page.goto(`/?lang=${lang}`);
+            await page.getByTestId('btn-sample').click();
+            await expect(page.getByTestId('btn-exit')).toBeVisible();
             // More Tools makes the bottom tool row overflow; Finish must not scroll away with it.
             await page.getByTestId('m-btn-toggle-advanced').click();
             await page.getByTestId('m-btn-add-date').click();
@@ -2072,7 +2078,7 @@ test.describe('10. Finish and Saved sheet', () => {
         // "Apply to all pages" shows a toast ("Applied to 2 page(s)").
         await tid(page, 'btn-add-date').click();
         await page.locator('[data-testid^="annotation-"]').first().click();
-        await page.getByTestId('btn-apply-all').click();
+        await applyToAllPages(page);
         const toast = page.locator('.toast.show');
         await expect(toast).toBeVisible();
         await page.waitForTimeout(400); // let the slide-in finish
@@ -2282,7 +2288,7 @@ test.describe('15. Phone editor layout @phone', () => {
         const box = (await popup.boundingBox())!;
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
-        await page.getByTestId('btn-apply-all').click({timeout: 3000});
+        await applyToAllPages(page, {timeout: 3000});
         await expect(page.locator('[data-testid^="annotation-"]')).toHaveCount(1); // this page; others got copies
     });
 
@@ -2290,12 +2296,12 @@ test.describe('15. Phone editor layout @phone', () => {
         await openPdf(page, 1);
         await tid(page, 'btn-toggle-advanced').click();
         for (const id of ['btn-toggle-footer', 'btn-toggle-audit']) {
-            const toggle = page.getByTestId(id);
+            const toggle = tid(page, id);
             await expect(toggle.locator('.toggle-label')).toBeVisible();
             expect((await toggle.locator('.toggle-label').innerText()).trim().length).toBeGreaterThan(2);
             await expect(toggle).toHaveAttribute('aria-pressed', /true|false/);
         }
-        const footer = page.getByTestId('btn-toggle-footer');
+        const footer = tid(page, 'btn-toggle-footer');
         const before = await footer.getAttribute('aria-pressed');
         await footer.click();
         await expect(footer).not.toHaveAttribute('aria-pressed', before!);

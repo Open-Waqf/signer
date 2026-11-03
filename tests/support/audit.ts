@@ -24,8 +24,8 @@ export async function signAndRead(page: Page, signedPdf?: Buffer, handoverCode?:
         await page.getByTestId('btn-sample').click();
     }
     await expect(page.getByTestId('btn-exit')).toBeVisible();
-    if (!(await page.getByTestId('btn-toggle-audit').isVisible())) await tid(page, 'btn-toggle-advanced').click();
-    const audit = page.getByTestId('btn-toggle-audit');
+    if (!(await tid(page, 'btn-toggle-audit').isVisible())) await tid(page, 'btn-toggle-advanced').click();
+    const audit = tid(page, 'btn-toggle-audit');
     if ((await audit.getAttribute('aria-pressed')) !== 'true') await audit.click();
     await tid(page, 'btn-add-date').click();
     const download = page.waitForEvent('download');

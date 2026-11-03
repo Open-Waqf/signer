@@ -1,7 +1,7 @@
 // save-output.spec.ts: what the saved file contains.
 import {expect, test, type Page} from '@playwright/test';
 import {PDFDocument} from 'pdf-lib';
-import {tid} from './support/ui';
+import {tid, applyToAllPages} from './support/ui';
 
 async function open(page: Page, pdf: Buffer, name = 'doc.pdf') {
     await page.goto('/');
@@ -29,7 +29,7 @@ test.describe('26. Saved file @phone', () => {
         for (let i = 0; i < 10; i++) doc.addPage([595, 842]);
         await open(page, Buffer.from(await doc.save()));
         await tid(page, 'btn-add-date').click();
-        await page.getByTestId('btn-apply-all').click();
+        await applyToAllPages(page);
         await expect(page.locator('.toast.show')).toContainText('9');
         const pdf = await save(page);
         // One date picture (plus at most its transparency mask), whatever the page count.
@@ -39,7 +39,7 @@ test.describe('26. Saved file @phone', () => {
 
     test('26.2 A second signer\'s footer does not print over the first', async ({page}) => {
         const footerOn = async () => {
-            const footer = page.getByTestId('btn-toggle-footer');
+            const footer = tid(page, 'btn-toggle-footer');
             if (!(await footer.isVisible())) await tid(page, 'btn-toggle-advanced').click(); // "More tools" is remembered
             if ((await footer.getAttribute('aria-pressed')) !== 'true') await footer.click();
             await tid(page, 'btn-add-date').click();

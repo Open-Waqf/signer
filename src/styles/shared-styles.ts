@@ -61,7 +61,7 @@ export const sharedStyles = css`
 
     .btn-danger {
         background: var(--danger-bg, #fee2e2);
-        color: var(--danger, #ef4444);
+        color: var(--danger-text, #991b1b); /* readable on pink (was 3.1:1) */
         border: none;
     }
 

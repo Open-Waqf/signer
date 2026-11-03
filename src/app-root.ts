@@ -594,7 +594,7 @@ export class AppRoot extends LitElement {
                         <img src="./icons/icon-192.webp" alt="${i18n.t('appTitle')}" data-testid="logo-img" @click=${this.handleSecretTap}
                              draggable="false"/>
                         <h1>${i18n.t('appTitle')}</h1>
-                        <p class="sub hero-subtitle">v${packageJson.version} • ${i18n.t('tagline')}</p>
+                        <p class="sub hero-subtitle">${i18n.t('tagline')}</p>
 
                         ${this.renderModeToggle()}
 
@@ -604,9 +604,12 @@ export class AppRoot extends LitElement {
                             <button class="btn btn-primary" data-testid="btn-select-file">
                                 ${this.verifyMode ? i18n.t('selectFileVerify') : i18n.t('selectFile')}
                             </button>
-                            <p class="sub drop-hint">
+                            <!-- Drag and drop means nothing on a touch screen: there, the same
+                                 place states the privacy promise instead (it replaces a separate pill). -->
+                            <p class="sub drop-hint drop-hint-pointer">
                                 ${this.verifyMode ? i18n.t('dropHintVerify') : i18n.t('dragDropHint')}
                             </p>
+                            <p class="sub drop-hint drop-hint-touch">${ICONS.shield} ${i18n.t('privacyBadge')}</p>
                         </div>
 
                         ${!this.verifyMode ? html`
@@ -615,19 +618,16 @@ export class AppRoot extends LitElement {
                             </button>
                         ` : ''}
 
-                        <div class="trust-pill-wrap">
-                            <span class="badge-success">${ICONS.shield} ${i18n.t('privacyBadge')}</span>
-                        </div>
 
                         <div class="footer-links">
                             <button type="button" class="footer-link" data-testid="link-privacy" @click=${this.showPrivacy}>${i18n.t('privacyTitle')}</button>
                             <span aria-hidden="true">•</span>
                             <a href="mailto:${AppConfig.supportEmail}" class="footer-link">${i18n.t('contactUs')}</a>
+                            <span aria-hidden="true">•</span>
+                            <button type="button" class="footer-link" data-testid="btn-share-app" @click=${() => this.shareApp()}>
+                                ${i18n.t('shareApp')}
+                            </button>
                         </div>
-
-                        <button class="btn share-app-btn" data-testid="btn-share-app" @click=${() => this.shareApp()}>
-                            ${ICONS.link} ${i18n.t('shareApp')}
-                        </button>
                     </div>
 
                     ${this.renderHomeFeatures()}
@@ -807,7 +807,6 @@ export class AppRoot extends LitElement {
     private renderVerifyDetailsBody() {
         return html`
             ${this.renderVerifyAnswer()}
-            ${this.renderVerifyResultCard()}
             ${this.hasStandardSignature ? html`
                 <div class="alert-box alert-warning" data-testid="cms-signature-banner">
                     <div class="cms-signature-title">${ICONS.certificate} ${i18n.t('standardSignatureTitle')}</div>
@@ -815,6 +814,10 @@ export class AppRoot extends LitElement {
                 </div>
             ` : ''}
             ${this.renderHashCheckCard()}
+            <!-- The record and the signer history are information, not the answer: closed by default. -->
+            <details class="verify-details" data-testid="verify-details">
+                <summary data-testid="verify-details-toggle">${i18n.t('verifyDetails')}</summary>
+                ${this.renderVerifyResultCard()}
 
             ${this.chainStatus.status === 'success' ? html`
                 <!-- Information, not proof: the signer history can be written by anyone. -->
@@ -822,6 +825,8 @@ export class AppRoot extends LitElement {
                      .innerHTML=${(this.integrityStatus === 'success' ? i18n.t('chainValidated') : i18n.t('chainValidatedPreliminary'))
                          .replace('{count}', String(this.chainStatus.total || 0))}></div>
             ` : ''}
+            </details>
+            <!-- A broken signer history is a warning: always visible. -->
             ${this.chainStatus.status === 'fail' ? html`
                 <div class="alert-box alert-error alert-top-gap" data-testid="chain-fail"
                      .innerHTML=${i18n.t('chainFailed').replace('{index}', String(this.chainStatus.failedSignerIndex || 0))}></div>

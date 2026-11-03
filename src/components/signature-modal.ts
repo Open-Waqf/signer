@@ -146,7 +146,7 @@ export class SignatureModal extends LitElement {
         .input-field {
             width: 100%;
             padding: 12px 16px;
-            border: 1px solid var(--border, #e5e7eb);
+            border: 1px solid var(--border-input, #958a78);
             border-radius: var(--radius-md, 10px);
             box-sizing: border-box;
             font-family: inherit;

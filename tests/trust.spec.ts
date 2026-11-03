@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import {expect, test} from '@playwright/test';
 import {signAndRead} from './support/audit';
-import {tid} from './support/ui';
+import {tid, openVerifyDetails} from './support/ui';
 
 test.describe('17. Honest trust messages @phone', () => {
     test('17.1 A passed handover check is not printed as a SECURITY ALERT', async ({page}) => {
@@ -25,6 +25,7 @@ test.describe('17. Honest trust messages @phone', () => {
         const chooser = page.waitForEvent('filechooser');
         await page.getByTestId('btn-select-file').click();
         (await chooser).setFiles({name: 'signed.pdf', mimeType: 'application/pdf', buffer: pdf});
+        await openVerifyDetails(page);
         const chain = page.getByTestId('chain-success');
         await expect(chain).toBeVisible();
         await expect(chain).toContainText('not proof');

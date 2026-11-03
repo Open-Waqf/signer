@@ -116,7 +116,7 @@ test.describe('20. Turned and cropped pages', () => {
         test(`20.2 The footer is at the bottom of the shown page: ${shape.name} page`, async ({page}) => {
             await openPdf(page, await makePdf(shape));
             await tid(page, 'btn-toggle-advanced').click();
-            await page.getByTestId('btn-toggle-footer').click();
+            await tid(page, 'btn-toggle-footer').click();
             await tid(page, 'btn-add-date').click();
             const {texts} = await shownPositions(await saveAndRead(page));
             const footer = texts.find((t) => t.str.startsWith('Signed via Open Waqf'));

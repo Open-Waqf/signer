@@ -15,10 +15,26 @@ const PHONE_ID: Record<string, string> = {
     'btn-toggle-advanced': 'm-btn-toggle-advanced',
     'btn-cert-sign': 'm-btn-cert-sign',
     'btn-save': 'm-btn-finish',
+    // On phones the two option switches sit in the bottom bar with the other tools.
+    'btn-toggle-footer': 'm-btn-toggle-footer',
+    'btn-toggle-audit': 'm-btn-toggle-audit',
 };
 
 export const isPhone = (page: Page) => (page.viewportSize()?.width ?? 1280) <= 768;
 
 export function tid(page: Page, testId: string): Locator {
     return page.getByTestId(isPhone(page) && PHONE_ID[testId] ? PHONE_ID[testId] : testId);
+}
+
+/** "Apply to all pages" sits behind the style bar's "⋯" button. */
+export async function applyToAllPages(page: Page, options?: {timeout?: number}) {
+    const more = page.getByTestId('btn-style-more');
+    if (!(await page.getByTestId('btn-apply-all').isVisible())) await more.click(options);
+    await page.getByTestId('btn-apply-all').click(options);
+}
+
+/** Verify: the record and signer history are under a closed "Details" section. */
+export async function openVerifyDetails(page: Page) {
+    const details = page.getByTestId('verify-details');
+    if (!(await details.evaluate((d) => (d as HTMLDetailsElement).open))) await page.getByTestId('verify-details-toggle').click();
 }
