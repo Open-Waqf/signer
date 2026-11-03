@@ -3,7 +3,7 @@ import {extractHex64, strictOrNormalizedHash} from '../../domain/hash';
 
 export type VerifyOutcome = {
     verifyFileHash: string;
-    verifyResult: { status: 'success' | 'fail' | null, id?: string };
+    verifyResult: { status: 'success' | 'fail' | null, id?: string, fromLink?: boolean };
     chainStatus: { status: 'idle' | 'success' | 'fail', failedSignerIndex?: number, total?: number };
     expectedVerifyId: string | null;
     hasStandardSignature: boolean;
@@ -37,7 +37,8 @@ export class VerifyController {
 
         return {
             verifyFileHash,
-            verifyResult: {status, id: fileId || undefined},
+            // fromLink: the file was checked against the reference in a verify link.
+            verifyResult: {status, id: fileId || undefined, fromLink: !!expectedVerifyId},
             chainStatus,
             expectedVerifyId: nextExpected,
             hasStandardSignature: meta.hasStandardSignature,

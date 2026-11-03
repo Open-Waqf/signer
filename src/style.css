@@ -680,13 +680,58 @@ app-root {
     margin: 0 0 8px 0;
 }
 
-.verify-disclaimer {
-    text-align: start;
-    color: var(--warning-text);
-    background: var(--warning-bg);
-    border-color: color-mix(in srgb, var(--warning), #fff 55%);
-    margin-top: 10px;
+.verify-record-title {
+    color: var(--text-main);
+    margin: 0 0 8px 0;
 }
+
+/* Verify: one plain answer at the top (step 6). */
+.verify-answer {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 14px;
+    padding: 14px 16px;
+    border-radius: var(--radius-md);
+    border: 2px solid;
+    text-align: start;
+}
+
+.verify-answer:focus {
+    outline: none;
+}
+
+.verify-answer-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.verify-answer-message {
+    margin: 6px 0 0;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.verify-answer-intact {
+    border-color: var(--success-text);
+    color: var(--success-text);
+    background: color-mix(in srgb, var(--success-text), transparent 92%);
+}
+
+.verify-answer-changed {
+    border-color: var(--danger-text);
+    color: var(--danger-text);
+    background: color-mix(in srgb, var(--danger-text), transparent 92%);
+}
+
+.verify-answer-unconfirmed {
+    border-color: var(--border-strong);
+    color: var(--text-main);
+    background: var(--bg-muted);
+}
+
 
 .verify-pending-text {
     margin-bottom: 16px;

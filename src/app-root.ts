@@ -24,6 +24,7 @@ import {
     verifyOutcomeState
 } from './features/verify/verify-state';
 import {groupedHashPreview} from './domain/hash';
+import {verifyAnswer} from './features/verify/verify-state';
 import {preferences} from './lib/preferences';
 import {isNativeOrSmallViewport, isNativePlatform} from './lib/runtime-platform';
 import {requestStoragePersistence} from './lib/storage-persistence';
@@ -703,16 +704,40 @@ export class AppRoot extends LitElement {
         `;
     }
 
+    private renderVerifyAnswer() {
+        const answer = verifyAnswer(this.verifyResult, this.integrityStatus);
+        const title = {
+            intact: i18n.t('verifyAnswerIntact'),
+            changed: i18n.t('verifyAnswerChanged'),
+            unconfirmed: i18n.t('verifyAnswerUnconfirmed'),
+        }[answer.kind];
+        const message = {
+            hashMatch: i18n.t('verifyAnswerHashMatchMsg'),
+            hashMismatch: i18n.t('verifyAnswerHashMismatchMsg'),
+            otherFile: i18n.t('verifyAnswerOtherFileMsg'),
+            recordOnly: i18n.t('verifyAnswerRecordOnlyMsg'),
+            noRecord: i18n.t('verifyAnswerNoRecordMsg'),
+        }[answer.reason];
+        const icon = {intact: ICONS.check, changed: ICONS.alert, unconfirmed: ICONS.search};
+        return html`
+            <!-- Focused when Verify opens: the answer is read first, and the dialog does not
+                 scroll down to the fingerprint field (or pop up the phone keyboard). -->
+            <div class="verify-answer verify-answer-${answer.kind}" data-testid="verify-answer"
+                 data-answer="${answer.kind}" role="status" aria-live="polite" tabindex="-1" autofocus>
+                <div class="verify-answer-title">${icon[answer.kind]} ${title}</div>
+                <p class="verify-answer-message">${message}</p>
+            </div>
+        `;
+    }
+
     private renderVerifyResultCard() {
         return html`
             <div class="verify-step-card info-panel" role="status" aria-live="polite">
                 <h3 class="verify-step-title">${i18n.t('metadataCheckTitle')}</h3>
                 ${this.verifyResult.status === 'success' ? html`
-                    <h2 class="verify-success-title" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
+                    <!-- Neutral, not green: the record can be copied into any file. -->
+                    <h2 class="verify-record-title" data-testid="verify-success-title">${i18n.t('recordFound')}</h2>
                     <p class="verify-step-note">${i18n.t('internalRefLabel')} <strong>${this.verifyResult.id}</strong></p>
-                    <div class="amanah-panel verify-disclaimer">
-                        ${i18n.t('recordFoundDisclaimer')}
-                    </div>
                 ` : html`
                     <h2 class="verify-fail-title" data-testid="verify-fail-title">${i18n.t('noRecordFound')}</h2>
                     <p class="verify-step-note">${i18n.t('noRecordMsg')}</p>
@@ -768,6 +793,7 @@ export class AppRoot extends LitElement {
 
     private renderVerifyDetailsBody() {
         return html`
+            ${this.renderVerifyAnswer()}
             ${this.renderVerifyResultCard()}
             ${this.hasStandardSignature ? html`
                 <div class="alert-box alert-warning" data-testid="cms-signature-banner">
