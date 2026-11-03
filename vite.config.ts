@@ -19,7 +19,7 @@ export default defineConfig({
             registerType: 'prompt',
             includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
             injectManifest: {
-                globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,json,woff2,wasm,bcmap,pfb,ttf,mjs}'],
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,json,woff2,wasm,bcmap,pfb,ttf,mjs,pdf}'],
                 maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
             },
             manifest: {

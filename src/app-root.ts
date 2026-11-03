@@ -414,10 +414,12 @@ export class AppRoot extends LitElement {
         this.setLoading(true);
         try {
             this.logMarker('[OWQ][SAMPLE_START]');
-            // Prefer bundled sample to avoid runtime generation issues in some Android WebViews.
+            // Prefer the bundled sample in the current language (made by scripts/make-samples.mjs,
+            // which shapes Arabic correctly); English when a language has none.
             try {
-                const sampleUrl = new URL('sample_document.pdf', new URL(import.meta.env.BASE_URL, window.location.href)).toString();
-                const response = await fetch(sampleUrl, {cache: 'no-store'});
+                const base = new URL(import.meta.env.BASE_URL, window.location.href);
+                let response = await fetch(new URL(`sample_document.${i18n.lang}.pdf`, base).toString());
+                if (!response.ok) response = await fetch(new URL('sample_document.en.pdf', base).toString());
                 if (response.ok) {
                     const buffer = await response.arrayBuffer();
                     this.logMarker('[OWQ][SAMPLE_LOADED][STATIC]');

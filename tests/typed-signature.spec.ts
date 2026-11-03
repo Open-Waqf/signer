@@ -1,4 +1,5 @@
 // typed-signature.spec.ts: sign by typing your name in a handwriting font (step 5).
+import fs from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {tid} from './support/ui';
 
@@ -43,11 +44,17 @@ test.describe('21. Typed signature', () => {
         const stream = await (await download).createReadStream();
         const chunks: Buffer[] = [];
         for await (const chunk of stream) chunks.push(chunk as Buffer);
+        // The saved page has exactly one picture more than the sample (whose text lines are
+        // pictures too, so Arabic is shaped right): the typed signature.
         const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-        const doc = await pdfjs.getDocument({data: new Uint8Array(Buffer.concat(chunks))}).promise;
-        const ops = await (await doc.getPage(1)).getOperatorList();
-        expect(ops.fnArray.filter((f: number) => f === pdfjs.OPS.paintImageXObject).length).toBe(1);
-        await doc.loadingTask.destroy();
+        const images = async (data: Uint8Array) => {
+            const doc = await pdfjs.getDocument({data}).promise;
+            const ops = await (await doc.getPage(1)).getOperatorList();
+            await doc.loadingTask.destroy();
+            return ops.fnArray.filter((f: number) => f === pdfjs.OPS.paintImageXObject).length;
+        };
+        const sample = new Uint8Array(fs.readFileSync('public/sample_document.en.pdf'));
+        expect(await images(new Uint8Array(Buffer.concat(chunks)))).toBe((await images(sample)) + 1);
     });
 
     test('21.2 Every handwriting style loads (the font files ship with the app, offline)', async ({page}) => {
