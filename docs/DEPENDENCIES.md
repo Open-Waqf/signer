@@ -48,12 +48,16 @@ Do not upgrade these, and decline any tool (npm, Dependabot) that offers to.
   silently broke certificate signing. Test 4.5 catches this.
 - **pdf.js 6** (`pdfjs-dist`):
   - `PDFDocumentProxy.destroy()` is gone. Call `doc.loadingTask.destroy()`.
-  - JBIG2 and CCITT (fax) images, common in scans, are decoded with files in
-    `public/wasm/`, passed as `wasmUrl`. Without them those pages render blank, with no
-    error. Test 11.1 catches this.
-  - After each pdf.js upgrade, copy `cmaps/`, `standard_fonts/` and the four jbig2 files
-    from `node_modules/pdfjs-dist/` into `public/`. Never ship `quickjs-eval.*` (it runs
-    JavaScript from PDFs).
+  - JBIG2 and CCITT (fax) images and JPEG 2000 images, common in scans and archives, are
+    decoded with files in `public/wasm/`, passed as `wasmUrl`. Without them those pages
+    render blank, with no error. Tests 11.1 (CCITT) and 11.2 (JPEG 2000) catch this.
+    The JPEG 2000 files were missing until Nov 2026 (pdf.js 6.5 upgrade).
+  - After each pdf.js upgrade, copy `cmaps/`, `standard_fonts/`, the four `jbig2` files and
+    the four `openjpeg` files (`LICENSE_*`, `.wasm`, `_nowasm_fallback.js`) from
+    `node_modules/pdfjs-dist/` into `public/`. The `_nowasm_fallback.js` files are for old
+    WebViews without WebAssembly. Never ship `quickjs-eval.*` (it runs JavaScript from
+    PDFs). `qcms_bg.wasm` (exact colour profiles) is left out on purpose: pdf.js falls back
+    to its own colour conversion.
   - Versions 5.6.83 up to (not including) 6.2.108 have a JavaScript-execution advisory.
     Never go back into that range.
   - pdf.js 6 needs a newer browser engine. Phones whose Android System WebView no longer

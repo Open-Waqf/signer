@@ -2152,6 +2152,26 @@ test.describe('11. Scanned PDFs', () => {
             return dark;
         }), {timeout: 15000}).toBeGreaterThan(1000);
     });
+
+    test('11.2 A JPEG 2000 image (common in scans and archives) renders visible content', async ({page}) => {
+        // pdf.js decodes JPEG 2000 with openjpeg files from public/wasm/, like JBIG2 above.
+        await page.goto('/');
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByTestId('btn-select-file').click();
+        (await chooser).setFiles(path.join(process.cwd(), 'tests/fixtures/jpx-scan.pdf'));
+        const ws = page.locator('pdf-workspace');
+        await expect(ws.getByTestId('btn-exit')).toBeVisible();
+
+        // The picture is a red block: count clearly red pixels.
+        await expect.poll(async () => ws.evaluate((el) => {
+            const canvas = (el as HTMLElement).shadowRoot?.querySelector('#pdf-canvas') as HTMLCanvasElement | null;
+            if (!canvas || !canvas.width) return 0;
+            const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+            let red = 0;
+            for (let i = 0; i < data.length; i += 4) if (data[i] > 150 && data[i + 1] < 90 && data[i + 2] < 90) red++;
+            return red;
+        }), {timeout: 15000}).toBeGreaterThan(1000);
+    });
 });
 
 // ---------------------------------------------------------------------------
